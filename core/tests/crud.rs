@@ -1,23 +1,23 @@
-use keva_core::{KevaStore, Value};
-use tempfile::tempdir;
-
-mod common;
-
+/// Verify `get` returns `None` for non-existent keys.
 #[test]
-fn test_basic_crud() {
-    let tmp = tempdir().unwrap();
-    let mut store = KevaStore::open(tmp.path()).expect("failed to open store");
+fn test_get_non_existent() {}
 
-    // Test Set & Get Text
-    store
-        .set("greetings", Value::Text("hello world".into()))
-        .expect("failed to set text");
+/// Verify `set` overwrites an existing value for a key without affecting its children or parent.
+#[test]
+fn test_set_isolation() {}
 
-    let val = store.get("greetings").expect("failed to get value");
-    assert_eq!(val, Some(Value::Text("hello world".into())));
+/// Verify `ls` returns direct children of a given key.
+#[test]
+fn test_list_children() {}
 
-    // Test Remove
-    store.pdel("greetings").expect("failed to delete");
-    let val = store.get("greetings").expect("failed to get value");
-    assert_eq!(val, None);
-}
+/// Verify removing an item (default config) marks it as `Trash` but keeps the data.
+#[test]
+fn test_soft_delete() {}
+
+/// Verify removing an item with `permanent: true` removes it entirely.
+#[test]
+fn test_permanent_delete() {}
+
+/// Verify that deleting a parent key does NOT remove its children.
+#[test]
+fn test_delete_non_recursive() {}

@@ -12,7 +12,9 @@ supports dual interfaces: a CLI for automation/scripting and a GUI for visual ex
 
 ### Namespace Structure
 
-- **Hierarchy:** Keys are path-based (e.g., `project/config/theme`).
+- **Hierarchy:** Keys are path-based (e.g., `project/config/theme`). Note: This is a logical hierarchy.
+    - **No Implicit Parents:** Creating a key `a/b/c` does NOT automatically create `a` or `a/b`.
+    - **Non-Recursive Delete:** Deleting `a` does NOT delete `a/b`.
 - **Parallel Storage:** A key (e.g., `project`) can contain children (like a folder) *and* store its own value (like a
   file) simultaneously. This allows `project` to have text content while `project/config` exists as a child key.
 
