@@ -51,6 +51,7 @@ supports dual interfaces: a CLI for automation/scripting and a GUI for visual ex
         - **Regex Mode:** Active when query contains regex symbols (e.g., `*`, `?`, `^`, `[`). Sorts by shortest match
           first.
     - **Visuals:** Shows "Magnet" icon 🧲 for Fuzzy, "Code" icon `.*` for Regex.
+    - **Trash Handling:** Trash items are included in search results but ranked at the bottom with a 🗑️ icon.
 - **Drag & Drop:**
     - Drop on **Right Pane:** Overwrites the currently selected key.
     - Drop on **Left Pane (Empty Space):** Prompts to create a new key using the filename.
@@ -69,6 +70,7 @@ supports dual interfaces: a CLI for automation/scripting and a GUI for visual ex
 Items progress through three stages based on configurable timestamps.
 
 1. **Active:** Normal visibility.
-2. **Stale:** Item remains visible but is visually marked as expired (warning).
-3. **Trash:** Item is moved to a hidden `__trash__` namespace (soft delete).
-4. **Purge:** Item is permanently deleted.
+2. **Trash:** Item is marked as soft-deleted and hidden from standard view.
+   - **CLI:** Accessible only via `--include-trash`.
+   - **GUI:** Always searchable (bottom of list, 🗑️ icon).
+3. **Purge:** Item is permanently deleted.
