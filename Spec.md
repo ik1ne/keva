@@ -32,9 +32,12 @@ supports dual interfaces: a CLI for automation/scripting and a GUI for visual ex
 - `get <key>`: Output the value to stdout.
 - `set <key> <value>`: Set the value for the key.
 - `rm <key>`: Remove the key. Behavior depends on configuration.
+    - `-r` / `--recursive`: Delete the key and all its children.
     - `--trash`: Force soft delete (move to Trash).
     - `--permanent`: Force immediate, permanent deletion.
 - `ls <key>`: List children of the key.
+- `search <query>`: Search the database using the configured Hybrid Logic.
+    - Output: List of matching keys (ranked).
 - `paste <key>`: Write current clipboard content to the key.
 - `copy <key>`: Copy the key's value to the clipboard.
 - `import <key> <file>`: Embed a file (copy) into the store.

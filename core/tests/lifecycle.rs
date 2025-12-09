@@ -21,3 +21,7 @@ fn test_gc_removes_purged_items() {}
 /// Verify that when an Embedded File item is physically purged by GC, the underlying storage space is freed.
 #[test]
 fn test_gc_reclaims_blob_space() {}
+
+/// Verify running GC does NOT remove items that are in Trash but have not yet exceeded the Purge TTL.
+#[test]
+fn test_gc_retains_unexpired_trash() {}
