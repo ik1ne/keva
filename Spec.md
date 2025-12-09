@@ -45,8 +45,9 @@ supports dual interfaces: a CLI for automation/scripting and a GUI for visual ex
 - **Search Behavior (Spotlight-style):**
     - **Scope:** Defaults to **Key Search**. Optional toggle for **Value Content**.
     - **Hybrid Logic:**
-        - **Fuzzy Mode (Default):** Active when query contains alphanumerics, `-`, `_`, `/`, `.`, or space. Sorts by
-          relevance.
+        - **Fuzzy Mode (Default):** Active when query contains alphanumerics, `-`, `_`, `/`, `.`, or space.
+          - **Ranking:** Exact Match > Prefix/Children > Substring > Subsequence.
+          - **Selection:** Automatically selects the top result for immediate preview.
         - **Regex Mode:** Active when query contains regex symbols (e.g., `*`, `?`, `^`, `[`). Sorts by shortest match
           first.
     - **Visuals:** Shows "Magnet" icon 🧲 for Fuzzy, "Code" icon `.*` for Regex.
