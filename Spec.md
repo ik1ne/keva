@@ -13,8 +13,8 @@ supports dual interfaces: a CLI for automation/scripting and a GUI for visual ex
 ### Namespace Structure
 
 - **Hierarchy:** Keys are path-based (e.g., `project/config/theme`).
-- **"Dot" Strategy:** To support both folder-like and file-like behaviors simultaneously, a key (e.g., `project`) can
-  contain children *and* store its own value. The value for `project` is effectively stored at `project/.`.
+- **Parallel Storage:** A key (e.g., `project`) can contain children (like a folder) *and* store its own value (like a
+  file) simultaneously. This allows `project` to have text content while `project/config` exists as a child key.
 
 ### Supported Value Types
 
