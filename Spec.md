@@ -40,9 +40,46 @@ Examples:
 | File from Finder/Explorer | file contents (hard copy) |
 | Formatted text from Word | plain text + RTF/HTML |
 
-## 3. Interfaces & Features
+## 3. Architecture
+
+### Component Overview
+
+```
+┌─────────────────────────────────────────────┐
+│                 Storage                     │
+└──────────────┬──────────────┬───────────────┘
+               │              │
+        ┌──────┴──────┐ ┌─────┴─────┐
+        │     CLI     │ │  Daemon   │
+        └─────────────┘ └─────┬─────┘
+                              │
+                        ┌─────┴─────┐
+                        │    GUI    │
+                        └───────────┘
+```
+
+### Storage Access
+
+- **CLI:** Accesses storage directly.
+- **Daemon:** Accesses storage directly. GUI window runs inside daemon process.
+- **Concurrency:** Storage layer handles locking internally. Multiple readers allowed; writers block until prior write
+  commits.
+- **Simultaneous Access:** CLI and daemon can run simultaneously. Write operations may briefly block if both attempt
+  concurrent writes.
+
+### Operating Modes
+
+| Mode               | Hotkey | GC               | Use Case                 |
+|--------------------|--------|------------------|--------------------------|
+| CLI only           | None   | Manual (`kv gc`) | Scripting, automation    |
+| GUI without daemon | None   | On window close  | Occasional manual launch |
+| GUI with daemon    | Yes    | On window hide   | Quick access via hotkey  |
+
+## 4. Interfaces & Features
 
 ### CLI Commands
+
+#### Data Operations
 
 - `get <key>`: Output the plain text value to stdout. Outputs empty string if no plain text exists.
     - `--raw`: Output the rich format as binary to stdout.
@@ -59,9 +96,23 @@ Examples:
     - Output: List of matching keys (ranked).
 - `paste <key>`: Write current clipboard content to the key (follows clipboard-native storage rules).
 - `copy <key>`: Copy the key's value to the clipboard.
+- `gc`: Manually trigger garbage collection.
 - **Flags:** `--include-trash` to search/list deleted items.
 
+#### Daemon Operations
+
+- `daemon start`: Start the daemon process (if not already running).
+- `daemon stop`: Stop the running daemon process.
+- `daemon status`: Check if daemon is running.
+- `daemon install`: Register daemon to launch at system login.
+- `daemon uninstall`: Remove launch-at-login registration.
+
 ### GUI Design
+
+#### Launch Methods
+
+1. **Without daemon:** Run `kv gui` or launch application directly.
+2. **With daemon:** Press configured hotkey.
 
 #### Layout
 
@@ -116,7 +167,7 @@ Each tree node displays on hover/selection:
 #### Key Creation and Saving
 
 - Keys are created implicitly when a value is first added.
-- Values are auto-saved after inactivity period or on window close.
+- Values are auto-saved after inactivity period or on window close/hide.
 
 #### Search Behavior (Spotlight-style)
 
@@ -140,11 +191,13 @@ Each tree node displays on hover/selection:
 - Drop on **Left Pane (Specific Key):** Stores file contents to that key.
 - **Large File Handling:** Files exceeding threshold trigger confirmation prompt before copy.
 
-## 4. Operational Behaviors
+## 5. Operational Behaviors
 
 ### Configuration & Preferences
 
-The following behaviors are user-configurable via a persistent config file.
+The following behaviors are user-configurable via a persistent config file and/or GUI preferences pane.
+
+#### Data Settings
 
 - **Delete Style:**
     - **Soft (Default):** Deletions move items to **Trash**.
@@ -152,6 +205,12 @@ The following behaviors are user-configurable via a persistent config file.
     - *Note: CLI flags (`--permanent`, `--trash`) and GUI modifiers (`Shift+Delete`) override this setting.*
 - **Large File Threshold:** Size limit triggering the import confirmation prompt (Default: **256MB**).
 - **TTL Durations:** Timers for Lifecycle stages (Active → Trash → Purge).
+
+#### Daemon Settings (GUI Preferences)
+
+- **Global Shortcut:** Key combination to show/hide GUI window.
+- **Launch at Login:** Toggle to enable/disable daemon auto-start.
+- **Daemon Status:** Indicator showing whether daemon is currently running.
 
 ### Safety Thresholds
 
@@ -175,11 +234,17 @@ Items progress through three stages based on configurable timestamps.
 
 To maintain performance and reclaim disk space, Keva performs automated maintenance.
 
-- **Trigger:** Automated background process runs upon application exit (interval configurable).
 - **Scope:**
     - Moves items from **Active** to **Trash** based on TTL.
     - Permanently removes items in the **Trash** stage based on TTL.
-        - Reclaims storage space from deleted file blobs.
-- **Manual Override:**
-    - Users can force a cleanup immediately via the CLI command `kv gc`.
-    - Users can force no cleanup upon exit via the CLI flag `--no-gc`.
+    - Reclaims storage space from deleted file blobs.
+
+- **Trigger by Mode:**
+
+| Mode               | GC Trigger              |
+|--------------------|-------------------------|
+| CLI                | Manual only via `kv gc` |
+| GUI without daemon | On window close         |
+| GUI with daemon    | On window hide          |
+
+- **Note:** CLI-only users who never run `kv gc` will accumulate trash until manually triggered.
