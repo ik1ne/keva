@@ -1,46 +1,188 @@
-# Technical Notes: Keva
+# Technical Notes: Keva Implementation Hints
 
-## 1. High-Level Architecture
+This document captures implementation decisions and research findings. Not part of the spec—intended as developer
+reference.
 
-Keva operates as a local-first application with a strict separation between the "Logical" layer (API/Rules) and the "
-Physical" layer (Storage).
+## 1. Target Platforms
 
-### Hybrid Storage Strategy
+- macOS
+- Windows
 
-To support both high performance for metadata and storage for large binary files (256MB+), Keva uses a split approach:
+## 2. Language
 
-- **Metadata & Small Values:** Stored in `redb` (Embedded B-Tree Database).
-- **Large Blobs (>1MB):** Stored as raw files in a managed `blobs/` directory. The DB stores only the pointer.
-- **Consistency:** Write operations prioritize "File First, DB Second." Read operations resolve the path dynamically.
+Rust (pure Rust preferred to minimize dependencies)
 
-### The "Dot" Namespace Strategy
+## 3. Recommended Libraries
 
-To resolve the filesystem conflict where a path cannot be both a file and a folder:
+| Component        | Library       | Notes                                                                                        |
+|------------------|---------------|----------------------------------------------------------------------------------------------|
+| Storage          | redb          | Pure Rust, ACID, single-writer/multi-reader, 3.8x faster individual writes than alternatives |
+| Full-text search | tantivy       | Pure Rust, Lucene-inspired, production-ready                                                 |
+| Fuzzy search     | nucleo        | Path-aware scoring, incremental search, parallel matching                                    |
+| GUI framework    | egui or Slint | egui: faster cold start (~250ms); Slint: smaller binary, more mature API                     |
+| Clipboard        | clipboard-rs  | Multi-format support (text, HTML, RTF, images, file lists)                                   |
+| Global hotkey    | global-hotkey | Cross-platform, maintained by Tauri team                                                     |
 
-- **Concept:** Every key is treated as a container.
-- **Implementation:** If a user stores a value at `project`, the system internally stores it at `project/.`.
+## 4. Storage Architecture
 
-## 2. Search Engine Design
+```
+~/.keva/
+  keva.redb          # Metadata + plain text values
+  blobs/
+    <hash>/          # Content-addressable storage
+      data           # Raw binary
+      meta.json      # MIME type, original size
+```
 
-### Hybrid Search Logic
+- Store blobs >100KB as separate files
+- Use BLAKE3 for content hashing (fast, secure)
+- redb handles concurrent access via file locking
 
-Keva avoids complex database indexing in favor of a high-performance **Parallel Linear Scan**.
+## 5. Performance Targets
 
-- **Fuzzy Mode (Default):**
-    - **Trigger:** Query contains standard characters (alphanumerics, `/`, `.`, `-`).
-    - **Engine:** `nucleo-matcher`.
-    - **Behavior:** Subsequence matching (e.g., `a/b/c` matches `a/big/cat`).
-- **Regex Mode:**
-    - **Trigger:** Query contains specific regex symbols (`*`, `?`, `^`, etc.).
-    - **Engine:** Rust `regex` crate.
-    - **Sorting:** *Deferred (TBD).*
+| Operation                 | Target |
+|---------------------------|--------|
+| GUI visible (with daemon) | <100ms |
+| GUI visible (cold start)  | <500ms |
+| First keystroke response  | <50ms  |
+| Subsequent keystrokes     | <16ms  |
+| Value preview (text)      | <50ms  |
+| Value preview (image)     | <200ms |
 
-## 3. Garbage Collection (GC) Strategy
+## 6. Fuzzy Search Optimization
 
-### Detached "Scavenger" Process
+### Incremental Filtering
 
-To avoid the overhead of a permanent background daemon, Keva uses a "Fire-and-Forget" model.
+Cache previous results; filter from cache when query extends:
 
-- **Mechanism:** The main application spawns a separate child process (`keva --gc`) to handle cleanup tasks.
-- **Behavior:** The main app **detaches** immediately. The child process opens the DB, checks the `lifecycle`
-  timestamps, performs the cleanup, and exits.
+```
+"a"   → full scan, cache results
+"ab"  → filter cached "a" results
+"abc" → filter cached "ab" results
+"ab"  → use cached "ab" results (backspace)
+"abd" → full scan (different branch)
+```
+
+### Scoring Tiers (nucleo handles this)
+
+1. Exact match
+2. Exact match (case-insensitive)
+3. Prefix match
+4. Child path match (query `a/b`, key `a/b/c`)
+5. Substring match
+6. Subsequence match (with bonuses for consecutive chars, word boundaries)
+
+## 7. Daemon Architecture
+
+### Single-Process Model
+
+GUI runs inside daemon process (no IPC needed):
+
+```
+┌─────────────────────────────────┐
+│         Daemon Process          │
+│  ┌───────────┐  ┌────────────┐  │
+│  │  Hotkey   │  │   Window   │  │
+│  │ Listener  │──│  (hidden)  │  │
+│  └───────────┘  └────────────┘  │
+│         │                       │
+│  ┌──────┴──────────────────┐   │
+│  │     Storage Access      │   │
+│  └─────────────────────────┘   │
+└─────────────────────────────────┘
+```
+
+### Lifecycle
+
+1. `kv daemon start` or `kv gui` → spawn daemon process
+2. Create hidden window, register hotkey
+3. Hotkey pressed → `window.set_visible(true)`
+4. Escape/blur → `window.set_visible(false)`, run GC
+5. `kv daemon stop` → graceful shutdown
+
+### Launch at Login
+
+- macOS: Write plist to `~/Library/LaunchAgents/com.keva.daemon.plist`
+- Windows: Task Scheduler via `schtasks.exe` or COM API
+
+### Single Instance Enforcement
+
+- PID file at `~/.keva/daemon.pid`
+- Or named mutex (Windows) / Unix socket (macOS)
+
+## 8. Clipboard Handling
+
+### Detection Priority
+
+```rust
+if clipboard.has_rich_format() {
+store_rich_format()
+if clipboard.has_meaningful_plain_text() {
+store_plain_text()
+}
+} else {
+store_plain_text()
+}
+```
+
+### File List Handling
+
+When clipboard contains file paths (copy from Finder/Explorer):
+
+1. Calculate total size
+2. If > threshold, prompt user
+3. Read file contents and store as blob
+4. Store file metadata (original name, MIME type)
+
+## 9. Binary Optimization
+
+```toml
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+```
+
+Expected binary size: ~2-4MB
+
+## 10. Concurrency Notes
+
+### redb Behavior
+
+- Multiple readers: allowed concurrently
+- Single writer: blocks other writers until commit
+- Read during write: sees pre-commit state
+
+### CLI + Daemon Coexistence
+
+Both can run simultaneously. Potential brief blocking on concurrent writes (typically <10ms for small operations).
+
+## 11. GC Implementation
+
+```rust
+fn gc() {
+    // Phase 1: Update timestamps (fast, in transaction)
+    let purge_candidates = db.query("WHERE purge_at < now()");
+
+    // Phase 2: Delete blobs (slow, outside transaction)
+    for key in purge_candidates {
+        if !any_other_key_references(key.blob_hash) {
+            delete_blob_file(key.blob_hash);
+        }
+    }
+
+    // Phase 3: Compact if needed
+    if space_reclaimed > threshold {
+        db.compact();
+    }
+}
+```
+
+## 12. Open Questions
+
+- [ ] Default global shortcut key (platform-specific?)
+- [ ] TTL default values (trash: 30 days? purge: 7 days after trash?)
+- [ ] Maximum key length
+- [ ] Maximum value size (for plain text stored in redb)
