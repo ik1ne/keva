@@ -4,6 +4,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+blake3 = "1"
+clipboard-rs = "0.3"
+nutype = "0.6"
+nucleo = "0.5"
+redb = "3"
+thiserror = "2.0"
 
 [dev-dependencies]
 tempfile = "3.10"
