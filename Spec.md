@@ -1,4 +1,4 @@
-# Project Specification: Keva
+# Project Specification: Keva (v3)
 
 ## 1. Overview
 
@@ -184,6 +184,14 @@ Each tree node displays on hover/selection:
     - **Regex Mode:** Active when query contains regex symbols (e.g., `*`, `?`, `^`, `[`). Sorts by shortest match
       first.
 - **Visuals:** Shows "Magnet" icon 🧲 for Fuzzy, "Code" icon `.*` for Regex.
+
+#### Keyboard Shortcuts
+
+| State                             | Key           | Action                                            |
+|-----------------------------------|---------------|---------------------------------------------------|
+| Key selected in left pane         | `Enter`       | Copy value to clipboard, close window             |
+| Key selected in left pane         | `Shift+Enter` | Focus right pane for editing                      |
+| No selection, search bar has text | `Enter`       | Focus right pane for editing (creates key if new) |
 
 #### Drag & Drop
 
