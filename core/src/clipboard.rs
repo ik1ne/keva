@@ -1,4 +1,3 @@
-use crate::error::Result;
 use crate::types::value::ClipData;
 
 pub struct Clipboard {
