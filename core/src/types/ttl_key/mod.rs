@@ -3,7 +3,7 @@ use redb::TypeName;
 use std::cmp::Ordering;
 use std::time::{Duration, SystemTime};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TtlKey {
     pub expires_at: SystemTime,
     pub key: Key,
@@ -70,3 +70,6 @@ impl redb::Value for TtlKey {
         TypeName::new("keva::TtlKey")
     }
 }
+
+#[cfg(test)]
+mod tests;

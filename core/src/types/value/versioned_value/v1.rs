@@ -1,4 +1,4 @@
-use crate::types::value::schema::ValueVariant;
+use crate::types::value::versioned_value::ValueVariant;
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
@@ -59,7 +59,7 @@ pub struct BlobStoredFileData {
     pub hash: FileHash,
 }
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum FileHash {
     Blake3([u8; 32]),
 }

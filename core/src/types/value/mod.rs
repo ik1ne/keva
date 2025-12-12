@@ -1,4 +1,4 @@
-pub(crate) mod schema;
+pub(crate) mod versioned_value;
 
 #[derive(Debug, Clone)]
 pub struct Value {

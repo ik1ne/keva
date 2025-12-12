@@ -46,3 +46,6 @@ impl redb::Value for VersionedValue {
         TypeName::new("keva::Value")
     }
 }
+
+#[cfg(test)]
+mod tests;

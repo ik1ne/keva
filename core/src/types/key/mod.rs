@@ -65,3 +65,6 @@ impl redb::Value for Key {
         TypeName::new("keva::Key")
     }
 }
+
+#[cfg(test)]
+mod tests;
