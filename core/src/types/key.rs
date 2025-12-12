@@ -3,10 +3,12 @@ use redb::TypeName;
 use std::cmp::Ordering;
 use std::str;
 
+pub const MAX_KEY_LENGTH: usize = 256;
+
 #[nutype(
     new_unchecked,
     sanitize(trim),
-    validate(not_empty, len_char_max = 256),
+    validate(not_empty, len_char_max = MAX_KEY_LENGTH),
     derive(
         Debug,
         Clone,
