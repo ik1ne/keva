@@ -1,4 +1,4 @@
-use crate::storage::db::error::Error;
+use crate::storage::db::error::DatabaseError;
 use crate::storage::db::ttl::purged::PurgedTable;
 use crate::storage::db::ttl::trashed::TrashedTable;
 use crate::types::value::versioned_value::latest_value;
@@ -11,7 +11,7 @@ pub mod error {
     use thiserror::Error;
 
     #[derive(Debug, Error)]
-    pub enum Error {
+    pub enum DatabaseError {
         #[error("Database error: {0}")]
         Redb(#[from] redb::DatabaseError),
 
@@ -58,11 +58,11 @@ impl GcTargets {
 }
 
 impl Database {
-    pub fn new(path: &Path) -> Result<Self, Error> {
+    pub fn new(path: &Path) -> Result<Self, DatabaseError> {
         // initialize redb, trashed_table, purged_table
     }
 
-    pub fn get(&self, key: &Key) -> Result<Option<Value>, Error> {}
+    pub fn get(&self, key: &Key) -> Result<Option<Value>, DatabaseError> {}
 
     /// Inserts value into main table.
     /// TTL tracking (trashed/purged tables) is updated internally based on lifecycle state.
@@ -72,11 +72,11 @@ impl Database {
         now: SystemTime,
         plain_text: Option<Cow<'_, str>>,
         files: Vec<latest_value::BlobStoredFileData>,
-    ) -> Result<InsertOperation, Error> {
+    ) -> Result<InsertOperation, DatabaseError> {
     }
-    pub fn remove(&mut self, key: &Key) -> Result<Value, Error> {}
-    pub fn rename(&mut self, old_key: &Key, new_key: &Key) -> Result<(), Error> {}
-    pub fn keys(&self) -> Result<impl IntoIterator<Item = Key>, Error> {}
-    pub fn gc_targets(&self, now: SystemTime) -> Result<GcTargets, Error> {}
-    pub fn gc_finalize(&mut self, targets: GcTargets) -> Result<(), Error> {}
+    pub fn remove(&mut self, key: &Key) -> Result<Value, DatabaseError> {}
+    pub fn rename(&mut self, old_key: &Key, new_key: &Key) -> Result<(), DatabaseError> {}
+    pub fn keys(&self) -> Result<impl IntoIterator<Item = Key>, DatabaseError> {}
+    pub fn gc_targets(&self, now: SystemTime) -> Result<GcTargets, DatabaseError> {}
+    pub fn gc_finalize(&mut self, targets: GcTargets) -> Result<(), DatabaseError> {}
 }

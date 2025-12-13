@@ -11,7 +11,7 @@ fn value_v1_serialization() {
             lifecycle_state: v1::LifecycleState::Active,
         },
         clip_data: v1::ClipData {
-            plain_text: Some("Hello, World!".to_string()),
+            plain_text: Some(v1::TextData::Inlined("Hello, World!".to_string())),
             rich_data: vec![],
         },
     };
@@ -23,18 +23,7 @@ fn value_v1_serialization() {
     #[expect(unreachable_patterns)]
     match deserialized_value {
         VersionedValue::V1(v1_value) => {
-            assert_eq!(
-                v1_value.metadata.lifecycle_state,
-                original_value.metadata.lifecycle_state
-            );
-            assert_eq!(
-                v1_value.clip_data.plain_text,
-                original_value.clip_data.plain_text
-            );
-            assert_eq!(
-                v1_value.metadata.created_at,
-                original_value.metadata.created_at
-            );
+            assert_eq!(v1_value, original_value);
         }
         _ => panic!("Deserialized to incorrect version"),
     }

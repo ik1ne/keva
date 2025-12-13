@@ -2,6 +2,7 @@ use crate::types::value::versioned_value::ValueVariant;
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
 
+#[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Value {
     pub metadata: Metadata,
@@ -12,6 +13,7 @@ impl ValueVariant for Value {
     const VERSION: u8 = 1;
 }
 
+#[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Metadata {
     pub created_at: SystemTime,
@@ -27,6 +29,7 @@ pub enum LifecycleState {
     Purge,
 }
 
+#[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClipData {
     pub plain_text: Option<TextData>,
@@ -34,12 +37,14 @@ pub struct ClipData {
     pub rich_data: Vec<RichData>,
 }
 
+#[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TextData {
     Inlined(String),
     BlobStored(FileHash),
 }
 
+#[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum RichData {
     Files(Vec<FileData>),
@@ -47,18 +52,21 @@ pub enum RichData {
     // Html(String),
 }
 
+#[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FileData {
     Inlined(InlineFileData),
     BlobStored(BlobStoredFileData),
 }
 
+#[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InlineFileData {
     pub file_name: String,
     pub data: Vec<u8>,
 }
 
+#[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlobStoredFileData {
     pub file_name: String,
