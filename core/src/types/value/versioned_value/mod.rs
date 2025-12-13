@@ -6,6 +6,8 @@ pub trait ValueVariant {
     const VERSION: u8;
 }
 
+pub use v1 as latest_value;
+
 #[derive(Debug, Clone)]
 pub enum VersionedValue {
     V1(v1::Value),

@@ -29,9 +29,15 @@ pub enum LifecycleState {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClipData {
-    pub plain_text: Option<String>,
+    pub plain_text: Option<TextData>,
     /// Currently len is 0..=1 but might be extended in the future
     pub rich_data: Vec<RichData>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum TextData {
+    Inlined(String),
+    BlobStored(FileHash),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
