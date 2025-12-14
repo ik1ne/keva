@@ -37,9 +37,6 @@ pub mod error {
         #[error("Key not found")]
         NotFound,
 
-        #[error("Key already exists")]
-        AlreadyExists,
-
         #[error("Cannot append files to text entry")]
         TypeMismatch,
     }
@@ -113,10 +110,12 @@ impl Database {
         }
     }
 
-    /// Inserts a new key-value pair.
+    /// Inserts a key-value pair, overwriting any existing entry.
     ///
-    /// Returns `Err(AlreadyExists)` if the key already exists.
-    /// To overwrite an existing key, call `purge` first then `insert`.
+    /// This always overwrites - the caller (Storage) is responsible for checking
+    /// whether overwriting is allowed based on lifecycle state.
+    ///
+    /// Handles TTL table cleanup for any existing entry.
     pub fn insert(
         &mut self,
         key: &Key,
@@ -128,9 +127,40 @@ impl Database {
         {
             let mut main_table = write_txn.open_table(MAIN_TABLE)?;
 
-            // Check if key already exists
-            if main_table.get(key)?.is_some() {
-                return Err(DatabaseError::AlreadyExists);
+            // Check if key already exists and clean up TTL tables
+            let existing_state = main_table
+                .get(key)?
+                .map(|g| Self::extract_latest(g.value()))
+                .map(|v| {
+                    (
+                        v.metadata.lifecycle_state,
+                        v.metadata.updated_at,
+                        v.metadata.trashed_at,
+                    )
+                });
+
+            if let Some((state, updated_at, trashed_at)) = existing_state {
+                match state {
+                    LifecycleState::Active => {
+                        let old_ttl_key = TtlKey {
+                            timestamp: updated_at,
+                            key: key.clone(),
+                        };
+                        TRASHED_TTL.remove(&write_txn, &old_ttl_key)?;
+                    }
+                    LifecycleState::Trash => {
+                        if let Some(trashed_at) = trashed_at {
+                            let old_ttl_key = TtlKey {
+                                timestamp: trashed_at,
+                                key: key.clone(),
+                            };
+                            PURGED_TTL.remove(&write_txn, &old_ttl_key)?;
+                        }
+                    }
+                    LifecycleState::Purge => {
+                        // No TTL entries to clean up
+                    }
+                }
             }
 
             // Build the new value
@@ -182,12 +212,10 @@ impl Database {
             let mut main_table = write_txn.open_table(MAIN_TABLE)?;
 
             // Get existing value
-            let mut value = {
-                main_table
-                    .get(key)?
-                    .map(|g| Self::extract_latest(g.value()))
-                    .ok_or(DatabaseError::NotFound)?
-            };
+            let mut value = main_table
+                .get(key)?
+                .map(|g| Self::extract_latest(g.value()))
+                .ok_or(DatabaseError::NotFound)?;
 
             // Can only append to Active keys
             if value.metadata.lifecycle_state != LifecycleState::Active {
@@ -366,19 +394,56 @@ impl Database {
         Ok(())
     }
 
-    /// Renames a key.
+    /// Renames a key, overwriting any existing entry at new_key.
     ///
     /// Returns `Err(NotFound)` if the old key doesn't exist.
-    /// Returns `Err(AlreadyExists)` if the new key already exists.
+    ///
+    /// This always overwrites new_key if it exists - the caller (Storage) is
+    /// responsible for checking whether overwriting is allowed.
+    ///
+    /// Handles TTL table cleanup for both old_key and any existing new_key.
     pub fn rename(&mut self, old_key: &Key, new_key: &Key) -> Result<(), DatabaseError> {
         let write_txn = self.db.begin_write()?;
 
         {
             let mut main_table = write_txn.open_table(MAIN_TABLE)?;
 
-            // Check new key doesn't exist
-            if main_table.get(new_key)?.is_some() {
-                return Err(DatabaseError::AlreadyExists);
+            // Check if new key exists and clean up its TTL tables
+            let new_key_state = main_table
+                .get(new_key)?
+                .map(|g| Self::extract_latest(g.value()))
+                .map(|v| {
+                    (
+                        v.metadata.lifecycle_state,
+                        v.metadata.updated_at,
+                        v.metadata.trashed_at,
+                    )
+                });
+
+            if let Some((state, updated_at, trashed_at)) = new_key_state {
+                match state {
+                    LifecycleState::Active => {
+                        let ttl_key = TtlKey {
+                            timestamp: updated_at,
+                            key: new_key.clone(),
+                        };
+                        TRASHED_TTL.remove(&write_txn, &ttl_key)?;
+                    }
+                    LifecycleState::Trash => {
+                        if let Some(trashed_at) = trashed_at {
+                            let ttl_key = TtlKey {
+                                timestamp: trashed_at,
+                                key: new_key.clone(),
+                            };
+                            PURGED_TTL.remove(&write_txn, &ttl_key)?;
+                        }
+                    }
+                    LifecycleState::Purge => {
+                        // No TTL entries to clean up
+                    }
+                }
+                // Remove the existing entry from main table
+                main_table.remove(new_key)?;
             }
 
             // Get and remove old entry, extract value immediately to release borrow
@@ -472,11 +537,9 @@ impl Database {
 
             // Process keys to trash
             for key in to_trash {
-                let value_opt = {
-                    main_table
-                        .get(&key)?
-                        .map(|guard| Self::extract_latest(guard.value()))
-                };
+                let value_opt = main_table
+                    .get(&key)?
+                    .map(|guard| Self::extract_latest(guard.value()));
 
                 if let Some(mut value) = value_opt {
                     // Only process if still Active
@@ -509,11 +572,9 @@ impl Database {
 
             // Process keys to purge
             for key in to_purge {
-                let value_opt = {
-                    main_table
-                        .remove(&key)?
-                        .map(|guard| Self::extract_latest(guard.value()))
-                };
+                let value_opt = main_table
+                    .remove(&key)?
+                    .map(|guard| Self::extract_latest(guard.value()));
 
                 if let Some(value) = value_opt {
                     // Remove from purged TTL table

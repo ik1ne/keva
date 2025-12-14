@@ -93,9 +93,9 @@ fn test_get_nonexistent_key() {
 }
 
 #[test]
-fn test_insert_already_exists_error() {
+fn test_insert_overwrites_existing_key() {
     let (mut db, _temp) = create_test_db();
-    let key = make_key("test/duplicate");
+    let key = make_key("test/overwrite");
     let now = SystemTime::now();
 
     db.insert(
@@ -105,19 +105,62 @@ fn test_insert_already_exists_error() {
     )
     .unwrap();
 
-    // Trying to insert same key again should error
-    let result = db.insert(
+    // Insert again should overwrite (Database always overwrites, Storage handles permission)
+    let insert_time = now + Duration::from_secs(100);
+    db.insert(
         &key,
-        now + Duration::from_secs(100),
+        insert_time,
         ClipData::Text(latest_value::TextData::Inlined("second".to_string())),
-    );
-    assert!(matches!(result, Err(DatabaseError::AlreadyExists)));
+    )
+    .unwrap();
 
-    // Original value should be unchanged
+    // Value should be the new one
     let value = db.get(&key).unwrap().unwrap();
+    assert_eq!(value.metadata.created_at, insert_time);
+    assert_eq!(value.metadata.updated_at, insert_time);
     assert_eq!(
         value.clip_data,
-        ClipData::Text(latest_value::TextData::Inlined("first".to_string()))
+        ClipData::Text(latest_value::TextData::Inlined("second".to_string()))
+    );
+}
+
+#[test]
+fn test_insert_overwrites_trashed_key() {
+    let (mut db, _temp) = create_test_db();
+    let key = make_key("test/trashed-overwrite");
+    let now = SystemTime::now();
+
+    db.insert(
+        &key,
+        now,
+        ClipData::Text(latest_value::TextData::Inlined("first".to_string())),
+    )
+    .unwrap();
+
+    // Trash the key
+    db.trash(&key, now + Duration::from_secs(10)).unwrap();
+
+    // Insert should overwrite the trashed key
+    let insert_time = now + Duration::from_secs(100);
+    db.insert(
+        &key,
+        insert_time,
+        ClipData::Text(latest_value::TextData::Inlined("second".to_string())),
+    )
+    .unwrap();
+
+    // Value should be the new one, Active state
+    let value = db.get(&key).unwrap().unwrap();
+    assert_eq!(value.metadata.created_at, insert_time);
+    assert_eq!(value.metadata.updated_at, insert_time);
+    assert!(value.metadata.trashed_at.is_none());
+    assert_eq!(
+        value.metadata.lifecycle_state,
+        latest_value::LifecycleState::Active
+    );
+    assert_eq!(
+        value.clip_data,
+        ClipData::Text(latest_value::TextData::Inlined("second".to_string()))
     );
 }
 
@@ -549,7 +592,7 @@ fn test_rename_nonexistent_key() {
 }
 
 #[test]
-fn test_rename_to_existing_key() {
+fn test_rename_overwrites_existing_key() {
     let (mut db, _temp) = create_test_db();
     let key1 = make_key("key1");
     let key2 = make_key("key2");
@@ -569,19 +612,59 @@ fn test_rename_to_existing_key() {
     )
     .unwrap();
 
-    let result = db.rename(&key1, &key2);
-    assert!(matches!(result, Err(DatabaseError::AlreadyExists)));
+    // Rename key1 to key2 should overwrite key2 (Database always overwrites, Storage handles permission)
+    db.rename(&key1, &key2).unwrap();
 
-    // Both keys should still exist with original values
-    let v1 = db.get(&key1).unwrap().unwrap();
-    let v2 = db.get(&key2).unwrap().unwrap();
+    // key1 should not exist
+    assert!(db.get(&key1).unwrap().is_none());
+
+    // key2 should have key1's content
+    let value = db.get(&key2).unwrap().unwrap();
     assert_eq!(
-        v1.clip_data,
+        value.clip_data,
         ClipData::Text(latest_value::TextData::Inlined("content1".to_string()))
     );
+}
+
+#[test]
+fn test_rename_overwrites_trashed_new_key() {
+    let (mut db, _temp) = create_test_db();
+    let key1 = make_key("source");
+    let key2 = make_key("target");
+    let now = SystemTime::now();
+
+    db.insert(
+        &key1,
+        now,
+        ClipData::Text(latest_value::TextData::Inlined("source content".to_string())),
+    )
+    .unwrap();
+
+    db.insert(
+        &key2,
+        now,
+        ClipData::Text(latest_value::TextData::Inlined("target content".to_string())),
+    )
+    .unwrap();
+
+    // Trash key2
+    db.trash(&key2, now + Duration::from_secs(10)).unwrap();
+
+    // Rename key1 to key2 should succeed (overwriting trashed key2)
+    db.rename(&key1, &key2).unwrap();
+
+    // key1 should not exist
+    assert!(db.get(&key1).unwrap().is_none());
+
+    // key2 should have key1's content
+    let value = db.get(&key2).unwrap().unwrap();
     assert_eq!(
-        v2.clip_data,
-        ClipData::Text(latest_value::TextData::Inlined("content2".to_string()))
+        value.clip_data,
+        ClipData::Text(latest_value::TextData::Inlined("source content".to_string()))
+    );
+    assert_eq!(
+        value.metadata.lifecycle_state,
+        latest_value::LifecycleState::Active
     );
 }
 
