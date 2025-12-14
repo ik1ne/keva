@@ -7,3 +7,4 @@ pub(crate) mod value;
 pub use value::Value;
 
 pub(crate) mod ttl_key;
+pub use ttl_key::TtlKey;

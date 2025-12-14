@@ -7,7 +7,7 @@ fn ttl_key_normal_usage() {
     let key_str = "valid_key";
     let key = Key::try_from(key_str).unwrap();
     let ttl_key = TtlKey {
-        expires_at: now,
+        timestamp: now,
         key: key.clone(),
     };
 
@@ -22,15 +22,15 @@ fn ttl_key_ordering() {
     let later = now + Duration::from_secs(10);
 
     let key1 = TtlKey {
-        expires_at: now,
+        timestamp: now,
         key: Key::try_from("a").unwrap(),
     };
     let key2 = TtlKey {
-        expires_at: now,
+        timestamp: now,
         key: Key::try_from("b").unwrap(),
     };
     let key3 = TtlKey {
-        expires_at: later,
+        timestamp: later,
         key: Key::try_from("a").unwrap(),
     };
 

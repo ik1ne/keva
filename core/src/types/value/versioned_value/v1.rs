@@ -32,10 +32,11 @@ pub enum LifecycleState {
 
 #[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ClipData {
-    pub plain_text: Option<TextData>,
-    /// Currently len is 0..=1 but might be extended in the future
-    pub rich_data: Vec<RichData>,
+pub enum ClipData {
+    /// Pure plaintext copy
+    Text(TextData),
+    /// File copy from file manager
+    Files(Vec<FileData>),
 }
 
 #[cfg_attr(test, derive(Eq, PartialEq))]
@@ -43,14 +44,6 @@ pub struct ClipData {
 pub enum TextData {
     Inlined(String),
     BlobStored,
-}
-
-#[cfg_attr(test, derive(Eq, PartialEq))]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum RichData {
-    Files(Vec<FileData>),
-    // Image(Vec<u8>),
-    // Html(String),
 }
 
 #[cfg_attr(test, derive(Eq, PartialEq))]

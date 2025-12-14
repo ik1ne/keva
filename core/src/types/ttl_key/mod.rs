@@ -5,7 +5,10 @@ use std::time::{Duration, SystemTime};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TtlKey {
-    pub expires_at: SystemTime,
+    /// The base timestamp for TTL calculation.
+    /// For trashed table: this is `updated_at` (Active → Trash threshold).
+    /// For purged table: this is `trashed_at` (Trash → Purge threshold).
+    pub timestamp: SystemTime,
     pub key: Key,
 }
 
@@ -42,11 +45,11 @@ impl redb::Value for TtlKey {
     where
         Self: 'a,
     {
-        let (expires_at_since_epoch, data) = extract_duration(data);
+        let (timestamp_since_epoch, data) = extract_duration(data);
         let key = Key::from_bytes(data);
 
         TtlKey {
-            expires_at: SystemTime::UNIX_EPOCH + expires_at_since_epoch,
+            timestamp: SystemTime::UNIX_EPOCH + timestamp_since_epoch,
             key,
         }
     }
@@ -57,7 +60,7 @@ impl redb::Value for TtlKey {
     {
         let mut bytes = Vec::new();
         let duration_since_epoch = value
-            .expires_at
+            .timestamp
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap();
         bytes.extend_from_slice(&duration_since_epoch.as_secs().to_be_bytes());

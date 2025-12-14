@@ -20,8 +20,4 @@ impl Config {
     pub fn blob_path(&self) -> PathBuf {
         self.base_path.join("blobs")
     }
-
-    pub fn inline_temp_path(&self) -> PathBuf {
-        self.base_path.join("temp")
-    }
 }
