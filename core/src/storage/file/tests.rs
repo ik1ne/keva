@@ -429,6 +429,40 @@ mod remove_blob_stored_text {
     }
 }
 
+mod remove_all {
+    use crate::storage::file::FileStorage;
+    use crate::storage::file::tests::common::{
+        store_blob_file, store_blob_text, store_inline_file, store_inline_text,
+    };
+    use std::path::Path;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_remove_all_files_and_texts() {
+        let temp_dir = tempdir().unwrap();
+        let storage = FileStorage {
+            base_path: temp_dir.path().to_path_buf(),
+            inline_threshold_bytes: 10,
+        };
+
+        let key_path = Path::new("key_hash");
+        let inlined_text = "inline";
+        let blob_text = "This is a blob.";
+
+        store_inline_file(&temp_dir, &storage, key_path, "inline.txt", inlined_text);
+        store_blob_file(&temp_dir, &storage, key_path, "blob.txt", blob_text);
+
+        store_inline_text(&storage, key_path, inlined_text);
+        store_blob_text(&storage, key_path, blob_text);
+
+        assert!(temp_dir.path().join(key_path).exists());
+
+        storage.remove_all(key_path).unwrap();
+
+        assert!(!temp_dir.path().join(key_path).exists());
+    }
+}
+
 mod ensure_file_path {
     use crate::storage::file::tests::common::{store_blob_file, store_inline_file};
     use crate::storage::file::{ENSURE_INLINED_DIR, FileStorage};
