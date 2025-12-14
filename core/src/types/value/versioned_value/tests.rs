@@ -1,5 +1,5 @@
 use super::*;
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 #[test]
 fn value_v1_serialization() {

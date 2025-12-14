@@ -11,6 +11,7 @@ pub struct Value {
 
 impl ValueVariant for Value {
     const VERSION: u8 = 1;
+    type Hasher = blake3_v1::Hasher;
 }
 
 #[cfg_attr(test, derive(Eq, PartialEq))]
@@ -41,7 +42,7 @@ pub struct ClipData {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TextData {
     Inlined(String),
-    BlobStored(FileHash),
+    BlobStored,
 }
 
 #[cfg_attr(test, derive(Eq, PartialEq))]
@@ -70,10 +71,5 @@ pub struct InlineFileData {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlobStoredFileData {
     pub file_name: String,
-    pub hash: FileHash,
-}
-
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum FileHash {
-    Blake3([u8; 32]),
+    pub hash: blake3_v1::Hash,
 }

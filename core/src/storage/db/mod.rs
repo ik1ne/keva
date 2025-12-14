@@ -60,9 +60,12 @@ impl GcTargets {
 impl Database {
     pub fn new(path: &Path) -> Result<Self, DatabaseError> {
         // initialize redb, trashed_table, purged_table
+        todo!()
     }
 
-    pub fn get(&self, key: &Key) -> Result<Option<Value>, DatabaseError> {}
+    pub fn get(&self, key: &Key) -> Result<Option<Value>, DatabaseError> {
+        todo!()
+    }
 
     /// Inserts value into main table.
     /// TTL tracking (trashed/purged tables) is updated internally based on lifecycle state.
@@ -73,10 +76,23 @@ impl Database {
         plain_text: Option<Cow<'_, str>>,
         files: Vec<latest_value::BlobStoredFileData>,
     ) -> Result<InsertOperation, DatabaseError> {
+        todo!()
     }
-    pub fn remove(&mut self, key: &Key) -> Result<Value, DatabaseError> {}
-    pub fn rename(&mut self, old_key: &Key, new_key: &Key) -> Result<(), DatabaseError> {}
-    pub fn keys(&self) -> Result<impl IntoIterator<Item = Key>, DatabaseError> {}
-    pub fn gc_targets(&self, now: SystemTime) -> Result<GcTargets, DatabaseError> {}
-    pub fn gc_finalize(&mut self, targets: GcTargets) -> Result<(), DatabaseError> {}
+    pub fn remove(&mut self, key: &Key) -> Result<Value, DatabaseError> {
+        todo!()
+    }
+    pub fn rename(&mut self, old_key: &Key, new_key: &Key) -> Result<(), DatabaseError> {
+        todo!()
+    }
+    pub fn keys(&self) -> Result<impl IntoIterator<Item = Key>, DatabaseError> {
+        todo!();
+        #[allow(unreachable_code)]
+        Ok(Vec::new())
+    }
+    pub fn gc_targets(&self, now: SystemTime) -> Result<GcTargets, DatabaseError> {
+        todo!()
+    }
+    pub fn gc_finalize(&mut self, targets: GcTargets) -> Result<(), DatabaseError> {
+        todo!()
+    }
 }
