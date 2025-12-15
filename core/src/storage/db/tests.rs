@@ -19,7 +19,10 @@ mod common {
         (db, temp_dir)
     }
 
-    pub(super) fn create_test_db_with_ttl(trash_ttl_secs: u64, purge_ttl_secs: u64) -> (Database, TempDir) {
+    pub(super) fn create_test_db_with_ttl(
+        trash_ttl_secs: u64,
+        purge_ttl_secs: u64,
+    ) -> (Database, TempDir) {
         let temp_dir = TempDir::new().unwrap();
         let config = Config {
             base_path: temp_dir.path().to_path_buf(),
@@ -40,7 +43,8 @@ mod common {
 
 mod crud {
     use super::common::{create_test_db, make_key};
-    use crate::storage::db::ClipData;
+    use crate::storage::db::{ClipData, TRASHED_TTL};
+    use crate::types::TtlKey;
     use crate::types::value::versioned_value::latest_value::{
         FileData, InlineFileData, LifecycleState, TextData,
     };
@@ -68,6 +72,15 @@ mod crud {
         assert_eq!(value.metadata.created_at, now);
         assert_eq!(value.metadata.updated_at, now);
         assert!(value.metadata.trashed_at.is_none());
+
+        // Verify TTL table: key should be in TRASHED_TTL for auto-trash scheduling
+        let write_txn = db.db.begin_write().unwrap();
+        let ttl_key = TtlKey {
+            timestamp: now,
+            key: key.clone(),
+        };
+        // Key should be in TRASHED_TTL (remove returns true)
+        assert!(TRASHED_TTL.remove(&write_txn, &ttl_key).unwrap());
     }
 
     #[test]
@@ -88,13 +101,7 @@ mod crud {
         match &value.clip_data {
             ClipData::Files(files) => {
                 assert_eq!(files.len(), 1);
-                match &files[0] {
-                    FileData::Inlined(data) => {
-                        assert_eq!(data.file_name, "test.txt");
-                        assert_eq!(data.data, b"file content");
-                    }
-                    _ => panic!("Expected inlined file"),
-                }
+                assert_eq!(files[0], file_data);
             }
             ClipData::Text(_) => panic!("Expected Files variant"),
         }
@@ -423,12 +430,13 @@ mod touch {
 
 mod trash {
     use super::common::{create_test_db, make_key};
-    use crate::storage::db::{ClipData, DatabaseError};
+    use crate::storage::db::{ClipData, DatabaseError, PURGED_TTL, TRASHED_TTL};
+    use crate::types::TtlKey;
     use crate::types::value::versioned_value::latest_value::{LifecycleState, TextData};
     use std::time::{Duration, SystemTime};
 
     #[test]
-    fn test_trash_changes_lifecycle_state() {
+    fn test_trash_sets_lifecycle_and_timestamp() {
         let (mut db, _temp) = create_test_db();
         let key = make_key("test/trash");
         let create_time = SystemTime::now();
@@ -443,10 +451,25 @@ mod trash {
         let trash_time = create_time + Duration::from_secs(100);
         db.trash(&key, trash_time).unwrap();
 
-        // Current should have Trash state
+        // Verify metadata
         let value = db.get(&key).unwrap().unwrap();
         assert_eq!(value.metadata.lifecycle_state, LifecycleState::Trash);
         assert_eq!(value.metadata.trashed_at, Some(trash_time));
+
+        // Verify TTL tables: key should be moved from TRASHED_TTL to PURGED_TTL
+        let write_txn = db.db.begin_write().unwrap();
+        let old_ttl_key = TtlKey {
+            timestamp: create_time,
+            key: key.clone(),
+        };
+        let new_ttl_key = TtlKey {
+            timestamp: trash_time,
+            key: key.clone(),
+        };
+        // Key should no longer be in TRASHED_TTL (remove returns false)
+        assert!(!TRASHED_TTL.remove(&write_txn, &old_ttl_key).unwrap());
+        // Key should be in PURGED_TTL (remove returns true)
+        assert!(PURGED_TTL.remove(&write_txn, &new_ttl_key).unwrap());
     }
 
     #[test]
