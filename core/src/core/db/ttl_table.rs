@@ -3,7 +3,7 @@
 //! This module provides a reusable TTL table that can track keys with timestamps
 //! for garbage collection purposes.
 
-use crate::storage::db::error::DatabaseError;
+use crate::core::db::error::DatabaseError;
 use crate::types::{Key, TtlKey};
 use redb::{ReadTransaction, ReadableTable, TableDefinition, WriteTransaction};
 use std::time::{Duration, SystemTime};
@@ -76,5 +76,20 @@ impl TtlTable {
         }
 
         Ok(expired)
+    }
+
+    /// Returns all keys in this TTL table.
+    ///
+    /// This iterates the entire table and collects all keys.
+    pub fn all_keys(&self, txn: &ReadTransaction) -> Result<Vec<Key>, DatabaseError> {
+        let table = txn.open_table(self.definition)?;
+        let mut keys = Vec::new();
+
+        for entry in table.iter()? {
+            let (ttl_key_guard, _) = entry?;
+            keys.push(ttl_key_guard.value().key);
+        }
+
+        Ok(keys)
     }
 }

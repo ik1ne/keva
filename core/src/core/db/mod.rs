@@ -4,8 +4,8 @@
 //! - Main key-value storage (Key → VersionedValue)
 //! - TTL tracking tables for garbage collection
 
-use crate::storage::db::error::DatabaseError;
-use crate::storage::db::ttl_table::TtlTable;
+use crate::core::db::error::DatabaseError;
+use crate::core::db::ttl_table::TtlTable;
 use crate::types::value::versioned_value::VersionedValue;
 use crate::types::value::versioned_value::latest_value::{
     ClipData, FileData, LifecycleState, Metadata, Value as PersistedValue,
@@ -301,6 +301,64 @@ impl Database {
         Ok(())
     }
 
+    /// Updates an existing key's clip_data and updated_at, preserving created_at.
+    ///
+    /// This is used for editing an existing value without changing its creation timestamp.
+    /// Returns `Err(NotFound)` if the key doesn't exist or is not Active.
+    pub fn update(
+        &mut self,
+        key: &Key,
+        now: SystemTime,
+        clip_data: ClipData,
+    ) -> Result<(), DatabaseError> {
+        let write_txn = self.db.begin_write()?;
+
+        {
+            let mut main_table = write_txn.open_table(MAIN_TABLE)?;
+
+            let value = main_table
+                .get(key)?
+                .map(|g| Self::extract_latest(g.value()))
+                .ok_or(DatabaseError::NotFound)?;
+
+            // Only update Active keys
+            if value.metadata.lifecycle_state != LifecycleState::Active {
+                return Err(DatabaseError::NotFound);
+            }
+
+            // Remove old TTL entry
+            let old_ttl_key = TtlKey {
+                timestamp: value.metadata.updated_at,
+                key: key.clone(),
+            };
+            TRASHED_TTL.remove(&write_txn, &old_ttl_key)?;
+
+            // Create updated value preserving created_at
+            let new_value = PersistedValue {
+                metadata: Metadata {
+                    created_at: value.metadata.created_at,
+                    updated_at: now,
+                    trashed_at: None,
+                    lifecycle_state: LifecycleState::Active,
+                },
+                clip_data,
+            };
+
+            // Add new TTL entry
+            let new_ttl_key = TtlKey {
+                timestamp: now,
+                key: key.clone(),
+            };
+            TRASHED_TTL.insert(&write_txn, &new_ttl_key)?;
+
+            // Store updated value
+            main_table.insert(key, &VersionedValue::V1(new_value))?;
+        }
+
+        write_txn.commit()?;
+        Ok(())
+    }
+
     /// Soft-deletes a key by moving it to Trash state.
     ///
     /// - Sets `lifecycle_state` to `Trash`
@@ -341,6 +399,59 @@ impl Database {
                 key: key.clone(),
             };
             PURGED_TTL.insert(&write_txn, &new_ttl_key)?;
+
+            // Store updated value
+            main_table.insert(key, &VersionedValue::V1(value))?;
+        }
+
+        write_txn.commit()?;
+        Ok(())
+    }
+
+    /// Restores a trashed key by moving it back to Active state.
+    ///
+    /// - Sets `lifecycle_state` to `Active`
+    /// - Clears `trashed_at`
+    /// - Updates `updated_at` to `now`
+    /// - Removes from purged TTL table, adds to trashed TTL table
+    ///
+    /// Returns `Err(NotFound)` if the key doesn't exist or is not in Trash state.
+    pub fn restore(&mut self, key: &Key, now: SystemTime) -> Result<(), DatabaseError> {
+        let write_txn = self.db.begin_write()?;
+
+        {
+            let mut main_table = write_txn.open_table(MAIN_TABLE)?;
+
+            let mut value = main_table
+                .get(key)?
+                .map(|g| Self::extract_latest(g.value()))
+                .ok_or(DatabaseError::NotFound)?;
+
+            // Can only restore Trash keys
+            if value.metadata.lifecycle_state != LifecycleState::Trash {
+                return Err(DatabaseError::NotFound);
+            }
+
+            // Remove from purged TTL table
+            if let Some(trashed_at) = value.metadata.trashed_at {
+                let old_ttl_key = TtlKey {
+                    timestamp: trashed_at,
+                    key: key.clone(),
+                };
+                PURGED_TTL.remove(&write_txn, &old_ttl_key)?;
+            }
+
+            // Update state
+            value.metadata.lifecycle_state = LifecycleState::Active;
+            value.metadata.trashed_at = None;
+            value.metadata.updated_at = now;
+
+            // Add to trashed TTL table
+            let new_ttl_key = TtlKey {
+                timestamp: now,
+                key: key.clone(),
+            };
+            TRASHED_TTL.insert(&write_txn, &new_ttl_key)?;
 
             // Store updated value
             main_table.insert(key, &VersionedValue::V1(value))?;
@@ -502,6 +613,52 @@ impl Database {
         for entry in table.iter()? {
             let (key, _) = entry?;
             keys.push(key.value());
+        }
+
+        Ok(keys)
+    }
+
+    /// Returns all Active keys by iterating the TRASHED_TTL table.
+    ///
+    /// This is more efficient than iterating the main table and decoding values.
+    pub fn active_keys(&self) -> Result<Vec<Key>, DatabaseError> {
+        let read_txn = self.db.begin_read()?;
+        TRASHED_TTL.all_keys(&read_txn)
+    }
+
+    /// Returns all Trash keys by iterating the PURGED_TTL table.
+    ///
+    /// This is more efficient than iterating the main table and decoding values.
+    pub fn trashed_keys(&self) -> Result<Vec<Key>, DatabaseError> {
+        let read_txn = self.db.begin_read()?;
+        PURGED_TTL.all_keys(&read_txn)
+    }
+
+    /// Returns all keys matching the given prefix using btree range scan.
+    ///
+    /// This is more efficient than iterating all keys and filtering.
+    pub fn list_prefix(&self, prefix: &str) -> Result<Vec<Key>, DatabaseError> {
+        let read_txn = self.db.begin_read()?;
+        let table = read_txn.open_table(MAIN_TABLE)?;
+
+        let mut keys = Vec::new();
+
+        // Use range starting from prefix
+        // Keys are stored as UTF-8 strings, sorted lexicographically
+        let Some(start_key) = Key::try_from(prefix).ok() else {
+            // Invalid prefix (e.g., empty after trim) - return empty
+            return Ok(keys);
+        };
+
+        // Use explicit range bounds with the Key type
+        let range: std::ops::RangeFrom<&Key> = &start_key..;
+        for entry in table.range::<&Key>(range)? {
+            let (key_guard, _) = entry?;
+            let key = key_guard.value();
+            if !key.as_str().starts_with(prefix) {
+                break;
+            }
+            keys.push(key);
         }
 
         Ok(keys)

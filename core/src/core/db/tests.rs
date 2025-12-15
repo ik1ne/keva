@@ -1,5 +1,5 @@
 mod common {
-    use crate::storage::db::Database;
+    use crate::core::db::Database;
     use crate::types::config::{Config, SavedConfig};
     use crate::types::key::Key;
     use std::time::Duration;
@@ -43,7 +43,7 @@ mod common {
 
 mod crud {
     use super::common::{create_test_db, make_key};
-    use crate::storage::db::{ClipData, TRASHED_TTL};
+    use crate::core::db::{ClipData, TRASHED_TTL};
     use crate::types::TtlKey;
     use crate::types::value::versioned_value::latest_value::{
         FileData, InlineFileData, LifecycleState, TextData,
@@ -222,7 +222,7 @@ mod crud {
 
 mod append_files {
     use super::common::{create_test_db, make_key};
-    use crate::storage::db::{ClipData, DatabaseError};
+    use crate::core::db::{ClipData, DatabaseError};
     use crate::types::value::versioned_value::latest_value::{FileData, InlineFileData, TextData};
     use std::time::{Duration, SystemTime};
 
@@ -369,7 +369,7 @@ mod append_files {
 
 mod touch {
     use super::common::{create_test_db, make_key};
-    use crate::storage::db::{ClipData, DatabaseError};
+    use crate::core::db::{ClipData, DatabaseError};
     use crate::types::value::versioned_value::latest_value::TextData;
     use std::time::{Duration, SystemTime};
 
@@ -430,7 +430,7 @@ mod touch {
 
 mod trash {
     use super::common::{create_test_db, make_key};
-    use crate::storage::db::{ClipData, DatabaseError, PURGED_TTL, TRASHED_TTL};
+    use crate::core::db::{ClipData, DatabaseError, PURGED_TTL, TRASHED_TTL};
     use crate::types::TtlKey;
     use crate::types::value::versioned_value::latest_value::{LifecycleState, TextData};
     use std::time::{Duration, SystemTime};
@@ -504,7 +504,7 @@ mod trash {
 
 mod purge {
     use super::common::{create_test_db, make_key};
-    use crate::storage::db::{ClipData, DatabaseError};
+    use crate::core::db::{ClipData, DatabaseError};
     use crate::types::value::versioned_value::latest_value::TextData;
     use std::time::{Duration, SystemTime};
 
@@ -558,7 +558,7 @@ mod purge {
 
 mod rename {
     use super::common::{create_test_db, make_key};
-    use crate::storage::db::{ClipData, DatabaseError};
+    use crate::core::db::{ClipData, DatabaseError};
     use crate::types::value::versioned_value::latest_value::{LifecycleState, TextData};
     use std::time::{Duration, SystemTime};
 
@@ -700,7 +700,7 @@ mod rename {
 
 mod keys {
     use super::common::{create_test_db, make_key};
-    use crate::storage::db::ClipData;
+    use crate::core::db::ClipData;
     use crate::types::value::versioned_value::latest_value::TextData;
     use std::time::{Duration, SystemTime};
 
@@ -769,7 +769,7 @@ mod keys {
 
 mod gc {
     use super::common::{create_test_db, create_test_db_with_ttl, make_key};
-    use crate::storage::db::ClipData;
+    use crate::core::db::ClipData;
     use crate::types::value::versioned_value::latest_value::{LifecycleState, TextData};
     use std::time::{Duration, SystemTime};
 
@@ -918,7 +918,7 @@ mod gc {
 
 mod edge_cases {
     use super::common::{create_test_db, make_key};
-    use crate::storage::db::ClipData;
+    use crate::core::db::ClipData;
     use crate::types::value::versioned_value::latest_value::{FileData, InlineFileData, TextData};
     use std::time::SystemTime;
 

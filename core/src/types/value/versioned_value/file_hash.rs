@@ -22,6 +22,6 @@ impl FileHasher for blake3_v1::Hasher {
     }
 
     fn finalize(&self) -> Self::Output {
-        blake3_v1::Hasher::finalize(&self)
+        blake3_v1::Hasher::finalize(self)
     }
 }

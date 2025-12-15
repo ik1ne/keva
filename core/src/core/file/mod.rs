@@ -1,7 +1,8 @@
 //! Blob storage mapping and inlined file management
 
-use crate::storage::file::error::FileStorageError;
+use crate::core::file::error::FileStorageError;
 use crate::types::value::versioned_value::ValueVariant;
+use crate::types::value::versioned_value::file_hash::FileHasher;
 use crate::types::value::versioned_value::latest_value::*;
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
@@ -35,7 +36,7 @@ pub mod error {
 /// Blob-stored text files are stored in `{base_path}/{key_path}/text.txt`.
 ///
 /// # Inlined Files/Text
-/// Inlined files are stored inside [`db`](crate::storage::db::Database).
+/// Inlined files are stored inside [`db`](crate::core::db::Database).
 ///
 /// # Ensuring File Paths
 /// The `ensure_file_path` method provides a way to get a filesystem path for both
@@ -169,6 +170,25 @@ impl FileStorage {
         Ok(())
     }
 
+    /// Renames a key's blob directory.
+    ///
+    /// If the old directory doesn't exist (no blobs stored), this is a no-op.
+    pub fn rename(&self, old_key_path: &Path, new_key_path: &Path) -> Result<(), FileStorageError> {
+        let old_dir = self.base_path.join(old_key_path);
+        let new_dir = self.base_path.join(new_key_path);
+
+        if !old_dir.exists() {
+            return Ok(()); // No blobs to move
+        }
+
+        if new_dir.exists() {
+            std::fs::remove_dir_all(&new_dir)?;
+        }
+        std::fs::rename(old_dir, new_dir)?;
+
+        Ok(())
+    }
+
     /// Ensures that the file represented by `file` exists on disk, returning its path.
     ///
     /// If the file is inlined, it will be written to a temporary location under
@@ -181,7 +201,7 @@ impl FileStorage {
         let inline_dir = self.base_path.join(ENSURE_INLINED_DIR).join(key_path);
         match file {
             FileData::Inlined(InlineFileData { file_name, data }) => {
-                let hash = <Value as ValueVariant>::Hasher::new()
+                let hash = <<Value as ValueVariant>::Hasher as FileHasher>::new()
                     .update(data)
                     .finalize();
                 let file_dir_path = inline_dir.join(hash.to_string());
@@ -247,6 +267,34 @@ impl FileStorage {
         }
 
         Ok(())
+    }
+
+    /// Lists all blob directories in the storage.
+    ///
+    /// Returns the directory names (which are blake3 hashes of keys).
+    /// This is used for orphan blob detection during garbage collection.
+    pub fn list_blob_dirs(&self) -> Result<Vec<PathBuf>, FileStorageError> {
+        if !self.base_path.exists() {
+            return Ok(Vec::new());
+        }
+
+        let mut dirs = Vec::new();
+        for entry in std::fs::read_dir(&self.base_path)? {
+            let entry = entry?;
+            let path = entry.path();
+            // Skip the temp_inline directory
+            if path.file_name() == Some(std::ffi::OsStr::new(ENSURE_INLINED_DIR)) {
+                continue;
+            }
+            if path.is_dir() {
+                // Return just the directory name (the hash)
+                if let Some(name) = path.file_name() {
+                    dirs.push(PathBuf::from(name));
+                }
+            }
+        }
+
+        Ok(dirs)
     }
 }
 
