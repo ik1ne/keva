@@ -38,6 +38,9 @@ pub mod error {
 
         #[error("Key is already trashed")]
         AlreadyTrashed,
+
+        #[error("Destination key already exists")]
+        DestinationExists,
     }
 }
 
@@ -64,7 +67,7 @@ impl KevaCore {
     pub fn open(config: Config) -> Result<Self, StorageError> {
         let file = FileStorage {
             base_path: config.blob_path(),
-            inline_threshold_bytes: config.saved.large_file_threshold_bytes,
+            inline_threshold_bytes: config.saved.inline_threshold_bytes,
         };
         let db = db::Database::new(config.clone())?;
         Ok(Self { db, file, config })
@@ -112,12 +115,11 @@ impl KevaCore {
     ///
     /// The effective state is computed from TTL expiration, so an Active key
     /// in the DB may be returned as Trash if its TTL has expired.
-    pub fn get(&self, key: &Key) -> Result<Option<Value>, StorageError> {
+    pub fn get(&self, key: &Key, now: SystemTime) -> Result<Option<Value>, StorageError> {
         let Some(mut value) = self.db.get(key)? else {
             return Ok(None);
         };
 
-        let now = SystemTime::now();
         let effective_state = self.effective_lifecycle_state(&value, now);
 
         match effective_state {
@@ -135,12 +137,16 @@ impl KevaCore {
     /// - If the key doesn't exist, creates a new entry
     /// - If the key exists and is Active, updates the value (preserving created_at)
     /// - If the key exists and is Trash, returns KeyIsTrashed error (must restore first)
-    pub fn upsert_text(&mut self, key: &Key, text: &str) -> Result<(), StorageError> {
+    pub fn upsert_text(
+        &mut self,
+        key: &Key,
+        text: &str,
+        now: SystemTime,
+    ) -> Result<(), StorageError> {
         let key_path = key_to_path(key);
         let text_data = self.file.store_text(&key_path, Cow::Borrowed(text))?;
-        let now = SystemTime::now();
 
-        match self.get(key)? {
+        match self.get(key, now)? {
             None => self.db.insert(key, now, ClipData::Text(text_data))?,
             Some(v) if v.metadata.lifecycle_state == LifecycleState::Active => {
                 self.db.update(key, now, ClipData::Text(text_data))?
@@ -168,6 +174,7 @@ impl KevaCore {
         &mut self,
         key: &Key,
         file_paths: impl IntoIterator<Item = impl AsRef<std::path::Path>>,
+        now: SystemTime,
     ) -> Result<(), StorageError> {
         let key_path = key_to_path(key);
         let files: Vec<_> = file_paths
@@ -179,8 +186,7 @@ impl KevaCore {
             return Ok(());
         }
 
-        let now = SystemTime::now();
-        match self.get(key)? {
+        match self.get(key, now)? {
             None => self.db.insert(key, now, ClipData::Files(files))?,
             Some(v)
                 if v.metadata.lifecycle_state == LifecycleState::Active
@@ -208,12 +214,12 @@ impl KevaCore {
     /// Soft-deletes a key by moving it to Trash state.
     ///
     /// Only works on Active keys. Returns error if key is already trashed.
-    pub fn trash(&mut self, key: &Key) -> Result<(), StorageError> {
-        let value = self.get(key)?;
+    pub fn trash(&mut self, key: &Key, now: SystemTime) -> Result<(), StorageError> {
+        let value = self.get(key, now)?;
         match value {
             None => Err(DatabaseError::NotFound.into()),
             Some(v) if v.metadata.lifecycle_state == LifecycleState::Active => {
-                self.db.trash(key, SystemTime::now())?;
+                self.db.trash(key, now)?;
                 Ok(())
             }
             Some(_) => Err(StorageError::AlreadyTrashed),
@@ -225,8 +231,8 @@ impl KevaCore {
     /// - If Trash → move to Active
     /// - If Active → no-op (idempotent)
     /// - If Purge/None → Error
-    pub fn restore(&mut self, key: &Key) -> Result<(), StorageError> {
-        let value = self.get(key)?;
+    pub fn restore(&mut self, key: &Key, now: SystemTime) -> Result<(), StorageError> {
+        let value = self.get(key, now)?;
         match value {
             None => Err(DatabaseError::NotFound.into()),
             Some(v) if v.metadata.lifecycle_state == LifecycleState::Active => {
@@ -234,7 +240,7 @@ impl KevaCore {
                 Ok(())
             }
             Some(v) if v.metadata.lifecycle_state == LifecycleState::Trash => {
-                self.db.restore(key, SystemTime::now())?;
+                self.db.restore(key, now)?;
                 Ok(())
             }
             Some(_) => {
@@ -256,17 +262,28 @@ impl KevaCore {
 
     /// Renames a key.
     ///
-    /// Only works on Active source keys. Destination key status doesn't matter
-    /// (existing destination is overwritten).
-    pub fn rename(&mut self, old_key: &Key, new_key: &Key) -> Result<(), StorageError> {
+    /// Only works on Active source keys. If `overwrite` is false and destination
+    /// exists (Active or Trash), returns `DestinationExists` error.
+    pub fn rename(
+        &mut self,
+        old_key: &Key,
+        new_key: &Key,
+        overwrite: bool,
+        now: SystemTime,
+    ) -> Result<(), StorageError> {
         // Check source key is Active
-        let value = self.get(old_key)?;
+        let value = self.get(old_key, now)?;
         match value {
             None => return Err(DatabaseError::NotFound.into()),
             Some(v) if v.metadata.lifecycle_state != LifecycleState::Active => {
                 return Err(StorageError::KeyIsTrashed);
             }
             Some(_) => {}
+        }
+
+        // Check destination doesn't exist (unless overwrite is true)
+        if !overwrite && self.get(new_key, now)?.is_some() {
+            return Err(StorageError::DestinationExists);
         }
 
         self.db.rename(old_key, new_key)?;
@@ -290,12 +307,12 @@ impl KevaCore {
     ///
     /// Uses btree range scan for efficiency. Only returns keys that are
     /// visible (not effective Purge).
-    pub fn list(&self, prefix: &str) -> Result<Vec<Key>, StorageError> {
+    pub fn list(&self, prefix: &str, now: SystemTime) -> Result<Vec<Key>, StorageError> {
         let keys = self.db.list_prefix(prefix)?;
         // Filter out keys with effective Purge state
         Ok(keys
             .into_iter()
-            .filter(|k| self.get(k).ok().flatten().is_some())
+            .filter(|k| self.get(k, now).ok().flatten().is_some())
             .collect())
     }
 
@@ -306,8 +323,8 @@ impl KevaCore {
     /// 2. Permanently deletes expired Trash keys
     /// 3. Cleans up blob files for purged keys
     /// 4. Removes orphan blob directories (blobs without corresponding keys)
-    pub fn gc(&mut self) -> Result<GcResult, StorageError> {
-        let result = self.db.gc(SystemTime::now())?;
+    pub fn gc(&mut self, now: SystemTime) -> Result<GcResult, StorageError> {
+        let result = self.db.gc(now)?;
 
         // Clean up blob files for purged keys
         for key in &result.purged {

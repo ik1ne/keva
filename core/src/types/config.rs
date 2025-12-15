@@ -11,7 +11,7 @@ pub struct Config {
 pub struct SavedConfig {
     pub trash_ttl: Duration,
     pub purge_ttl: Duration,
-    pub large_file_threshold_bytes: u64,
+    pub inline_threshold_bytes: u64,
 }
 
 impl Config {

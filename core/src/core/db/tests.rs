@@ -12,7 +12,7 @@ mod common {
             saved: SavedConfig {
                 trash_ttl: Duration::from_secs(30 * 24 * 60 * 60), // 30 days
                 purge_ttl: Duration::from_secs(7 * 24 * 60 * 60),  // 7 days
-                large_file_threshold_bytes: 1024 * 1024,           // 1MB
+                inline_threshold_bytes: 1024 * 1024, // 1MB
             },
         };
         let db = Database::new(config).unwrap();
@@ -29,7 +29,7 @@ mod common {
             saved: SavedConfig {
                 trash_ttl: Duration::from_secs(trash_ttl_secs),
                 purge_ttl: Duration::from_secs(purge_ttl_secs),
-                large_file_threshold_bytes: 1024 * 1024,
+                inline_threshold_bytes: 1024 * 1024,
             },
         };
         let db = Database::new(config).unwrap();

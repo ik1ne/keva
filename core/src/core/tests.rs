@@ -10,7 +10,7 @@ fn create_test_storage() -> (KevaCore, TempDir) {
         saved: SavedConfig {
             trash_ttl: Duration::from_secs(30 * 24 * 60 * 60), // 30 days
             purge_ttl: Duration::from_secs(7 * 24 * 60 * 60),  // 7 days
-            large_file_threshold_bytes: 1024 * 1024,           // 1MB
+            inline_threshold_bytes: 1024 * 1024, // 1MB
         },
     };
     let storage = KevaCore::open(config).unwrap();
@@ -29,10 +29,11 @@ mod upsert_text {
     fn test_upsert_creates_new_key() {
         let (mut storage, _temp) = create_test_storage();
         let key = make_key("test/key");
+        let now = SystemTime::now();
 
-        storage.upsert_text(&key, "hello world").unwrap();
+        storage.upsert_text(&key, "hello world", now).unwrap();
 
-        let value = storage.get(&key).unwrap().unwrap();
+        let value = storage.get(&key, now).unwrap().unwrap();
         assert_eq!(
             value.clip_data,
             ClipData::Text(TextData::Inlined("hello world".to_string()))
@@ -44,16 +45,18 @@ mod upsert_text {
     fn test_upsert_updates_existing_key() {
         let (mut storage, _temp) = create_test_storage();
         let key = make_key("test/key");
+        let now = SystemTime::now();
 
-        storage.upsert_text(&key, "first").unwrap();
-        let first_value = storage.get(&key).unwrap().unwrap();
+        storage.upsert_text(&key, "first", now).unwrap();
+        let first_value = storage.get(&key, now).unwrap().unwrap();
         let created_at = first_value.metadata.created_at;
 
         // Small delay to ensure different timestamps
         std::thread::sleep(Duration::from_millis(10));
+        let later = SystemTime::now();
 
-        storage.upsert_text(&key, "second").unwrap();
-        let second_value = storage.get(&key).unwrap().unwrap();
+        storage.upsert_text(&key, "second", later).unwrap();
+        let second_value = storage.get(&key, later).unwrap().unwrap();
 
         // Content should be updated
         assert_eq!(
@@ -70,16 +73,17 @@ mod upsert_text {
     fn test_upsert_fails_on_trashed_key() {
         let (mut storage, _temp) = create_test_storage();
         let key = make_key("test/key");
+        let now = SystemTime::now();
 
-        storage.upsert_text(&key, "first").unwrap();
-        storage.trash(&key).unwrap();
+        storage.upsert_text(&key, "first", now).unwrap();
+        storage.trash(&key, now).unwrap();
 
         // Key should be visible as Trash
-        let value = storage.get(&key).unwrap().unwrap();
+        let value = storage.get(&key, now).unwrap().unwrap();
         assert_eq!(value.metadata.lifecycle_state, LifecycleState::Trash);
 
         // Upsert should fail - must restore first
-        let result = storage.upsert_text(&key, "second");
+        let result = storage.upsert_text(&key, "second", now);
         assert!(matches!(result, Err(StorageError::KeyIsTrashed)));
     }
 }
@@ -101,10 +105,11 @@ mod add_files {
         let (mut storage, temp) = create_test_storage();
         let key = make_key("test/files");
         let file_path = create_test_file(&temp, "test.txt", b"file content");
+        let now = SystemTime::now();
 
-        storage.add_files(&key, [&file_path]).unwrap();
+        storage.add_files(&key, [&file_path], now).unwrap();
 
-        let value = storage.get(&key).unwrap().unwrap();
+        let value = storage.get(&key, now).unwrap().unwrap();
         match &value.clip_data {
             ClipData::Files(files) => {
                 assert_eq!(files.len(), 1);
@@ -126,11 +131,12 @@ mod add_files {
         let key = make_key("test/files");
         let file1 = create_test_file(&temp, "file1.txt", b"content1");
         let file2 = create_test_file(&temp, "file2.txt", b"content2");
+        let now = SystemTime::now();
 
-        storage.add_files(&key, [&file1]).unwrap();
-        storage.add_files(&key, [&file2]).unwrap();
+        storage.add_files(&key, [&file1], now).unwrap();
+        storage.add_files(&key, [&file2], now).unwrap();
 
-        let value = storage.get(&key).unwrap().unwrap();
+        let value = storage.get(&key, now).unwrap().unwrap();
         match &value.clip_data {
             ClipData::Files(files) => {
                 assert_eq!(files.len(), 2);
@@ -144,10 +150,11 @@ mod add_files {
         let (mut storage, temp) = create_test_storage();
         let key = make_key("test/text");
         let file_path = create_test_file(&temp, "test.txt", b"content");
+        let now = SystemTime::now();
 
-        storage.upsert_text(&key, "text content").unwrap();
+        storage.upsert_text(&key, "text content", now).unwrap();
 
-        let result = storage.add_files(&key, [&file_path]);
+        let result = storage.add_files(&key, [&file_path], now);
         assert!(matches!(
             result,
             Err(StorageError::Database(DatabaseError::TypeMismatch))
@@ -162,18 +169,19 @@ mod trash {
     fn test_trash_makes_key_trashed() {
         let (mut storage, _temp) = create_test_storage();
         let key = make_key("test/key");
+        let now = SystemTime::now();
 
-        storage.upsert_text(&key, "content").unwrap();
-        let active_value = storage.get(&key).unwrap().unwrap();
+        storage.upsert_text(&key, "content", now).unwrap();
+        let active_value = storage.get(&key, now).unwrap().unwrap();
         assert_eq!(
             active_value.metadata.lifecycle_state,
             LifecycleState::Active
         );
 
-        storage.trash(&key).unwrap();
+        storage.trash(&key, now).unwrap();
 
         // Key should still be visible, but with Trash state
-        let trashed_value = storage.get(&key).unwrap().unwrap();
+        let trashed_value = storage.get(&key, now).unwrap().unwrap();
         assert_eq!(
             trashed_value.metadata.lifecycle_state,
             LifecycleState::Trash
@@ -184,8 +192,9 @@ mod trash {
     fn test_trash_nonexistent_key_fails() {
         let (mut storage, _temp) = create_test_storage();
         let key = make_key("nonexistent");
+        let now = SystemTime::now();
 
-        let result = storage.trash(&key);
+        let result = storage.trash(&key, now);
         assert!(matches!(
             result,
             Err(StorageError::Database(DatabaseError::NotFound))
@@ -196,11 +205,12 @@ mod trash {
     fn test_trash_already_trashed_fails() {
         let (mut storage, _temp) = create_test_storage();
         let key = make_key("test/key");
+        let now = SystemTime::now();
 
-        storage.upsert_text(&key, "content").unwrap();
-        storage.trash(&key).unwrap();
+        storage.upsert_text(&key, "content", now).unwrap();
+        storage.trash(&key, now).unwrap();
 
-        let result = storage.trash(&key);
+        let result = storage.trash(&key, now);
         assert!(matches!(result, Err(StorageError::AlreadyTrashed)));
     }
 }
@@ -214,15 +224,54 @@ mod rename {
         let (mut storage, _temp) = create_test_storage();
         let old_key = make_key("old/key");
         let new_key = make_key("new/key");
+        let now = SystemTime::now();
 
-        storage.upsert_text(&old_key, "content").unwrap();
-        storage.rename(&old_key, &new_key).unwrap();
+        storage.upsert_text(&old_key, "content", now).unwrap();
+        storage.rename(&old_key, &new_key, false, now).unwrap();
 
-        assert!(storage.get(&old_key).unwrap().is_none());
-        let value = storage.get(&new_key).unwrap().unwrap();
+        assert!(storage.get(&old_key, now).unwrap().is_none());
+        let value = storage.get(&new_key, now).unwrap().unwrap();
         assert_eq!(
             value.clip_data,
             ClipData::Text(TextData::Inlined("content".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_rename_fails_if_destination_exists() {
+        let (mut storage, _temp) = create_test_storage();
+        let old_key = make_key("old/key");
+        let new_key = make_key("new/key");
+        let now = SystemTime::now();
+
+        storage.upsert_text(&old_key, "old content", now).unwrap();
+        storage.upsert_text(&new_key, "new content", now).unwrap();
+
+        let result = storage.rename(&old_key, &new_key, false, now);
+        assert!(matches!(result, Err(StorageError::DestinationExists)));
+
+        // Both keys should still exist with original content
+        assert!(storage.get(&old_key, now).unwrap().is_some());
+        assert!(storage.get(&new_key, now).unwrap().is_some());
+    }
+
+    #[test]
+    fn test_rename_with_overwrite() {
+        let (mut storage, _temp) = create_test_storage();
+        let old_key = make_key("old/key");
+        let new_key = make_key("new/key");
+        let now = SystemTime::now();
+
+        storage.upsert_text(&old_key, "old content", now).unwrap();
+        storage.upsert_text(&new_key, "new content", now).unwrap();
+
+        storage.rename(&old_key, &new_key, true, now).unwrap();
+
+        assert!(storage.get(&old_key, now).unwrap().is_none());
+        let value = storage.get(&new_key, now).unwrap().unwrap();
+        assert_eq!(
+            value.clip_data,
+            ClipData::Text(TextData::Inlined("old content".to_string()))
         );
     }
 }
@@ -233,17 +282,18 @@ mod keys_and_list {
     #[test]
     fn test_active_keys_returns_only_active() {
         let (mut storage, _temp) = create_test_storage();
+        let now = SystemTime::now();
 
         storage
-            .upsert_text(&make_key("active1"), "content")
+            .upsert_text(&make_key("active1"), "content", now)
             .unwrap();
         storage
-            .upsert_text(&make_key("active2"), "content")
+            .upsert_text(&make_key("active2"), "content", now)
             .unwrap();
         storage
-            .upsert_text(&make_key("trashed"), "content")
+            .upsert_text(&make_key("trashed"), "content", now)
             .unwrap();
-        storage.trash(&make_key("trashed")).unwrap();
+        storage.trash(&make_key("trashed"), now).unwrap();
 
         let keys = storage.active_keys().unwrap();
         assert_eq!(keys.len(), 2);
@@ -257,16 +307,17 @@ mod keys_and_list {
     #[test]
     fn test_trashed_keys_returns_only_trashed() {
         let (mut storage, _temp) = create_test_storage();
+        let now = SystemTime::now();
 
-        storage.upsert_text(&make_key("active"), "content").unwrap();
+        storage.upsert_text(&make_key("active"), "content", now).unwrap();
         storage
-            .upsert_text(&make_key("trashed1"), "content")
+            .upsert_text(&make_key("trashed1"), "content", now)
             .unwrap();
         storage
-            .upsert_text(&make_key("trashed2"), "content")
+            .upsert_text(&make_key("trashed2"), "content", now)
             .unwrap();
-        storage.trash(&make_key("trashed1")).unwrap();
-        storage.trash(&make_key("trashed2")).unwrap();
+        storage.trash(&make_key("trashed1"), now).unwrap();
+        storage.trash(&make_key("trashed2"), now).unwrap();
 
         let keys = storage.trashed_keys().unwrap();
         assert_eq!(keys.len(), 2);
@@ -280,21 +331,22 @@ mod keys_and_list {
     #[test]
     fn test_list_filters_by_prefix() {
         let (mut storage, _temp) = create_test_storage();
+        let now = SystemTime::now();
 
         storage
-            .upsert_text(&make_key("project/config"), "content")
+            .upsert_text(&make_key("project/config"), "content", now)
             .unwrap();
         storage
-            .upsert_text(&make_key("project/data"), "content")
+            .upsert_text(&make_key("project/data"), "content", now)
             .unwrap();
         storage
-            .upsert_text(&make_key("other/key"), "content")
+            .upsert_text(&make_key("other/key"), "content", now)
             .unwrap();
 
-        let project_keys = storage.list("project/").unwrap();
+        let project_keys = storage.list("project/", now).unwrap();
         assert_eq!(project_keys.len(), 2);
 
-        let other_keys = storage.list("other/").unwrap();
+        let other_keys = storage.list("other/", now).unwrap();
         assert_eq!(other_keys.len(), 1);
     }
 }

@@ -636,7 +636,7 @@ impl Database {
 
     /// Returns all keys matching the given prefix using btree range scan.
     ///
-    /// This is more efficient than iterating all keys and filtering.
+    /// Uses double-bounded range for efficiency - no need to check each key.
     pub fn list_prefix(&self, prefix: &str) -> Result<Vec<Key>, DatabaseError> {
         let read_txn = self.db.begin_read()?;
         let table = read_txn.open_table(MAIN_TABLE)?;
@@ -650,18 +650,51 @@ impl Database {
             return Ok(keys);
         };
 
-        // Use explicit range bounds with the Key type
-        let range: std::ops::RangeFrom<&Key> = &start_key..;
-        for entry in table.range::<&Key>(range)? {
-            let (key_guard, _) = entry?;
-            let key = key_guard.value();
-            if !key.as_str().starts_with(prefix) {
-                break;
+        // Compute successor prefix for exclusive end bound
+        // e.g., "foo/" -> "foo0" (since '0' > '/' in UTF-8)
+        if let Some(end_key) = Self::prefix_successor(prefix) {
+            // Double-bounded range - no need to check starts_with
+            for entry in table.range::<&Key>(&start_key..&end_key)? {
+                let (key_guard, _) = entry?;
+                keys.push(key_guard.value());
             }
-            keys.push(key);
+        } else {
+            // All chars were char::MAX - fall back to unbounded with manual check
+            for entry in table.range::<&Key>(&start_key..)? {
+                let (key_guard, _) = entry?;
+                let key = key_guard.value();
+                if !key.as_str().starts_with(prefix) {
+                    break;
+                }
+                keys.push(key);
+            }
         }
 
         Ok(keys)
+    }
+
+    /// Computes the lexicographically smallest string greater than all strings
+    /// with the given prefix. Returns None if prefix consists entirely of char::MAX.
+    fn prefix_successor(prefix: &str) -> Option<Key> {
+        let mut chars: Vec<char> = prefix.chars().collect();
+
+        // Find rightmost char that can be incremented
+        while let Some(c) = chars.pop() {
+            if let Some(next_c) = char::from_u32(c as u32 + 1) {
+                chars.push(next_c);
+                let successor: String = chars.iter().collect();
+                // Try to create a valid Key - if it fails, continue popping
+                if let Ok(key) = Key::try_from(successor.as_str()) {
+                    return Some(key);
+                }
+                // Successor wasn't valid Key, remove the char we just pushed and try previous
+                chars.pop();
+            }
+            // c was char::MAX or successor wasn't valid Key, continue to previous char
+        }
+
+        // All chars were char::MAX or couldn't form valid Key
+        None
     }
 
     /// Performs garbage collection.

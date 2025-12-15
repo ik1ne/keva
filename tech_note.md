@@ -190,4 +190,4 @@ fn gc() {
 - [x] TTL values - configurable via `SavedConfig` (`trash_ttl`, `purge_ttl`)
 - [x] Maximum key length - 256 characters (`MAX_KEY_LENGTH`)
 - [ ] Maximum value size (for plain text stored in redb) - currently limited by `inline_threshold_bytes`
-- [x] Large file threshold - configurable via `SavedConfig` (`large_file_threshold_bytes`)
+- [x] Inline threshold - configurable via `SavedConfig` (`inline_threshold_bytes`)
