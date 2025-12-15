@@ -27,16 +27,20 @@ Rust (pure Rust preferred to minimize dependencies)
 
 ```
 ~/.keva/
-  keva.redb          # Metadata + plain text values
+  keva.redb              # Metadata + inlined values (text/small files)
   blobs/
-    <hash>/          # Content-addressable storage
-      data           # Raw binary
-      meta.json      # MIME type, original size
+    {key_path}/          # Organized by key
+      {content_hash}/    # Content-addressable subdirectory
+        {filename}       # Original filename preserved
+      text.txt           # Blob-stored text (when too large to inline)
+    temp_inline/         # Temporary cache for ensure_*_path methods
+      {key_path}/...
 ```
 
-- Store blobs >100KB as separate files
+- Inline threshold configurable (`inline_threshold_bytes`) - small data stored in redb, large data as blob files
 - Use BLAKE3 for content hashing (fast, secure)
 - redb handles concurrent access via file locking
+- Original filenames preserved for blob-stored files
 
 ## 5. Performance Targets
 
@@ -183,6 +187,7 @@ fn gc() {
 ## 12. Open Questions
 
 - [ ] Default global shortcut key (platform-specific?)
-- [ ] TTL default values (trash: 30 days? purge: 7 days after trash?)
-- [ ] Maximum key length
-- [ ] Maximum value size (for plain text stored in redb)
+- [x] TTL values - configurable via `SavedConfig` (`trash_ttl`, `purge_ttl`)
+- [x] Maximum key length - 256 characters (`MAX_KEY_LENGTH`)
+- [ ] Maximum value size (for plain text stored in redb) - currently limited by `inline_threshold_bytes`
+- [x] Large file threshold - configurable via `SavedConfig` (`large_file_threshold_bytes`)

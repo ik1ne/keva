@@ -41,7 +41,9 @@ mod common {
 mod crud {
     use super::common::{create_test_db, make_key};
     use crate::storage::db::ClipData;
-    use crate::types::value::versioned_value::latest_value;
+    use crate::types::value::versioned_value::latest_value::{
+        FileData, InlineFileData, LifecycleState, TextData,
+    };
     use std::time::{Duration, SystemTime};
 
     #[test]
@@ -53,19 +55,16 @@ mod crud {
         db.insert(
             &key,
             now,
-            ClipData::Text(latest_value::TextData::Inlined("hello world".to_string())),
+            ClipData::Text(TextData::Inlined("hello world".to_string())),
         )
         .unwrap();
 
         let value = db.get(&key).unwrap().unwrap();
         assert_eq!(
             value.clip_data,
-            ClipData::Text(latest_value::TextData::Inlined("hello world".to_string()))
+            ClipData::Text(TextData::Inlined("hello world".to_string()))
         );
-        assert_eq!(
-            value.metadata.lifecycle_state,
-            latest_value::LifecycleState::Active
-        );
+        assert_eq!(value.metadata.lifecycle_state, LifecycleState::Active);
         assert_eq!(value.metadata.created_at, now);
         assert_eq!(value.metadata.updated_at, now);
         assert!(value.metadata.trashed_at.is_none());
@@ -77,7 +76,7 @@ mod crud {
         let key = make_key("test/with-file");
         let now = SystemTime::now();
 
-        let file_data = latest_value::FileData::Inlined(latest_value::InlineFileData {
+        let file_data = FileData::Inlined(InlineFileData {
             file_name: "test.txt".to_string(),
             data: b"file content".to_vec(),
         });
@@ -90,7 +89,7 @@ mod crud {
             ClipData::Files(files) => {
                 assert_eq!(files.len(), 1);
                 match &files[0] {
-                    latest_value::FileData::Inlined(data) => {
+                    FileData::Inlined(data) => {
                         assert_eq!(data.file_name, "test.txt");
                         assert_eq!(data.data, b"file content");
                     }
@@ -119,7 +118,7 @@ mod crud {
         db.insert(
             &key,
             now,
-            ClipData::Text(latest_value::TextData::Inlined("first".to_string())),
+            ClipData::Text(TextData::Inlined("first".to_string())),
         )
         .unwrap();
 
@@ -128,7 +127,7 @@ mod crud {
         db.insert(
             &key,
             insert_time,
-            ClipData::Text(latest_value::TextData::Inlined("second".to_string())),
+            ClipData::Text(TextData::Inlined("second".to_string())),
         )
         .unwrap();
 
@@ -138,7 +137,7 @@ mod crud {
         assert_eq!(value.metadata.updated_at, insert_time);
         assert_eq!(
             value.clip_data,
-            ClipData::Text(latest_value::TextData::Inlined("second".to_string()))
+            ClipData::Text(TextData::Inlined("second".to_string()))
         );
     }
 
@@ -151,7 +150,7 @@ mod crud {
         db.insert(
             &key,
             now,
-            ClipData::Text(latest_value::TextData::Inlined("first".to_string())),
+            ClipData::Text(TextData::Inlined("first".to_string())),
         )
         .unwrap();
 
@@ -163,7 +162,7 @@ mod crud {
         db.insert(
             &key,
             insert_time,
-            ClipData::Text(latest_value::TextData::Inlined("second".to_string())),
+            ClipData::Text(TextData::Inlined("second".to_string())),
         )
         .unwrap();
 
@@ -172,13 +171,10 @@ mod crud {
         assert_eq!(value.metadata.created_at, insert_time);
         assert_eq!(value.metadata.updated_at, insert_time);
         assert!(value.metadata.trashed_at.is_none());
-        assert_eq!(
-            value.metadata.lifecycle_state,
-            latest_value::LifecycleState::Active
-        );
+        assert_eq!(value.metadata.lifecycle_state, LifecycleState::Active);
         assert_eq!(
             value.clip_data,
-            ClipData::Text(latest_value::TextData::Inlined("second".to_string()))
+            ClipData::Text(TextData::Inlined("second".to_string()))
         );
     }
 
@@ -191,7 +187,7 @@ mod crud {
         db.insert(
             &key,
             create_time,
-            ClipData::Text(latest_value::TextData::Inlined("first".to_string())),
+            ClipData::Text(TextData::Inlined("first".to_string())),
         )
         .unwrap();
 
@@ -202,7 +198,7 @@ mod crud {
         db.insert(
             &key,
             update_time,
-            ClipData::Text(latest_value::TextData::Inlined("second".to_string())),
+            ClipData::Text(TextData::Inlined("second".to_string())),
         )
         .unwrap();
 
@@ -212,7 +208,7 @@ mod crud {
         assert_eq!(value.metadata.updated_at, update_time);
         assert_eq!(
             value.clip_data,
-            ClipData::Text(latest_value::TextData::Inlined("second".to_string()))
+            ClipData::Text(TextData::Inlined("second".to_string()))
         );
     }
 }
@@ -220,7 +216,7 @@ mod crud {
 mod append_files {
     use super::common::{create_test_db, make_key};
     use crate::storage::db::{ClipData, DatabaseError};
-    use crate::types::value::versioned_value::latest_value;
+    use crate::types::value::versioned_value::latest_value::{FileData, InlineFileData, TextData};
     use std::time::{Duration, SystemTime};
 
     #[test]
@@ -233,12 +229,10 @@ mod append_files {
         db.insert(
             &key,
             create_time,
-            ClipData::Files(vec![latest_value::FileData::Inlined(
-                latest_value::InlineFileData {
-                    file_name: "file1.txt".to_string(),
-                    data: b"content1".to_vec(),
-                },
-            )]),
+            ClipData::Files(vec![FileData::Inlined(InlineFileData {
+                file_name: "file1.txt".to_string(),
+                data: b"content1".to_vec(),
+            })]),
         )
         .unwrap();
 
@@ -247,12 +241,10 @@ mod append_files {
         db.append_files(
             &key,
             append_time,
-            vec![latest_value::FileData::Inlined(
-                latest_value::InlineFileData {
-                    file_name: "file2.txt".to_string(),
-                    data: b"content2".to_vec(),
-                },
-            )],
+            vec![FileData::Inlined(InlineFileData {
+                file_name: "file2.txt".to_string(),
+                data: b"content2".to_vec(),
+            })],
         )
         .unwrap();
 
@@ -281,7 +273,7 @@ mod append_files {
         db.insert(
             &key,
             create_time,
-            ClipData::Text(latest_value::TextData::Inlined("text only".to_string())),
+            ClipData::Text(TextData::Inlined("text only".to_string())),
         )
         .unwrap();
 
@@ -289,12 +281,10 @@ mod append_files {
         let result = db.append_files(
             &key,
             create_time + Duration::from_secs(50),
-            vec![latest_value::FileData::Inlined(
-                latest_value::InlineFileData {
-                    file_name: "new_file.txt".to_string(),
-                    data: b"new content".to_vec(),
-                },
-            )],
+            vec![FileData::Inlined(InlineFileData {
+                file_name: "new_file.txt".to_string(),
+                data: b"new content".to_vec(),
+            })],
         );
         assert!(matches!(result, Err(DatabaseError::TypeMismatch)));
     }
@@ -307,12 +297,10 @@ mod append_files {
         let result = db.append_files(
             &key,
             SystemTime::now(),
-            vec![latest_value::FileData::Inlined(
-                latest_value::InlineFileData {
-                    file_name: "file.txt".to_string(),
-                    data: b"content".to_vec(),
-                },
-            )],
+            vec![FileData::Inlined(InlineFileData {
+                file_name: "file.txt".to_string(),
+                data: b"content".to_vec(),
+            })],
         );
         assert!(matches!(result, Err(DatabaseError::NotFound)));
     }
@@ -326,12 +314,10 @@ mod append_files {
         db.insert(
             &key,
             now,
-            ClipData::Files(vec![latest_value::FileData::Inlined(
-                latest_value::InlineFileData {
-                    file_name: "file.txt".to_string(),
-                    data: b"content".to_vec(),
-                },
-            )]),
+            ClipData::Files(vec![FileData::Inlined(InlineFileData {
+                file_name: "file.txt".to_string(),
+                data: b"content".to_vec(),
+            })]),
         )
         .unwrap();
 
@@ -340,12 +326,10 @@ mod append_files {
         let result = db.append_files(
             &key,
             now + Duration::from_secs(20),
-            vec![latest_value::FileData::Inlined(
-                latest_value::InlineFileData {
-                    file_name: "file2.txt".to_string(),
-                    data: b"content2".to_vec(),
-                },
-            )],
+            vec![FileData::Inlined(InlineFileData {
+                file_name: "file2.txt".to_string(),
+                data: b"content2".to_vec(),
+            })],
         );
         assert!(matches!(result, Err(DatabaseError::NotFound)));
     }
@@ -359,12 +343,10 @@ mod append_files {
         db.insert(
             &key,
             now,
-            ClipData::Files(vec![latest_value::FileData::Inlined(
-                latest_value::InlineFileData {
-                    file_name: "file.txt".to_string(),
-                    data: b"content".to_vec(),
-                },
-            )]),
+            ClipData::Files(vec![FileData::Inlined(InlineFileData {
+                file_name: "file.txt".to_string(),
+                data: b"content".to_vec(),
+            })]),
         )
         .unwrap();
 
@@ -381,7 +363,7 @@ mod append_files {
 mod touch {
     use super::common::{create_test_db, make_key};
     use crate::storage::db::{ClipData, DatabaseError};
-    use crate::types::value::versioned_value::latest_value;
+    use crate::types::value::versioned_value::latest_value::TextData;
     use std::time::{Duration, SystemTime};
 
     #[test]
@@ -393,7 +375,7 @@ mod touch {
         db.insert(
             &key,
             create_time,
-            ClipData::Text(latest_value::TextData::Inlined("content".to_string())),
+            ClipData::Text(TextData::Inlined("content".to_string())),
         )
         .unwrap();
 
@@ -406,7 +388,7 @@ mod touch {
         // Content should be unchanged
         assert_eq!(
             value.clip_data,
-            ClipData::Text(latest_value::TextData::Inlined("content".to_string()))
+            ClipData::Text(TextData::Inlined("content".to_string()))
         );
     }
 
@@ -428,7 +410,7 @@ mod touch {
         db.insert(
             &key,
             now,
-            ClipData::Text(latest_value::TextData::Inlined("content".to_string())),
+            ClipData::Text(TextData::Inlined("content".to_string())),
         )
         .unwrap();
 
@@ -442,7 +424,7 @@ mod touch {
 mod trash {
     use super::common::{create_test_db, make_key};
     use crate::storage::db::{ClipData, DatabaseError};
-    use crate::types::value::versioned_value::latest_value;
+    use crate::types::value::versioned_value::latest_value::{LifecycleState, TextData};
     use std::time::{Duration, SystemTime};
 
     #[test]
@@ -454,7 +436,7 @@ mod trash {
         db.insert(
             &key,
             create_time,
-            ClipData::Text(latest_value::TextData::Inlined("content".to_string())),
+            ClipData::Text(TextData::Inlined("content".to_string())),
         )
         .unwrap();
 
@@ -463,10 +445,7 @@ mod trash {
 
         // Current should have Trash state
         let value = db.get(&key).unwrap().unwrap();
-        assert_eq!(
-            value.metadata.lifecycle_state,
-            latest_value::LifecycleState::Trash
-        );
+        assert_eq!(value.metadata.lifecycle_state, LifecycleState::Trash);
         assert_eq!(value.metadata.trashed_at, Some(trash_time));
     }
 
@@ -488,7 +467,7 @@ mod trash {
         db.insert(
             &key,
             now,
-            ClipData::Text(latest_value::TextData::Inlined("content".to_string())),
+            ClipData::Text(TextData::Inlined("content".to_string())),
         )
         .unwrap();
 
@@ -503,7 +482,7 @@ mod trash {
 mod purge {
     use super::common::{create_test_db, make_key};
     use crate::storage::db::{ClipData, DatabaseError};
-    use crate::types::value::versioned_value::latest_value;
+    use crate::types::value::versioned_value::latest_value::TextData;
     use std::time::{Duration, SystemTime};
 
     #[test]
@@ -515,7 +494,7 @@ mod purge {
         db.insert(
             &key,
             now,
-            ClipData::Text(latest_value::TextData::Inlined("content".to_string())),
+            ClipData::Text(TextData::Inlined("content".to_string())),
         )
         .unwrap();
 
@@ -534,7 +513,7 @@ mod purge {
         db.insert(
             &key,
             now,
-            ClipData::Text(latest_value::TextData::Inlined("content".to_string())),
+            ClipData::Text(TextData::Inlined("content".to_string())),
         )
         .unwrap();
 
@@ -557,7 +536,7 @@ mod purge {
 mod rename {
     use super::common::{create_test_db, make_key};
     use crate::storage::db::{ClipData, DatabaseError};
-    use crate::types::value::versioned_value::latest_value;
+    use crate::types::value::versioned_value::latest_value::{LifecycleState, TextData};
     use std::time::{Duration, SystemTime};
 
     #[test]
@@ -570,7 +549,7 @@ mod rename {
         db.insert(
             &old_key,
             now,
-            ClipData::Text(latest_value::TextData::Inlined("content".to_string())),
+            ClipData::Text(TextData::Inlined("content".to_string())),
         )
         .unwrap();
 
@@ -583,7 +562,7 @@ mod rename {
         let value = db.get(&new_key).unwrap().unwrap();
         assert_eq!(
             value.clip_data,
-            ClipData::Text(latest_value::TextData::Inlined("content".to_string()))
+            ClipData::Text(TextData::Inlined("content".to_string()))
         );
     }
 
@@ -597,7 +576,7 @@ mod rename {
         db.insert(
             &old_key,
             now,
-            ClipData::Text(latest_value::TextData::Inlined("content".to_string())),
+            ClipData::Text(TextData::Inlined("content".to_string())),
         )
         .unwrap();
 
@@ -607,10 +586,7 @@ mod rename {
         db.rename(&old_key, &new_key).unwrap();
 
         let value = db.get(&new_key).unwrap().unwrap();
-        assert_eq!(
-            value.metadata.lifecycle_state,
-            latest_value::LifecycleState::Trash
-        );
+        assert_eq!(value.metadata.lifecycle_state, LifecycleState::Trash);
         assert_eq!(value.metadata.trashed_at, Some(trash_time));
     }
 
@@ -634,14 +610,14 @@ mod rename {
         db.insert(
             &key1,
             now,
-            ClipData::Text(latest_value::TextData::Inlined("content1".to_string())),
+            ClipData::Text(TextData::Inlined("content1".to_string())),
         )
         .unwrap();
 
         db.insert(
             &key2,
             now,
-            ClipData::Text(latest_value::TextData::Inlined("content2".to_string())),
+            ClipData::Text(TextData::Inlined("content2".to_string())),
         )
         .unwrap();
 
@@ -655,7 +631,7 @@ mod rename {
         let value = db.get(&key2).unwrap().unwrap();
         assert_eq!(
             value.clip_data,
-            ClipData::Text(latest_value::TextData::Inlined("content1".to_string()))
+            ClipData::Text(TextData::Inlined("content1".to_string()))
         );
     }
 
@@ -669,14 +645,14 @@ mod rename {
         db.insert(
             &key1,
             now,
-            ClipData::Text(latest_value::TextData::Inlined("source content".to_string())),
+            ClipData::Text(TextData::Inlined("source content".to_string())),
         )
         .unwrap();
 
         db.insert(
             &key2,
             now,
-            ClipData::Text(latest_value::TextData::Inlined("target content".to_string())),
+            ClipData::Text(TextData::Inlined("target content".to_string())),
         )
         .unwrap();
 
@@ -693,19 +669,16 @@ mod rename {
         let value = db.get(&key2).unwrap().unwrap();
         assert_eq!(
             value.clip_data,
-            ClipData::Text(latest_value::TextData::Inlined("source content".to_string()))
+            ClipData::Text(TextData::Inlined("source content".to_string()))
         );
-        assert_eq!(
-            value.metadata.lifecycle_state,
-            latest_value::LifecycleState::Active
-        );
+        assert_eq!(value.metadata.lifecycle_state, LifecycleState::Active);
     }
 }
 
 mod keys {
     use super::common::{create_test_db, make_key};
     use crate::storage::db::ClipData;
-    use crate::types::value::versioned_value::latest_value;
+    use crate::types::value::versioned_value::latest_value::TextData;
     use std::time::{Duration, SystemTime};
 
     #[test]
@@ -726,7 +699,7 @@ mod keys {
             db.insert(
                 &key,
                 now,
-                ClipData::Text(latest_value::TextData::Inlined(format!("content-{}", name))),
+                ClipData::Text(TextData::Inlined(format!("content-{}", name))),
             )
             .unwrap();
         }
@@ -752,14 +725,14 @@ mod keys {
         db.insert(
             &active_key,
             now,
-            ClipData::Text(latest_value::TextData::Inlined("active".to_string())),
+            ClipData::Text(TextData::Inlined("active".to_string())),
         )
         .unwrap();
 
         db.insert(
             &trashed_key,
             now,
-            ClipData::Text(latest_value::TextData::Inlined("trashed".to_string())),
+            ClipData::Text(TextData::Inlined("trashed".to_string())),
         )
         .unwrap();
 
@@ -774,7 +747,7 @@ mod keys {
 mod gc {
     use super::common::{create_test_db, create_test_db_with_ttl, make_key};
     use crate::storage::db::ClipData;
-    use crate::types::value::versioned_value::latest_value;
+    use crate::types::value::versioned_value::latest_value::{LifecycleState, TextData};
     use std::time::{Duration, SystemTime};
 
     #[test]
@@ -785,7 +758,7 @@ mod gc {
         db.insert(
             &make_key("test"),
             now,
-            ClipData::Text(latest_value::TextData::Inlined("content".to_string())),
+            ClipData::Text(TextData::Inlined("content".to_string())),
         )
         .unwrap();
 
@@ -804,7 +777,7 @@ mod gc {
         db.insert(
             &key,
             create_time,
-            ClipData::Text(latest_value::TextData::Inlined("content".to_string())),
+            ClipData::Text(TextData::Inlined("content".to_string())),
         )
         .unwrap();
 
@@ -818,10 +791,7 @@ mod gc {
 
         // Verify the key is now trashed
         let value = db.get(&key).unwrap().unwrap();
-        assert_eq!(
-            value.metadata.lifecycle_state,
-            latest_value::LifecycleState::Trash
-        );
+        assert_eq!(value.metadata.lifecycle_state, LifecycleState::Trash);
         assert_eq!(value.metadata.trashed_at, Some(gc_time));
     }
 
@@ -835,7 +805,7 @@ mod gc {
         db.insert(
             &key,
             create_time,
-            ClipData::Text(latest_value::TextData::Inlined("content".to_string())),
+            ClipData::Text(TextData::Inlined("content".to_string())),
         )
         .unwrap();
 
@@ -865,7 +835,7 @@ mod gc {
         db.insert(
             &key,
             create_time,
-            ClipData::Text(latest_value::TextData::Inlined("content".to_string())),
+            ClipData::Text(TextData::Inlined("content".to_string())),
         )
         .unwrap();
 
@@ -881,10 +851,7 @@ mod gc {
         assert!(result2.purged.is_empty());
 
         let value = db.get(&key).unwrap().unwrap();
-        assert_eq!(
-            value.metadata.lifecycle_state,
-            latest_value::LifecycleState::Trash
-        );
+        assert_eq!(value.metadata.lifecycle_state, LifecycleState::Trash);
 
         // Phase 3: After purge TTL - should be purged
         let t3 = t2 + Duration::from_secs(60);
@@ -906,7 +873,7 @@ mod gc {
         db.insert(
             &key,
             create_time,
-            ClipData::Text(latest_value::TextData::Inlined("content".to_string())),
+            ClipData::Text(TextData::Inlined("content".to_string())),
         )
         .unwrap();
 
@@ -929,7 +896,7 @@ mod gc {
 mod edge_cases {
     use super::common::{create_test_db, make_key};
     use crate::storage::db::ClipData;
-    use crate::types::value::versioned_value::latest_value;
+    use crate::types::value::versioned_value::latest_value::{FileData, InlineFileData, TextData};
     use std::time::SystemTime;
 
     #[test]
@@ -938,14 +905,11 @@ mod edge_cases {
         let key = make_key("blob-text");
         let now = SystemTime::now();
 
-        db.insert(&key, now, ClipData::Text(latest_value::TextData::BlobStored))
+        db.insert(&key, now, ClipData::Text(TextData::BlobStored))
             .unwrap();
 
         let value = db.get(&key).unwrap().unwrap();
-        assert_eq!(
-            value.clip_data,
-            ClipData::Text(latest_value::TextData::BlobStored)
-        );
+        assert_eq!(value.clip_data, ClipData::Text(TextData::BlobStored));
     }
 
     #[test]
@@ -955,11 +919,11 @@ mod edge_cases {
         let now = SystemTime::now();
 
         let files = vec![
-            latest_value::FileData::Inlined(latest_value::InlineFileData {
+            FileData::Inlined(InlineFileData {
                 file_name: "file1.txt".to_string(),
                 data: b"content1".to_vec(),
             }),
-            latest_value::FileData::Inlined(latest_value::InlineFileData {
+            FileData::Inlined(InlineFileData {
                 file_name: "file2.txt".to_string(),
                 data: b"content2".to_vec(),
             }),
@@ -994,7 +958,7 @@ mod edge_cases {
             db.insert(
                 &key,
                 now,
-                ClipData::Text(latest_value::TextData::Inlined(key_str.to_string())),
+                ClipData::Text(TextData::Inlined(key_str.to_string())),
             )
             .unwrap();
         }
@@ -1008,7 +972,7 @@ mod edge_cases {
             let value = db.get(&key).unwrap().unwrap();
             assert_eq!(
                 value.clip_data,
-                ClipData::Text(latest_value::TextData::Inlined(key_str.to_string()))
+                ClipData::Text(TextData::Inlined(key_str.to_string()))
             );
         }
     }

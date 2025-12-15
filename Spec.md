@@ -20,25 +20,19 @@ supports dual interfaces: a CLI for automation/scripting and a GUI for visual ex
 
 ### Supported Value Types
 
-Values are stored using clipboard-native formats:
+Values are stored as one of two types:
 
-1. **Richest Format:** The highest-fidelity format from clipboard (e.g., image, HTML, application-specific data).
-2. **Plain Text (Optional):** Stored alongside rich format if meaningful (non-empty, non-whitespace).
+1. **Text:** Plain text content (inlined in database or blob-stored for large text).
+2. **Files:** One or more files copied from file manager (hard copy of file contents).
 
-When pasting from clipboard:
-
-- If rich data exists → store rich data (+ plain text if meaningful)
-- If only plain text exists → store plain text only
+*Note: Rich format support (HTML, images, RTF, application-specific data) is planned for a future version.*
 
 Examples:
 | Copy Source | Stored |
 |-------------|--------|
-| Text from browser | plain text + HTML |
-| Cell from Excel | plain text + Excel format |
-| Image from Photoshop | image only |
-| Screenshot | image only |
-| File from Finder/Explorer | file contents (hard copy) |
-| Formatted text from Word | plain text + RTF/HTML |
+| Text from any application | Text |
+| File from Finder/Explorer | Files (hard copy) |
+| Multiple files | Files (multiple entries) |
 
 ## 3. Architecture
 
