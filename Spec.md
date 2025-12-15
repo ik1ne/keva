@@ -79,19 +79,17 @@ Examples:
     - `--raw`: Output the rich format as binary to stdout.
 - `set <key> <value>`: Set the plain text value for the key.
 - `rm <key>`: Remove the key. Behavior depends on configuration.
-    - `-r` / `--recursive`: Delete the key and all its children.
+    - `-r` / `--recursive`: Delete the key and all its children (keys matching `<key>` and `<key>/*`).
     - `--trash`: Force soft delete (move to Trash).
     - `--permanent`: Force immediate, permanent deletion.
 - `mv <key> <new_key>`: Rename/move a key without modifying its value. Fails if `<new_key>` already exists unless
   `--force` is specified.
     - `--force`: Overwrite existing key at destination.
-- `ls <key>`: List children of the key.
-- `search <query>`: Search the database using the configured Hybrid Logic.
-    - Output: List of matching keys (ranked).
+- `ls [prefix]`: List all keys matching the prefix (or all keys if no prefix given).
+    - `--include-trash`: Include trashed items in results (hidden by default).
 - `paste <key>`: Write current clipboard content to the key (follows clipboard-native storage rules).
 - `copy <key>`: Copy the key's value to the clipboard.
 - `gc`: Manually trigger garbage collection.
-- **Flags:** `--include-trash` to search/list deleted items.
 
 #### Daemon Operations
 
@@ -197,7 +195,7 @@ Each tree node displays on hover/selection:
 
 ### Configuration & Preferences
 
-The following behaviors are user-configurable via a persistent config file and/or GUI preferences pane.
+The following behaviors are user-configurable via a config file and/or GUI preferences pane.
 
 #### Data Settings
 
@@ -226,7 +224,7 @@ Items progress through three stages based on configurable timestamps.
 1. **Active:** Normal visibility.
 2. **Trash:** Item is marked as soft-deleted and hidden from standard view.
     - **Condition:** Skipped if **Delete Style** is set to `Immediate` or if `rm --permanent` is used.
-    - **CLI:** Accessible only via `--include-trash`.
+    - **CLI:** Hidden from `ls` by default; use `--include-trash` to show.
     - **GUI:** Always searchable (bottom of list, 🗑️ icon).
 3. **Purge:** Item is considered permanently deleted.
     - **Visibility:** Hidden from all interfaces (Search/List/Get) immediately upon TTL expiration.
@@ -250,3 +248,31 @@ To maintain performance and reclaim disk space, Keva performs automated maintena
 | GUI with daemon    | On window hide          |
 
 - **Note:** CLI-only users who never run `kv gc` will accumulate trash until manually triggered.
+
+---
+
+## 6. Future Plans
+
+The following features are planned but not yet implemented:
+
+### CLI Search Command
+
+- `search <query>`: Search the database using Hybrid Logic (fuzzy + regex).
+- Requires daemon for nucleo persistence to achieve acceptable performance.
+- Until daemon is implemented, search is GUI-only.
+
+### Direct Children Listing
+
+- `ls --children <key>`: List only direct children of a key (one level deep).
+- Example: If keys `a`, `a/b`, `a/b/c` exist, `ls --children a` returns only `a/b`.
+- Useful for tree navigation in GUI.
+
+### Rich Format Support
+
+- HTML, images, RTF, application-specific clipboard data.
+- `get --raw`: Output rich format as binary to stdout.
+
+### Value Content Search
+
+- Search within value contents, not just keys.
+- Toggle in GUI search bar.

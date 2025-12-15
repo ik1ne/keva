@@ -303,16 +303,29 @@ impl KevaCore {
         Ok(self.db.trashed_keys()?)
     }
 
-    /// Returns all keys (Active + Trash) matching the given prefix.
+    /// Returns all keys matching the given prefix.
     ///
-    /// Uses btree range scan for efficiency. Only returns keys that are
-    /// visible (not effective Purge).
-    pub fn list(&self, prefix: &str, now: SystemTime) -> Result<Vec<Key>, StorageError> {
+    /// Uses btree range scan for efficiency.
+    /// - Always excludes keys with effective Purge state
+    /// - If `include_trash` is false (default), excludes Trash keys
+    /// - If `include_trash` is true, includes both Active and Trash keys
+    pub fn list(
+        &self,
+        prefix: &str,
+        include_trash: bool,
+        now: SystemTime,
+    ) -> Result<Vec<Key>, StorageError> {
         let keys = self.db.list_prefix(prefix)?;
-        // Filter out keys with effective Purge state
         Ok(keys
             .into_iter()
-            .filter(|k| self.get(k, now).ok().flatten().is_some())
+            .filter_map(|k| {
+                let value = self.get(&k, now).ok()??;
+                match value.metadata.lifecycle_state {
+                    LifecycleState::Active => Some(k),
+                    LifecycleState::Trash if include_trash => Some(k),
+                    _ => None,
+                }
+            })
             .collect())
     }
 
