@@ -201,6 +201,10 @@ mod store_file {
     }
 
     #[test]
+    #[cfg_attr(
+        target_os = "macos",
+        ignore = "macOS does not support non-UTF-8 file names in HFS+ and APFS"
+    )]
     fn test_store_non_utf8_file_name() {
         #[cfg(unix)]
         let invalid: OsString = {
