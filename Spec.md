@@ -87,8 +87,9 @@ Examples:
     - `--force`: Overwrite existing key at destination.
 - `ls [prefix]`: List all keys matching the prefix (or all keys if no prefix given).
     - `--include-trash`: Include trashed items in results (hidden by default).
-- `paste <key>`: Write current clipboard content to the key (follows clipboard-native storage rules).
-- `copy <key>`: Copy the key's value to the clipboard.
+- `import <key>`: Import current clipboard content to the key.
+    - When clipboard contains both files and text, **files take priority** (text is discarded).
+- `copy <key>`: Copy the key's value to the clipboard. Also updates `last_accessed` timestamp.
 - `gc`: Manually trigger garbage collection.
 
 #### Daemon Operations
@@ -170,11 +171,14 @@ Each tree node displays on hover/selection:
           yet run.
         - Items exceeding their **Purge** timestamp are automatically excluded from results.
     - **Trash Handling:** Trash items are included in search results but ranked at the bottom with a 🗑️ icon.
-- **Hybrid Logic:**
-    - **Fuzzy Mode (Default):** Active when query contains alphanumerics, `-`, `_`, `/`, `.`, or space.
-        - **Ranking:** Exact Match > Prefix/Children > Substring > Subsequence.
-    - **Regex Mode:** Active when query contains regex symbols (e.g., `*`, `?`, `^`, `[`). Sorts by shortest match
-      first.
+- **Search Modes (Explicit Selection):**
+    - **Fuzzy Mode:** Fuzzy matching with scoring. Ranking: Exact Match > Prefix/Children > Substring > Subsequence.
+    - **Regex Mode:** Regular expression matching. Sorts by shortest match first.
+    - *Note:* Mode is explicitly selected by the user (e.g., toggle button). No auto-detection based on query
+      characters.
+- **Configuration:**
+    - **Case Sensitivity:** Configurable (default: smart case - case-insensitive unless query contains uppercase).
+    - **Unicode Normalization:** Configurable (default: enabled).
 - **Visuals:** Shows "Magnet" icon 🧲 for Fuzzy, "Code" icon `.*` for Regex.
 
 #### Keyboard Shortcuts
@@ -221,11 +225,34 @@ The following behaviors are user-configurable via a config file and/or GUI prefe
 
 Items progress through three stages based on configurable timestamps.
 
+#### Timestamps
+
+Each key stores the following timestamps:
+
+- **created_at:** When the key was first created.
+- **updated_at:** When the value was last modified.
+- **last_accessed:** When the key was last read or copied to clipboard.
+- **trashed_at:** When the key was moved to Trash (if applicable).
+
+#### TTL Calculation
+
+TTL expiration is based on **`last_accessed`**, not `updated_at`. This means frequently accessed keys stay active
+longer, even if their values haven't changed.
+
+Operations that update `last_accessed`:
+
+- `get <key>` - Reading a value
+- `copy <key>` - Copying value to clipboard
+
+#### Lifecycle Stages
+
 1. **Active:** Normal visibility.
+    - Transitions to **Trash** when `last_accessed + trash_ttl` expires.
 2. **Trash:** Item is marked as soft-deleted and hidden from standard view.
     - **Condition:** Skipped if **Delete Style** is set to `Immediate` or if `rm --permanent` is used.
     - **CLI:** Hidden from `ls` by default; use `--include-trash` to show.
     - **GUI:** Always searchable (bottom of list, 🗑️ icon).
+    - Transitions to **Purge** when `trashed_at + purge_ttl` expires.
 3. **Purge:** Item is considered permanently deleted.
     - **Visibility:** Hidden from all interfaces (Search/List/Get) immediately upon TTL expiration.
     - **Storage:** Physical data persists until the next Garbage Collection cycle.
@@ -257,7 +284,9 @@ The following features are planned but not yet implemented:
 
 ### CLI Search Command
 
-- `search <query>`: Search the database using Hybrid Logic (fuzzy + regex).
+- `search <query>`: Search the database for keys matching the query.
+    - `--fuzzy` (default): Use fuzzy matching.
+    - `--regex`: Use regular expression matching.
 - Requires daemon for nucleo persistence to achieve acceptable performance.
 - Until daemon is implemented, search is GUI-only.
 
