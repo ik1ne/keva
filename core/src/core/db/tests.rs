@@ -374,7 +374,7 @@ mod touch {
     use std::time::{Duration, SystemTime};
 
     #[test]
-    fn test_touch_updates_timestamp() {
+    fn test_touch_updates_last_accessed() {
         let (mut db, _temp) = create_test_db();
         let key = make_key("test/touch");
         let create_time = SystemTime::now();
@@ -391,7 +391,9 @@ mod touch {
 
         let value = db.get(&key).unwrap().unwrap();
         assert_eq!(value.metadata.created_at, create_time);
-        assert_eq!(value.metadata.updated_at, touch_time);
+        // touch() only updates last_accessed, not updated_at
+        assert_eq!(value.metadata.updated_at, create_time);
+        assert_eq!(value.metadata.last_accessed, touch_time);
         // Content should be unchanged
         assert_eq!(
             value.clip_data,

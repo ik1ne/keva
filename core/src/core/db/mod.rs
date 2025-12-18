@@ -134,16 +134,16 @@ impl Database {
                 .map(|v| {
                     (
                         v.metadata.lifecycle_state,
-                        v.metadata.updated_at,
+                        v.metadata.last_accessed,
                         v.metadata.trashed_at,
                     )
                 });
 
-            if let Some((state, updated_at, trashed_at)) = existing_state {
+            if let Some((state, last_accessed, trashed_at)) = existing_state {
                 match state {
                     LifecycleState::Active => {
                         let old_ttl_key = TtlKey {
-                            timestamp: updated_at,
+                            timestamp: last_accessed,
                             key: key.clone(),
                         };
                         TRASHED_TTL.remove(&write_txn, &old_ttl_key)?;
@@ -168,6 +168,7 @@ impl Database {
                 metadata: Metadata {
                     created_at: now,
                     updated_at: now,
+                    last_accessed: now,
                     trashed_at: None,
                     lifecycle_state: LifecycleState::Active,
                 },
@@ -230,13 +231,14 @@ impl Database {
 
             // Remove old TTL entry
             let old_ttl_key = TtlKey {
-                timestamp: value.metadata.updated_at,
+                timestamp: value.metadata.last_accessed,
                 key: key.clone(),
             };
             TRASHED_TTL.remove(&write_txn, &old_ttl_key)?;
 
-            // Update timestamp
+            // Update timestamps
             value.metadata.updated_at = now;
+            value.metadata.last_accessed = now;
 
             // Append files
             existing_files.extend(files);
@@ -256,7 +258,7 @@ impl Database {
         Ok(())
     }
 
-    /// Updates the `updated_at` timestamp without modifying the value.
+    /// Updates the `last_accessed` timestamp without modifying the value.
     ///
     /// This is used to prevent a key from being garbage collected when accessed.
     /// Returns `Err(NotFound)` if the key doesn't exist or is not Active.
@@ -278,13 +280,13 @@ impl Database {
 
             // Remove old TTL entry
             let old_ttl_key = TtlKey {
-                timestamp: value.metadata.updated_at,
+                timestamp: value.metadata.last_accessed,
                 key: key.clone(),
             };
             TRASHED_TTL.remove(&write_txn, &old_ttl_key)?;
 
             // Update timestamp
-            value.metadata.updated_at = now;
+            value.metadata.last_accessed = now;
 
             // Add new TTL entry
             let new_ttl_key = TtlKey {
@@ -328,7 +330,7 @@ impl Database {
 
             // Remove old TTL entry
             let old_ttl_key = TtlKey {
-                timestamp: value.metadata.updated_at,
+                timestamp: value.metadata.last_accessed,
                 key: key.clone(),
             };
             TRASHED_TTL.remove(&write_txn, &old_ttl_key)?;
@@ -338,6 +340,7 @@ impl Database {
                 metadata: Metadata {
                     created_at: value.metadata.created_at,
                     updated_at: now,
+                    last_accessed: now,
                     trashed_at: None,
                     lifecycle_state: LifecycleState::Active,
                 },
@@ -384,7 +387,7 @@ impl Database {
 
             // Remove from trashed TTL table
             let old_ttl_key = TtlKey {
-                timestamp: value.metadata.updated_at,
+                timestamp: value.metadata.last_accessed,
                 key: key.clone(),
             };
             TRASHED_TTL.remove(&write_txn, &old_ttl_key)?;
@@ -445,6 +448,7 @@ impl Database {
             value.metadata.lifecycle_state = LifecycleState::Active;
             value.metadata.trashed_at = None;
             value.metadata.updated_at = now;
+            value.metadata.last_accessed = now;
 
             // Add to trashed TTL table
             let new_ttl_key = TtlKey {
@@ -481,7 +485,7 @@ impl Database {
             match value.metadata.lifecycle_state {
                 LifecycleState::Active => {
                     let ttl_key = TtlKey {
-                        timestamp: value.metadata.updated_at,
+                        timestamp: value.metadata.last_accessed,
                         key: key.clone(),
                     };
                     TRASHED_TTL.remove(&write_txn, &ttl_key)?;
@@ -526,16 +530,16 @@ impl Database {
                 .map(|v| {
                     (
                         v.metadata.lifecycle_state,
-                        v.metadata.updated_at,
+                        v.metadata.last_accessed,
                         v.metadata.trashed_at,
                     )
                 });
 
-            if let Some((state, updated_at, trashed_at)) = new_key_state {
+            if let Some((state, last_accessed, trashed_at)) = new_key_state {
                 match state {
                     LifecycleState::Active => {
                         let ttl_key = TtlKey {
-                            timestamp: updated_at,
+                            timestamp: last_accessed,
                             key: new_key.clone(),
                         };
                         TRASHED_TTL.remove(&write_txn, &ttl_key)?;
@@ -567,11 +571,11 @@ impl Database {
             match value.metadata.lifecycle_state {
                 LifecycleState::Active => {
                     let old_ttl_key = TtlKey {
-                        timestamp: value.metadata.updated_at,
+                        timestamp: value.metadata.last_accessed,
                         key: old_key.clone(),
                     };
                     let new_ttl_key = TtlKey {
-                        timestamp: value.metadata.updated_at,
+                        timestamp: value.metadata.last_accessed,
                         key: new_key.clone(),
                     };
                     TRASHED_TTL.remove(&write_txn, &old_ttl_key)?;
@@ -736,7 +740,7 @@ impl Database {
                     if value.metadata.lifecycle_state == LifecycleState::Active {
                         // Remove from trashed TTL table
                         let old_ttl_key = TtlKey {
-                            timestamp: value.metadata.updated_at,
+                            timestamp: value.metadata.last_accessed,
                             key: key.clone(),
                         };
                         TRASHED_TTL.remove(&write_txn, &old_ttl_key)?;

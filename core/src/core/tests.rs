@@ -1,4 +1,5 @@
 use super::*;
+use crate::search::SearchConfig;
 use crate::types::config::SavedConfig;
 use std::time::Duration;
 use tempfile::TempDir;
@@ -13,7 +14,7 @@ fn create_test_storage() -> (KevaCore, TempDir) {
             inline_threshold_bytes: 1024 * 1024, // 1MB
         },
     };
-    let storage = KevaCore::open(config).unwrap();
+    let storage = KevaCore::open(config, SearchConfig::default()).unwrap();
     (storage, temp_dir)
 }
 
@@ -374,27 +375,5 @@ mod keys_and_list {
         let key_strings: Vec<&str> = keys.iter().map(|k| k.as_str()).collect();
         assert!(key_strings.contains(&"key/active"));
         assert!(key_strings.contains(&"key/trashed"));
-    }
-}
-
-mod clipboard {
-    use super::*;
-
-    #[test]
-    fn test_clipboard_methods_return_not_implemented() {
-        let (mut storage, _temp) = create_test_storage();
-        let key = make_key("test");
-
-        let result1 = storage.upsert_from_clipboard(&key);
-        assert!(matches!(
-            result1,
-            Err(StorageError::ClipboardNotImplemented)
-        ));
-
-        let result2 = storage.add_from_clipboard(&key);
-        assert!(matches!(
-            result2,
-            Err(StorageError::ClipboardNotImplemented)
-        ));
     }
 }

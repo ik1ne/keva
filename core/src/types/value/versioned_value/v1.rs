@@ -19,6 +19,7 @@ impl ValueVariant for Value {
 pub struct Metadata {
     pub created_at: SystemTime,
     pub updated_at: SystemTime,
+    pub last_accessed: SystemTime,
     pub trashed_at: Option<SystemTime>,
     pub lifecycle_state: LifecycleState,
 }

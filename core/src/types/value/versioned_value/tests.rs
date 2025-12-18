@@ -3,10 +3,12 @@ use std::time::SystemTime;
 
 #[test]
 fn value_v1_text_serialization() {
+    let now = SystemTime::now();
     let original_value = v1::Value {
         metadata: v1::Metadata {
-            created_at: SystemTime::now(),
-            updated_at: SystemTime::now(),
+            created_at: now,
+            updated_at: now,
+            last_accessed: now,
             trashed_at: None,
             lifecycle_state: v1::LifecycleState::Active,
         },
@@ -28,10 +30,12 @@ fn value_v1_text_serialization() {
 
 #[test]
 fn value_v1_files_serialization() {
+    let now = SystemTime::now();
     let original_value = v1::Value {
         metadata: v1::Metadata {
-            created_at: SystemTime::now(),
-            updated_at: SystemTime::now(),
+            created_at: now,
+            updated_at: now,
+            last_accessed: now,
             trashed_at: None,
             lifecycle_state: v1::LifecycleState::Active,
         },
