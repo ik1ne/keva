@@ -1,307 +1,176 @@
-# Project Specification: Keva (v3)
+# Project Specification: Keva
 
 ## 1. Overview
 
-Keva is a local Key-Value store designed for structured data management. It features a hierarchical namespace and
-supports dual interfaces: a CLI for automation/scripting and a GUI for visual exploration.
+Keva is a local key-value store designed for clipboard-like data management. It provides fast storage and retrieval with
+fuzzy search capabilities.
 
 - **Name:** Keva
-- **CLI Alias:** `kv`
+- **Platforms:** macOS (.app bundle), Windows (installer)
 
 ## 2. Core Concepts
 
-### Namespace Structure
+### Keys
 
-- **Hierarchy:** Keys are path-based (e.g., `project/config/theme`). Note: This is a logical hierarchy.
-    - **No Implicit Parents:** Creating a key `a/b/c` does NOT automatically create `a` or `a/b`.
-    - **Non-Recursive Delete:** Deleting `a` does NOT delete `a/b`.
-- **Parallel Storage:** A key (e.g., `project`) can contain children (like a folder) *and* store its own value (like a
-  file) simultaneously. This allows `project` to have text content while `project/config` exists as a child key.
+Keys are flat strings. The `/` character has no special meaning to the storage layer. The GUI may visually group keys
+sharing common prefixes, but this is cosmetic only with no behavioral implications.
 
-### Supported Value Types
+Examples of valid keys:
+
+- `project/config/theme`
+- `my-notes`
+- `2024/01/15`
+
+### Value Types
 
 Values are stored as one of two types:
 
-1. **Text:** Plain text content (inlined in database or blob-stored for large text).
+1. **Text:** Plain text content.
 2. **Files:** One or more files copied from file manager (hard copy of file contents).
 
-*Note: Rich format support (HTML, images, RTF, application-specific data) is planned for a future version.*
+| Copy Source               | Stored As                |
+|---------------------------|--------------------------|
+| Text from any application | Text                     |
+| File from Finder/Explorer | Files (hard copy)        |
+| Multiple files            | Files (multiple entries) |
 
-Examples:
-| Copy Source | Stored |
-|-------------|--------|
-| Text from any application | Text |
-| File from Finder/Explorer | Files (hard copy) |
-| Multiple files | Files (multiple entries) |
+When clipboard contains both files and text, **files take priority** (text is discarded).
 
 ## 3. Architecture
 
-### Component Overview
+Single-process application containing GUI window and keva-core storage layer. System tray integration in Phase 2+.
 
-```
-┌─────────────────────────────────────────────┐
-│                 Storage                     │
-└──────────────┬──────────────┬───────────────┘
-               │              │
-        ┌──────┴──────┐ ┌─────┴─────┐
-        │     CLI     │ │  Daemon   │
-        └─────────────┘ └─────┬─────┘
-                              │
-                        ┌─────┴─────┐
-                        │    GUI    │
-                        └───────────┘
-```
+**Phases:**
 
-### Storage Access
+| Phase | Features                                | GC Trigger   |
+|-------|-----------------------------------------|--------------|
+| 1     | Window only, no tray, no hotkey         | Window close |
+| 2+    | System tray, global hotkey, window hide | Window hide  |
 
-- **CLI:** Accesses storage directly.
-- **Daemon:** Accesses storage directly. GUI window runs inside daemon process.
-- **Concurrency:** Storage layer handles locking internally. Multiple readers allowed; writers block until prior write
-  commits.
-- **Simultaneous Access:** CLI and daemon can run simultaneously. Write operations may briefly block if both attempt
-  concurrent writes.
+## 4. GUI
 
-### Operating Modes
+### Layout
 
-| Mode               | Hotkey | GC               | Use Case                 |
-|--------------------|--------|------------------|--------------------------|
-| CLI only           | None   | Manual (`kv gc`) | Scripting, automation    |
-| GUI without daemon | None   | On window close  | Occasional manual launch |
-| GUI with daemon    | Yes    | On window hide   | Quick access via hotkey  |
+Split pane with three components:
 
-## 4. Interfaces & Features
+- **Top:** Search bar (key filter, fuzzy matching)
+- **Left:** Key list (filtered by search bar)
+- **Right:** Inspector/Preview pane (view or edit value)
 
-### CLI Commands
+### Search Bar and Left Pane Relationship
 
-#### Data Operations
-
-- `get <key>`: Output the plain text value to stdout. Outputs empty string if no plain text exists.
-    - `--raw`: Output the rich format as binary to stdout.
-- `set <key> <value>`: Set the plain text value for the key.
-- `rm <key>`: Remove the key. Behavior depends on configuration.
-    - `-r` / `--recursive`: Delete the key and all its children (keys matching `<key>` and `<key>/*`).
-    - `--trash`: Force soft delete (move to Trash).
-    - `--permanent`: Force immediate, permanent deletion.
-- `mv <key> <new_key>`: Rename/move a key without modifying its value. Fails if `<new_key>` already exists unless
-  `--force` is specified.
-    - `--force`: Overwrite existing key at destination.
-- `ls [prefix]`: List all keys matching the prefix (or all keys if no prefix given).
-    - `--include-trash`: Include trashed items in results (hidden by default).
-- `import <key>`: Import current clipboard content to the key.
-    - When clipboard contains both files and text, **files take priority** (text is discarded).
-- `copy <key>`: Copy the key's value to the clipboard. Also updates `last_accessed` timestamp.
-- `gc`: Manually trigger garbage collection.
-
-#### Daemon Operations
-
-- `daemon start`: Start the daemon process (if not already running).
-- `daemon stop`: Stop the running daemon process.
-- `daemon status`: Check if daemon is running.
-- `daemon install`: Register daemon to launch at system login.
-- `daemon uninstall`: Remove launch-at-login registration.
-
-### GUI Design
-
-#### Launch Methods
-
-1. **Without daemon:** Run `kv gui` or launch application directly.
-2. **With daemon:** Press configured hotkey.
-
-#### Layout
-
-Split Pane with three components:
-
-- **Top:** Search/Spotlight bar (key input and filter)
-- **Left:** Tree Explorer (visualizing hierarchy, filtered by search bar)
-- **Right:** Inspector/Preview pane (renders content or provides editor)
-
-#### Search Bar and Left Pane Relationship
-
-Search bar and left pane selection are **independent**:
+Search bar and left pane selection are independent:
 
 - Search bar filters the left pane results AND serves as target key for right pane when nothing is selected.
-- Clicking a key in left pane does NOT update search bar (prevents list reshuffling).
+- Clicking a key in left pane does NOT update search bar.
 - Right pane shows: selected key's value (if selection exists) OR empty editor for search bar's key (if no selection).
 
-#### Right Pane Behavior
+### Right Pane Behavior
 
 **Empty State (no value for target key):**
 
 - Shows text input with placeholder: `Write or paste value for "<key>"`
 - Accepts:
     - Text input → stored as plain text
-    - `Ctrl+V` with rich data → stored as rich format, shows preview
-    - `Ctrl+V` with plain text only → inserted at cursor
+    - `Ctrl+V` with files → stored as files, shows preview
+    - `Ctrl+V` with plain text → inserted at cursor
     - Drag & drop file → stored as file contents, shows preview
 
 **Text Editing State (plain text value exists):**
 
 - Standard text editor behavior
 - `Ctrl+V`:
-    - If clipboard contains plain text → insert at cursor (even if rich data also exists)
-    - If clipboard contains only rich data → blocked, show hint bar: "Clear text to paste rich content"
-- Right-click menu:
-    - If clipboard has plain text: Cut, Copy, Paste (enabled)
-    - If clipboard has only rich data: Cut, Copy, Paste (grayed out)
+    - If clipboard contains plain text → insert at cursor
+    - If clipboard contains only files → blocked, show hint: "Clear text to paste files"
+- Auto-save after 3 seconds of inactivity or on window close/hide
 
-**Preview State (rich format value exists):**
+**Preview State (files value exists):**
 
-- Shows rendered preview (image, PDF, formatted text, etc.)
-- Delete button visible to clear value and return to empty state
+- Shows file list/preview
+- Delete button to clear value and return to empty state
 
-#### Left Pane Controls
+### Left Pane Controls
 
-Each tree node displays on hover/selection:
+Each key displays on hover/selection:
 
-- **Rename button (pen icon):** Opens inline editor to modify key path. Confirmation prompt if rename would overwrite
+- **Rename button (pen icon):** Opens inline editor to modify key. Confirmation prompt if rename would overwrite
   existing key.
 - **Delete button (trash icon):** Deletes the key (follows configured delete style).
 
-#### Key Creation and Saving
+### Search Behavior
 
-- Keys are created implicitly when a value is first added.
-- Values are auto-saved after inactivity period or on window close/hide.
+- **Mode:** Fuzzy matching only
+- **Ranking:** Exact match > Prefix > Substring > Subsequence
+- **Case Sensitivity:** Smart case (case-insensitive unless query contains uppercase)
+- **Trash Handling:** Trash items included but ranked at bottom with 🗑️ icon
+- **TTL Filtering:**
+    - Items past trash TTL shown as trash (even if GC hasn't run)
+    - Items past purge TTL excluded from results
 
-#### Search Behavior (Spotlight-style)
-
-- **Scope:** Defaults to **Key Search**. Optional toggle for **Value Content**.
-- **Filtering:**
-    - **TTL Check:**
-        - Items exceeding their **Trash** timestamp are treated as **Trash** (ranked bottom + icon), even if GC has not
-          yet run.
-        - Items exceeding their **Purge** timestamp are automatically excluded from results.
-    - **Trash Handling:** Trash items are included in search results but ranked at the bottom with a 🗑️ icon.
-- **Search Modes (Explicit Selection):**
-    - **Fuzzy Mode:** Fuzzy matching with scoring. Ranking: Exact Match > Prefix/Children > Substring > Subsequence.
-    - **Regex Mode:** Regular expression matching. Sorts by shortest match first.
-    - *Note:* Mode is explicitly selected by the user (e.g., toggle button). No auto-detection based on query
-      characters.
-- **Configuration:**
-    - **Case Sensitivity:** Configurable (default: smart case - case-insensitive unless query contains uppercase).
-    - **Unicode Normalization:** Configurable (default: enabled).
-- **Visuals:** Shows "Magnet" icon 🧲 for Fuzzy, "Code" icon `.*` for Regex.
-
-#### Keyboard Shortcuts
+### Keyboard Shortcuts
 
 | State                             | Key           | Action                                            |
 |-----------------------------------|---------------|---------------------------------------------------|
-| Key selected in left pane         | `Enter`       | Copy value to clipboard, close window             |
+| Key selected in left pane         | `Enter`       | Copy value to clipboard, close/hide window        |
 | Key selected in left pane         | `Shift+Enter` | Focus right pane for editing                      |
 | No selection, search bar has text | `Enter`       | Focus right pane for editing (creates key if new) |
 
-#### Drag & Drop
+### Drag & Drop
 
 - Drop on **Right Pane:** Stores file contents to currently targeted key.
 - Drop on **Left Pane (Specific Key):** Stores file contents to that key.
-- **Large File Handling:** Files exceeding threshold trigger confirmation prompt before copy.
+- **Large File Handling:** Files exceeding threshold trigger confirmation prompt.
 
-## 5. Operational Behaviors
+## 5. Configuration
 
-### Configuration & Preferences
-
-The following behaviors are user-configurable via a config file and/or GUI preferences pane.
-
-#### Data Settings
+### Data Settings
 
 - **Delete Style:**
-    - **Soft (Default):** Deletions move items to **Trash**.
-    - **Immediate:** Deletions permanently remove items, skipping the Trash lifecycle.
-    - *Note: CLI flags (`--permanent`, `--trash`) and GUI modifiers (`Shift+Delete`) override this setting.*
-- **Large File Threshold:** Size limit triggering the import confirmation prompt (Default: **256MB**).
-- **TTL Durations:** Timers for Lifecycle stages (Active → Trash → Purge).
+    - **Soft (Default):** Deletions move items to Trash.
+    - **Immediate:** Deletions permanently remove items.
+- **Large File Threshold:** Size limit triggering import confirmation (Default: 256MB).
+- **TTL Durations:** Configurable timers for lifecycle stages.
 
-#### Daemon Settings (GUI Preferences)
+### Application Settings (Phase 2+)
 
-- **Global Shortcut:** Key combination to show/hide GUI window.
-- **Launch at Login:** Toggle to enable/disable daemon auto-start.
-- **Daemon Status:** Indicator showing whether daemon is currently running.
+- **Global Shortcut:** Key combination to show/hide window.
+- **Launch at Login:** Toggle for auto-start.
 
-### Safety Thresholds
+## 6. Lifecycle Management
 
-- **Large Files:** If a paste/drop operation exceeds the **Large File Threshold** (Configurable, default 256MB), the
-  system must prompt the user for explicit confirmation before proceeding.
+### Timestamps
 
-### Lifecycle Management (Waterfall TTL)
-
-Items progress through three stages based on configurable timestamps.
-
-#### Timestamps
-
-Each key stores the following timestamps:
+Each key stores:
 
 - **created_at:** When the key was first created.
 - **updated_at:** When the value was last modified.
-- **last_accessed:** When the key was last read or copied to clipboard.
+- **last_accessed:** When the key was last viewed or copied to clipboard.
 - **trashed_at:** When the key was moved to Trash (if applicable).
 
-#### TTL Calculation
+### TTL Calculation
 
-TTL expiration is based on **`last_accessed`**, not `updated_at`. This means frequently accessed keys stay active
-longer, even if their values haven't changed.
+TTL expiration is based on `last_accessed`. Operations that update `last_accessed`:
 
-Operations that update `last_accessed`:
+- Selecting key in left pane (viewing in right pane)
+- Copying value to clipboard
 
-- `get <key>` - Reading a value
-- `copy <key>` - Copying value to clipboard
+### Lifecycle Stages
 
-#### Lifecycle Stages
+1. **Active:** Normal visibility. Transitions to Trash when `last_accessed + trash_ttl` expires.
 
-1. **Active:** Normal visibility.
-    - Transitions to **Trash** when `last_accessed + trash_ttl` expires.
-2. **Trash:** Item is marked as soft-deleted and hidden from standard view.
-    - **Condition:** Skipped if **Delete Style** is set to `Immediate` or if `rm --permanent` is used.
-    - **CLI:** Hidden from `ls` by default; use `--include-trash` to show.
-    - **GUI:** Always searchable (bottom of list, 🗑️ icon).
-    - Transitions to **Purge** when `trashed_at + purge_ttl` expires.
-3. **Purge:** Item is considered permanently deleted.
-    - **Visibility:** Hidden from all interfaces (Search/List/Get) immediately upon TTL expiration.
-    - **Storage:** Physical data persists until the next Garbage Collection cycle.
+2. **Trash:** Soft-deleted, hidden from default view.
+    - Skipped if delete style is Immediate.
+    - Searchable (bottom of results, 🗑️ icon).
+    - Transitions to Purge when `trashed_at + purge_ttl` expires.
 
-### Garbage Collection (GC)
+3. **Purge:** Considered permanently deleted.
+    - Hidden from all interfaces immediately upon TTL expiration.
+    - Physical data removed at next GC cycle.
 
-To maintain performance and reclaim disk space, Keva performs automated maintenance.
+### Garbage Collection
 
-- **Scope:**
-    - Moves items from **Active** to **Trash** based on TTL.
-    - Permanently removes items in the **Trash** stage based on TTL.
-    - Reclaims storage space from deleted file blobs.
+- Moves items from Active to Trash based on TTL
+- Permanently removes items past purge TTL
+- Reclaims storage space from deleted blobs
 
-- **Trigger by Mode:**
-
-| Mode               | GC Trigger              |
-|--------------------|-------------------------|
-| CLI                | Manual only via `kv gc` |
-| GUI without daemon | On window close         |
-| GUI with daemon    | On window hide          |
-
-- **Note:** CLI-only users who never run `kv gc` will accumulate trash until manually triggered.
-
----
-
-## 6. Future Plans
-
-The following features are planned but not yet implemented:
-
-### CLI Search Command
-
-- `search <query>`: Search the database for keys matching the query.
-    - `--fuzzy` (default): Use fuzzy matching.
-    - `--regex`: Use regular expression matching.
-- Requires daemon for nucleo persistence to achieve acceptable performance.
-- Until daemon is implemented, search is GUI-only.
-
-### Direct Children Listing
-
-- `ls --children <key>`: List only direct children of a key (one level deep).
-- Example: If keys `a`, `a/b`, `a/b/c` exist, `ls --children a` returns only `a/b`.
-- Useful for tree navigation in GUI.
-
-### Rich Format Support
-
-- HTML, images, RTF, application-specific clipboard data.
-- `get --raw`: Output rich format as binary to stdout.
-
-### Value Content Search
-
-- Search within value contents, not just keys.
-- Toggle in GUI search bar.
+Trigger: Window close (Phase 1) or window hide (Phase 2+).
