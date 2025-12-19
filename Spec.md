@@ -114,6 +114,14 @@ Each key displays on hover/selection:
 | Key selected in left pane         | `Shift+Enter` | Copy value to clipboard, hide window              |
 | Key selected in left pane         | `Enter`       | Focus right pane for editing                      |
 | No selection, search bar has text | `Enter`       | Focus right pane for editing (creates key if new) |
+| Any                               | `Cmd+,`       | Close main window, open settings dialog           |
+
+### Settings Dialog
+
+- Opened via `Cmd+,` (closes main window, opens settings popup)
+- Lists adjustable configuration options
+- Changes saved to config file on dialog close
+- Applied immediately to running application
 
 ### Drag & Drop
 
@@ -123,19 +131,66 @@ Each key displays on hover/selection:
 
 ## 5. Configuration
 
-### Data Settings
+### Data Directory
 
-- **Delete Style:**
-    - **Soft (Default):** Deletions move items to Trash.
-    - **Immediate:** Deletions permanently remove items.
-- **Large File Threshold:** Size limit triggering import confirmation (Default: 256MB).
-- **TTL Durations:** Configurable timers for lifecycle stages.
+Default location: `~/.keva/`
 
-### Application Settings
+Override via environment variable: `KEVA_DATA_DIR`
 
-- **Global Shortcut:** Key combination to show/hide window.
-- **Launch at Login:** Toggle for auto-start.
-- **Menu Bar Icon:** Toggle to show/hide menu bar icon (default: visible).
+Directory structure:
+
+```
+{data_dir}/
+├── config.toml    # Adjustable settings
+├── keva.redb      # Database
+└── blobs/         # Large file storage
+```
+
+### Config File Format
+
+Location: `{data_dir}/config.toml`
+
+```toml
+# Delete behavior: "soft" (to trash) or "immediate" (permanent)
+delete_style = "soft"
+
+# Files larger than this trigger confirmation prompt (bytes)
+large_file_threshold = 268435456  # 256 MB
+
+# Duration before active items move to trash (seconds)
+trash_ttl = 2592000  # 30 days
+
+# Duration before trashed items are purged (seconds)
+purge_ttl = 604800  # 7 days
+```
+
+### Config Validation
+
+On launch, if config.toml contains invalid values:
+
+1. Popup displays specific validation errors
+2. User chooses: **[Launch with defaults]** or **[Quit]**
+3. "Launch with defaults" overwrites invalid fields and proceeds
+4. "Quit" exits without modifying config file
+
+If config.toml is missing: created with defaults, no popup.
+
+### Settings Reference
+
+| Setting                | Default  | Description                                                |
+|------------------------|----------|------------------------------------------------------------|
+| `delete_style`         | `"soft"` | `"soft"` = move to trash, `"immediate"` = permanent delete |
+| `large_file_threshold` | 256 MB   | Confirmation prompt for files exceeding this size          |
+| `trash_ttl`            | 30 days  | Time before inactive items move to trash                   |
+| `purge_ttl`            | 7 days   | Time before trashed items are permanently deleted          |
+
+### Future Settings (Not Yet Implemented)
+
+These settings will be added when corresponding features are implemented:
+
+- **Global Shortcut:** Key combination to show/hide window
+- **Launch at Login:** Toggle for auto-start
+- **Menu Bar Icon:** Toggle to show/hide menu bar icon
 
 ## 6. Lifecycle Management
 
