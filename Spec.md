@@ -38,14 +38,14 @@ When clipboard contains both files and text, **files take priority** (text is di
 
 ## 3. Architecture
 
-Single-process application containing GUI window and keva-core storage layer. System tray integration in Phase 2+.
+Single-process application containing GUI window and keva-core storage layer.
 
-**Phases:**
-
-| Phase | Features                                | GC Trigger   |
-|-------|-----------------------------------------|--------------|
-| 1     | Window only, no tray, no hotkey         | Window close |
-| 2+    | System tray, global hotkey, window hide | Window hide  |
+- Window hidden keeps process alive in background
+- No persistent dock icon
+- Menu bar icon optional (configurable)
+- Search index built on launch, persists in memory while process runs
+- Relaunch app (Spotlight, double-click) → shows existing instance's window
+- Cmd+Q with window focused → quits app
 
 ## 4. GUI
 
@@ -82,7 +82,7 @@ Search bar and left pane selection are independent:
 - `Ctrl+V`:
     - If clipboard contains plain text → insert at cursor
     - If clipboard contains only files → blocked, show hint: "Clear text to paste files"
-- Auto-save after 3 seconds of inactivity or on window close/hide
+- Auto-save after 3 seconds of inactivity or on window hide
 
 **Preview State (files value exists):**
 
@@ -111,8 +111,8 @@ Each key displays on hover/selection:
 
 | State                             | Key           | Action                                            |
 |-----------------------------------|---------------|---------------------------------------------------|
-| Key selected in left pane         | `Enter`       | Copy value to clipboard, close/hide window        |
-| Key selected in left pane         | `Shift+Enter` | Focus right pane for editing                      |
+| Key selected in left pane         | `Shift+Enter` | Copy value to clipboard, hide window              |
+| Key selected in left pane         | `Enter`       | Focus right pane for editing                      |
 | No selection, search bar has text | `Enter`       | Focus right pane for editing (creates key if new) |
 
 ### Drag & Drop
@@ -131,10 +131,11 @@ Each key displays on hover/selection:
 - **Large File Threshold:** Size limit triggering import confirmation (Default: 256MB).
 - **TTL Durations:** Configurable timers for lifecycle stages.
 
-### Application Settings (Phase 2+)
+### Application Settings
 
 - **Global Shortcut:** Key combination to show/hide window.
 - **Launch at Login:** Toggle for auto-start.
+- **Menu Bar Icon:** Toggle to show/hide menu bar icon (default: visible).
 
 ## 6. Lifecycle Management
 
@@ -173,4 +174,4 @@ TTL expiration is based on `last_accessed`. Operations that update `last_accesse
 - Permanently removes items past purge TTL
 - Reclaims storage space from deleted blobs
 
-Trigger: Window close (Phase 1) or window hide (Phase 2+).
+Trigger: Window hide or app quit.
