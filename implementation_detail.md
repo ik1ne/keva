@@ -10,8 +10,7 @@ keva/
 ├── cli/            # keva_cli - Future scope, not v1 (placeholder in workspace)
 ├── gui/            # keva_gui - GUI application (PLACEHOLDER)
 ├── Spec.md         # Functional specification (v1 = GUI-only)
-├── Planned.md      # Future features (CLI, rich formats, etc.)
-└── tech_note.md    # Implementation guidance
+└── Planned.md      # Future features (CLI, rich formats, etc.)
 ```
 
 > **Note**: The workspace `Cargo.toml` includes `cli` member for future development, but CLI is not part of v1 scope.
