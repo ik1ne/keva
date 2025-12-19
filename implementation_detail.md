@@ -173,18 +173,18 @@ Active  ──[trash_ttl expires]──►  Trash  ──[purge_ttl expires]─�
 
 ## Dependencies
 
-| Crate          | Version | Purpose                                  |
-|----------------|---------|------------------------------------------|
-| `redb`         | 3.x     | Embedded ACID database                   |
-| `nucleo`       | 0.5     | Fuzzy search (v1 GUI)                    |
-| `regex`        | 1.x     | Regex search (implemented, future GUI)   |
-| `blake3`       | 1.x     | Content hashing                          |
-| `clipboard-rs` | 0.3     | Clipboard I/O                            |
-| `postcard`     | -       | Binary serialization                     |
-| `serde`        | -       | Serialization framework                  |
-| `nutype`       | 0.6     | Validated string types                   |
-| `thiserror`    | -       | Error handling                           |
-| `tracing`      | -       | Logging                                  |
+| Crate          | Version | Purpose                                |
+|----------------|---------|----------------------------------------|
+| `redb`         | 3.x     | Embedded ACID database                 |
+| `nucleo`       | 0.5     | Fuzzy search (v1 GUI)                  |
+| `regex`        | 1.x     | Regex search (implemented, future GUI) |
+| `blake3`       | 1.x     | Content hashing                        |
+| `clipboard-rs` | 0.3     | Clipboard I/O                          |
+| `postcard`     | -       | Binary serialization                   |
+| `serde`        | -       | Serialization framework                |
+| `nutype`       | 0.6     | Validated string types                 |
+| `thiserror`    | -       | Error handling                         |
+| `tracing`      | -       | Logging                                |
 
 ---
 
@@ -210,13 +210,13 @@ Active  ──[trash_ttl expires]──►  Trash  ──[purge_ttl expires]─�
 
 ### From Planned.md (Future Scope)
 
-| Feature                                 | Status                                         |
-|-----------------------------------------|------------------------------------------------|
-| CLI interface                           | Placeholder exists, not v1 scope               |
-| Regex search mode (GUI exposure)        | Implemented in core, awaiting GUI integration  |
-| Rich format support (HTML, RTF, images) | Not implemented                                |
-| Value content search                    | Not implemented                                |
-| Binary output for programmatic access   | Not implemented                                |
+| Feature                                 | Status                                        |
+|-----------------------------------------|-----------------------------------------------|
+| CLI interface                           | Placeholder exists, not v1 scope              |
+| Regex search mode (GUI exposure)        | Implemented in core, awaiting GUI integration |
+| Rich format support (HTML, RTF, images) | Not implemented                               |
+| Value content search                    | Not implemented                               |
+| Binary output for programmatic access   | Not implemented                               |
 
 ---
 
