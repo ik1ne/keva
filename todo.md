@@ -1,275 +1,379 @@
-# keva_core Implementation TODO
+# Keva GUI Implementation Plan
 
-## Summary
+## Context
 
-Implement two internal modules in keva_core:
+Keva is a local key-value store for clipboard-like data. The core library (`keva_core`) is implemented. This document
+describes the GUI implementation using egui/eframe.
 
-1. **Clipboard** - Read/write system clipboard
-2. **Search** - Fuzzy (nucleo) + Regex hybrid search
+**Reference documents:**
 
-All public API exposed through `KevaCore` methods.
+- `Spec.md` - Product specification (source of truth for behavior)
+- `implementation_detail.md` - keva_core API reference
+- `Planned.md` - Future features (not in scope)
 
----
+**Project structure:**
 
-## Clipboard Module (`clipboard.rs`)
-
-### Design
-
-- Internal module (`pub(crate)`)
-- Uses `clipboard-rs` crate (already in Cargo.toml)
-
-### Read Priority
-
-When clipboard contains both files and text, **files take priority** - text is discarded.
-
-### Internal API
-
-```rust
-pub(crate) enum ClipboardContent {
-    Text(String),
-    Files(Vec<PathBuf>),
-}
-
-pub(crate) fn read_clipboard() -> Result<ClipboardContent, ClipboardError>;
-pub(crate) fn write_text(text: &str) -> Result<(), ClipboardError>;
-pub(crate) fn write_files(paths: &[PathBuf]) -> Result<(), ClipboardError>;
 ```
-
-### KevaCore Public Methods
-
-```rust
-impl KevaCore {
-    /// Import clipboard content to a key
-    /// Files take priority over text when both are present
-    pub fn import_clipboard(&mut self, key: &Key, now: SystemTime) -> Result<(), StorageError>;
-
-    /// Copy key's value to clipboard and update access time
-    pub fn copy_to_clipboard(&mut self, key: &Key, now: SystemTime) -> Result<(), StorageError>;
-}
-```
-
----
-
-## Search Module (`search.rs`)
-
-### Design
-
-- Internal module (`pub(crate)`)
-- Uses `nucleo` for fuzzy search (already in Cargo.toml)
-- Uses `regex` for regex mode (**add to Cargo.toml**)
-- SearchEngine owned by KevaCore with **incremental updates**
-- **No auto-detection** - caller explicitly specifies search mode
-
-### Public Types (re-exported from lib.rs)
-
-```rust
-/// Query with explicit search mode - no auto-detection
-pub enum SearchQuery {
-    Fuzzy(String),
-    Regex(String),
-}
-
-pub struct SearchResult {
-    pub key: Key,
-    pub score: u32,
-    pub is_trash: bool,
-}
-
-/// Case matching behavior for fuzzy search
-#[derive(Debug, Clone, Copy, Default)]
-pub enum CaseMatching {
-    /// Always case sensitive
-    Sensitive,
-    /// Always case insensitive
-    Insensitive,
-    /// Smart case: case-insensitive unless query contains uppercase
-    #[default]
-    Smart,
-}
-
-/// Configuration for fuzzy search behavior
-#[derive(Debug, Clone, Default)]
-pub struct SearchConfig {
-    pub case_matching: CaseMatching,        // Default: Smart
-    pub unicode_normalization: bool,        // Default: true
-}
-
-impl SearchConfig {
-    pub fn new() -> Self {
-        Self {
-            case_matching: CaseMatching::Smart,
-            unicode_normalization: true,
-        }
-    }
-}
-```
-
-### Internal SearchEngine
-
-```rust
-pub(crate) struct SearchEngine {
-    nucleo: Nucleo<SearchItem>,
-    active_keys: HashSet<Key>,
-    trashed_keys: HashSet<Key>,
-    pending_deletions: usize,
-    rebuild_threshold: usize,
-    config: SearchConfig,
-}
-
-impl SearchEngine {
-    pub(crate) fn new(
-        active: Vec<Key>,
-        trashed: Vec<Key>,
-        config: SearchConfig,
-    ) -> Self;
-
-    // Incremental updates
-    pub(crate) fn add_active(&mut self, key: Key);
-    pub(crate) fn add_trashed(&mut self, key: Key);
-    pub(crate) fn remove(&mut self, key: &Key);
-    pub(crate) fn trash(&mut self, key: &Key);
-    pub(crate) fn restore(&mut self, key: &Key);
-    pub(crate) fn rename(&mut self, old: &Key, new: &Key);
-    pub(crate) fn rebuild(&mut self);
-
-    pub(crate) fn search(
-        &mut self,
-        query: SearchQuery,
-        timeout_ms: u64,
-    ) -> Result<Vec<SearchResult>, SearchError>;
-}
-```
-
-### Rebuild Operation
-
-**Why needed:** Nucleo is append-only (no remove API). Deleted items stay in Nucleo but are filtered from results.
-
-**What it does:**
-
-1. Clears Nucleo completely (`nucleo.restart(true)`)
-2. Resets `pending_deletions` to 0
-3. Re-injects only current valid keys from `active_keys` and `trashed_keys`
-
-**When triggered:** Automatically when `pending_deletions > rebuild_threshold` (default: 100)
-
-### KevaCore Integration
-
-```rust
-impl KevaCore {
-    pub fn open(config: Config, search_config: SearchConfig) -> Result<Self, StorageError> {
-        let search_engine = SearchEngine::new(
-            db.active_keys()?,
-            db.trashed_keys()?,
-            search_config,
-        );
-        // ...
-    }
-
-    // Update search engine on mutations
-    pub fn upsert_text(...) { /* ... */ self.search_engine.add_active(key); }
-    pub fn trash(...) { /* ... */ self.search_engine.trash(key); }
-    pub fn restore(...) { /* ... */ self.search_engine.restore(key); }
-    pub fn purge(...) { /* ... */ self.search_engine.remove(key); }
-    pub fn rename(...) { /* ... */ self.search_engine.rename(old, new); }
-    pub fn gc(...) { /* ... update trashed/purged keys ... */ }
-
-    /// Search with explicit mode (no auto-detection)
-    pub fn search(
-        &mut self,
-        query: SearchQuery,
-        timeout_ms: u64,
-    ) -> Result<Vec<SearchResult>, StorageError>;
-}
-```
-
----
-
-## Metadata Changes
-
-### Add `last_accessed` Timestamp
-
-Update value metadata to include `last_accessed`:
-
-```rust
-pub struct Metadata {
-    pub created_at: SystemTime,
-    pub updated_at: SystemTime,
-    pub last_accessed: SystemTime,  // NEW
-    pub trashed_at: Option<SystemTime>,
-    pub lifecycle_state: LifecycleState,
-}
-```
-
-### TTL Based on `last_accessed`
-
-**Change:** TTL expiration is now based on `last_accessed`, not `updated_at`.
-
-Operations that update `last_accessed`:
-
-- `get()` - reading a value
-- `copy_to_clipboard()` - copying value to clipboard
-
-This extends the lifetime of frequently accessed entries.
-
-### Effective Lifecycle State Calculation
-
-```rust
-fn effective_lifecycle_state(&self, value: &Value, now: SystemTime) -> LifecycleState {
-    match value.metadata.lifecycle_state {
-        LifecycleState::Active => {
-            // Use last_accessed instead of updated_at
-            let expires_at = value.metadata.last_accessed + self.config.saved.trash_ttl;
-            if expires_at <= now {
-                LifecycleState::Trash
-            } else {
-                LifecycleState::Active
-            }
-        }
-        LifecycleState::Trash => {
-            // ... same as before ...
-        }
-        LifecycleState::Purge => LifecycleState::Purge,
-    }
-}
+keva/
+├── core/           # keva_core (implemented)
+├── gui/            # keva_gui (this implementation)
+├── Spec.md
+├── Planned.md
+└── implementation_detail.md
 ```
 
 ---
 
 ## Dependencies
 
-**Already present:**
+Add to `gui/Cargo.toml`:
 
-- `clipboard-rs = "0.3"`
-- `nucleo = "0.5"`
-
-**To add:**
-
-- `regex = "1"`
-
----
-
-## Files to Modify
-
-| File                                         | Changes                                                         |
-|----------------------------------------------|-----------------------------------------------------------------|
-| `core/Cargo.toml`                            | Add `regex = "1"`                                               |
-| `core/src/clipboard.rs`                      | Implement (currently empty)                                     |
-| `core/src/search.rs`                         | Implement (currently empty)                                     |
-| `core/src/core/mod.rs`                       | Add `search_engine` field, new methods, update existing methods |
-| `core/src/lib.rs`                            | Re-export `SearchQuery`, `SearchResult`, `SearchConfig`         |
-| `core/src/types/value/versioned_value/v1.rs` | Add `last_accessed` to metadata                                 |
-| `core/src/core/db/mod.rs`                    | Update `get()` to touch `last_accessed`                         |
+```toml
+[dependencies]
+keva_core = { path = "../core" }
+eframe = "0.29"
+egui = "0.29"
+toml = "0.8"
+serde = { version = "1", features = ["derive"] }
+dirs = "5"
+```
 
 ---
 
-## Implementation Order
+## Milestones
 
-1. Add `regex` dependency
-2. Add `last_accessed` to metadata (versioned value migration)
-3. Implement `clipboard.rs`
-4. Implement `search.rs` with `SearchConfig`
-5. Update `KevaCore` with clipboard methods (`import_clipboard`, `copy_to_clipboard`)
-6. Update `KevaCore` with search engine integration
-7. Update `get()` and `copy_to_clipboard()` to update `last_accessed`
-8. Update existing `KevaCore` methods to call search engine deltas
-9. Tests
+### M1: Window Skeleton
+
+**Goal:** Render three-pane layout with placeholder content.
+
+**Tasks:**
+
+1. Create `gui/src/main.rs` with eframe app setup
+2. Create `gui/src/app.rs` with `KevaApp` struct implementing `eframe::App`
+3. Implement layout:
+    - Top: Search bar (text input, non-functional)
+    - Left: Key list panel (static placeholder text)
+    - Right: Inspector panel (static placeholder text)
+4. Use `egui::TopBottomPanel` for search bar, `egui::SidePanel` for left pane, `egui::CentralPanel` for right pane
+
+**Acceptance criteria:**
+
+- `cargo run -p keva_gui` opens window
+- Three distinct panels visible
+- Window title: "Keva"
+
+---
+
+### M2: Config Loading + Core Integration
+
+**Goal:** Load configuration and initialize keva_core.
+
+**Tasks:**
+
+1. Create `gui/src/config.rs`:
+    - Define `GuiConfig` struct matching Spec.md Section 5
+    - Implement `load(data_dir: PathBuf) -> Result<GuiConfig, ConfigError>`
+    - Implement `save(&self, data_dir: PathBuf) -> Result<(), ConfigError>`
+    - Implement validation with specific error messages per field
+2. Create `gui/src/error.rs` for GUI-specific errors
+3. Update `main.rs`:
+    - Read `KEVA_DATA_DIR` env var or use default (`~/.keva/`)
+    - Load config.toml (create with defaults if missing)
+    - Show validation error popup if invalid (see Spec.md Section 5 Config Validation)
+    - Initialize `KevaCore::open(data_dir, config)`
+4. Store `KevaCore` instance in `KevaApp`
+5. Display key count in left pane (call `keva_core.active_keys()`)
+
+**Acceptance criteria:**
+
+- App launches with valid config
+- App shows error popup with invalid config
+- Left pane shows "X keys" from actual database
+
+**Config struct:**
+
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GuiConfig {
+    pub delete_style: DeleteStyle,           // "soft" or "immediate"
+    pub large_file_threshold: u64,           // bytes
+    pub trash_ttl: u64,                      // seconds
+    pub purge_ttl: u64,                      // seconds
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DeleteStyle {
+    Soft,
+    Immediate,
+}
+```
+
+---
+
+### M3: Key List Display
+
+**Goal:** Display actual keys in left pane.
+
+**Tasks:**
+
+1. Fetch keys from `keva_core.active_keys()` and `keva_core.trashed_keys()`
+2. Render scrollable list in left pane using `egui::ScrollArea`
+3. Each key as selectable label (`ui.selectable_label`)
+4. Track selected key in `KevaApp` state: `selected_key: Option<Key>`
+5. Trashed keys shown at bottom with 🗑️ prefix
+6. Clicking key updates `selected_key`
+
+**Acceptance criteria:**
+
+- All active keys displayed
+- Trashed keys displayed at bottom with icon
+- Clicking key highlights it
+- Selection state persists
+
+---
+
+### M4: Search Bar Integration
+
+**Goal:** Fuzzy search filters key list.
+
+**Tasks:**
+
+1. Add `search_query: String` to `KevaApp` state
+2. Bind search bar input to `search_query`
+3. When `search_query` is non-empty:
+    - Call `keva_core.search(query, timeout_ms)`
+    - Display results instead of full key list
+    - Maintain ranking order from search results
+4. When `search_query` is empty:
+    - Show all keys (active + trashed)
+5. Clear selection when search query changes
+
+**Acceptance criteria:**
+
+- Typing filters key list
+- Results ranked by relevance
+- Empty query shows all keys
+- Search responds within 100ms for typical queries
+
+---
+
+### M5: Right Pane Read-Only
+
+**Goal:** Display value for selected key.
+
+**Tasks:**
+
+1. When key selected, call `keva_core.get(key, now)`
+2. Display based on value type:
+    - **Text:** Show text content in read-only text area
+    - **Files:** Show file list with names and sizes
+    - **None:** Show placeholder text
+3. When no key selected but search bar has text:
+    - Use search bar text as target key
+    - Show empty state placeholder: `Write or paste value for "<key>"`
+
+**Acceptance criteria:**
+
+- Selecting key shows its value
+- Text values displayed correctly
+- File values show list of filenames
+- Empty/new keys show placeholder
+
+---
+
+### M6: Right Pane Editing
+
+**Goal:** Edit text values, create new keys.
+
+**Tasks:**
+
+1. Replace read-only text area with `egui::TextEdit::multiline`
+2. Track edit state: `editing_text: Option<String>`, `last_edit_time: Instant`
+3. Auto-save logic:
+    - On text change, update `last_edit_time`
+    - Each frame, check if `now - last_edit_time > 3 seconds` and text differs from stored
+    - If so, call `keva_core.upsert_text(key, text, now)` and refresh key list
+4. For new keys (search bar text, no existing value):
+    - First text input creates key via `upsert_text`
+5. Handle paste (`Ctrl+V` / `Cmd+V`):
+    - Check clipboard content type
+    - If text: insert at cursor (default egui behavior)
+    - If files and current value is text: show hint "Clear text to paste files"
+    - If files and current value is empty/files: call `keva_core.import_clipboard(key, now)`
+
+**Acceptance criteria:**
+
+- Text editing works
+- Auto-save triggers after 3 seconds of inactivity
+- New keys can be created by typing in search bar + entering text
+- File paste blocked when text exists (with hint)
+
+---
+
+### M7: Left Pane Controls
+
+**Goal:** Rename and delete keys.
+
+**Tasks:**
+
+1. On hover/selection, show control buttons:
+    - Rename button (✏️ or pen icon)
+    - Delete button (🗑️ or trash icon)
+2. Rename flow:
+    - Click button → key text becomes editable
+    - Enter confirms, Escape cancels
+    - If new key exists, show confirmation dialog
+    - Call `keva_core.rename(old, new, overwrite, now)`
+3. Delete flow:
+    - Check `config.delete_style`
+    - If `Soft`: call `keva_core.trash(key, now)`
+    - If `Immediate`: call `keva_core.purge(key)`
+    - Refresh key list
+
+**Acceptance criteria:**
+
+- Hover shows buttons
+- Rename works with confirmation for overwrites
+- Delete respects configured delete style
+- Key list refreshes after operations
+
+---
+
+### M8: Keyboard Shortcuts
+
+**Goal:** Implement keyboard navigation per Spec.md.
+
+**Tasks:**
+
+1. Handle keyboard input in `KevaApp::update`:
+    - `Enter` with key selected: focus right pane for editing
+    - `Enter` with no selection + search text: focus right pane (creates key if new)
+    - `Shift+Enter` with key selected: copy to clipboard, hide window
+    - `Cmd+,` (macOS) / `Ctrl+,` (Windows): open settings dialog
+2. For `Shift+Enter`:
+    - Call `keva_core.copy_to_clipboard(key, now)`
+    - Call `frame.set_visible(false)` or minimize
+3. Track focus state to enable/disable shortcuts appropriately
+
+**Acceptance criteria:**
+
+- All shortcuts from Spec.md work
+- `Shift+Enter` copies and hides window
+- `Cmd+,` opens settings (see M9)
+
+---
+
+### M9: Settings Dialog
+
+**Goal:** Implement settings UI.
+
+**Tasks:**
+
+1. Create `gui/src/settings.rs` with `SettingsDialog` struct
+2. Track dialog state in `KevaApp`: `settings_open: bool`, `settings_draft: GuiConfig`
+3. When `Cmd+,` pressed:
+    - Set `settings_open = true`
+    - Clone current config to `settings_draft`
+4. Render settings as modal or separate window:
+    - Delete Style: dropdown (Soft/Immediate)
+    - Large File Threshold: number input with MB label
+    - Trash TTL: number input with days label
+    - Purge TTL: number input with days label
+5. On dialog close:
+    - Save `settings_draft` to config.toml
+    - Call `keva_core.update_config(...)` (requires keva_core change)
+    - Set `settings_open = false`
+
+**keva_core change required:**
+
+```rust
+impl KevaCore {
+    pub fn update_config(&mut self, config: KevaConfig) { ... }
+}
+```
+
+**Acceptance criteria:**
+
+- Settings dialog opens on `Cmd+,`
+- All settings editable
+- Changes persist to config.toml
+- Changes applied immediately
+
+---
+
+### M10: Drag & Drop
+
+**Goal:** Accept file drops.
+
+**Tasks:**
+
+1. Enable drag-drop in eframe: `NativeOptions { drag_and_drop_support: true, .. }`
+2. Handle `egui::Event::DroppedFile` events
+3. Determine drop target:
+    - If dropped on left pane key: use that key
+    - If dropped on right pane: use current target key
+4. Check file size against `large_file_threshold`:
+    - If exceeds: show confirmation dialog
+    - If confirmed or under threshold: call `keva_core.add_files(key, paths, now)`
+5. Refresh display after drop
+
+**Acceptance criteria:**
+
+- Files can be dropped on right pane
+- Files can be dropped on specific keys in left pane
+- Large files trigger confirmation
+- Dropped files stored correctly
+
+---
+
+### M11: Window Lifecycle + GC
+
+**Goal:** Handle window close and garbage collection.
+
+**Tasks:**
+
+1. On window close event:
+    - Trigger auto-save if pending edits
+    - Call `keva_core.gc(now)`
+    - Exit application
+2. Ensure single-instance behavior (optional for v1):
+    - Check for existing instance on launch
+    - If exists, activate existing window instead of launching new
+
+**Acceptance criteria:**
+
+- Pending edits saved on close
+- GC runs on close
+- App exits cleanly
+
+---
+
+## File Structure
+
+Final `gui/` structure:
+
+```
+gui/
+├── Cargo.toml
+└── src/
+    ├── main.rs          # Entry point, config loading, error popups
+    ├── app.rs           # KevaApp struct, main update loop
+    ├── config.rs        # GuiConfig, load/save/validate
+    ├── settings.rs      # Settings dialog
+    ├── panels/
+    │   ├── mod.rs
+    │   ├── search_bar.rs
+    │   ├── key_list.rs
+    │   └── inspector.rs
+    └── error.rs         # GUI error types
+```
+
+---
+
+## Notes
+
+- Use `std::time::Instant::now()` for `now` parameter in keva_core calls that need timestamp
+- Convert to appropriate timestamp type as required by keva_core API
+- Test with small dataset first, then verify performance with larger key counts
+- Refer to Spec.md for exact UI behavior details
