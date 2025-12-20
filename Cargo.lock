@@ -371,13 +371,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "keva_cli"
-version = "0.1.0"
-dependencies = [
- "keva_core",
-]
-
-[[package]]
 name = "keva_core"
 version = "0.1.0"
 dependencies = [
