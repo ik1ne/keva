@@ -518,6 +518,10 @@ impl Database {
     ///
     /// Handles TTL table cleanup for both old_key and any existing new_key.
     pub fn rename(&mut self, old_key: &Key, new_key: &Key) -> Result<(), DatabaseError> {
+        if old_key == new_key {
+            return Ok(());
+        }
+
         let write_txn = self.db.begin_write()?;
 
         {

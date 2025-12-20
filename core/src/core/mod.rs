@@ -290,6 +290,10 @@ impl KevaCore {
         overwrite: bool,
         now: SystemTime,
     ) -> Result<(), StorageError> {
+        if old_key == new_key {
+            return Ok(());
+        }
+
         // Check source key is Active
         let value = self.get(old_key, now)?;
         match value {
@@ -301,12 +305,30 @@ impl KevaCore {
         }
 
         // Check destination doesn't exist (unless overwrite is true)
-        if !overwrite && self.get(new_key, now)?.is_some() {
+        let destination_exists = self.get(new_key, now)?.is_some();
+        if !overwrite && destination_exists {
             return Err(StorageError::DestinationExists);
         }
 
         self.db.rename(old_key, new_key)?;
-        self.search_engine.rename(old_key, new_key.clone());
+
+        // Search index maintenance:
+        // Nucleo doesn't support in-place deletion, so we model removals via set membership
+        // + periodic rebuild. When overwriting an existing destination key, we must ensure any
+        // previous destination entry (active or trashed) is removed; then we remove the source
+        // and add the destination with the source's lifecycle (source is always Active here).
+        if destination_exists {
+            self.search_engine.remove(new_key);
+        }
+        self.search_engine.remove(old_key);
+        self.search_engine.add_active(new_key.clone());
+
+        // Overwrite-rename can otherwise leave stale duplicates in the underlying index until the
+        // rebuild threshold is reached; force rebuild for deterministic results.
+        if overwrite && destination_exists {
+            self.search_engine.rebuild();
+        }
+
         let old_path = key_to_path(old_key);
         let new_path = key_to_path(new_key);
         self.file.rename(&old_path, &new_path)?;
@@ -331,14 +353,17 @@ impl KevaCore {
         Ok(self.db.touch(key, now)?)
     }
 
-    /// Performs garbage collection.
+    /// Performs periodic maintenance.
     ///
     /// This:
     /// 1. Moves expired Active keys to Trash
     /// 2. Permanently deletes expired Trash keys
     /// 3. Cleans up blob files for purged keys
     /// 4. Removes orphan blob directories (blobs without corresponding keys)
-    pub fn gc(&mut self, now: SystemTime) -> Result<GcResult, StorageError> {
+    ///
+    /// Note: When search indexing is enabled, this method is also the intended hook for
+    /// search index maintenance/compaction to avoid doing heavy work during active UI interaction.
+    pub fn maintenance(&mut self, now: SystemTime) -> Result<GcResult, StorageError> {
         let result = self.db.gc(now)?;
 
         // Update search engine for trashed keys

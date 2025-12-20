@@ -287,6 +287,40 @@ mod rename {
             ClipData::Text(TextData::Inlined("old content".to_string()))
         );
     }
+
+    #[test]
+    fn test_rename_overwrite_normalizes_search_trash_status() {
+        let (mut storage, _temp) = create_test_storage();
+        let now = SystemTime::now();
+
+        let old_key = make_key("old/key");
+        let new_key = make_key("new/key");
+
+        // Source must be active.
+        storage.upsert_text(&old_key, "old content", now).unwrap();
+
+        // Destination exists and is trashed, so search index has it as trash.
+        storage.upsert_text(&new_key, "new content", now).unwrap();
+        storage.trash(&new_key, now).unwrap();
+
+        // Overwrite rename should replace destination and normalize its search state to active.
+        storage.rename(&old_key, &new_key, true, now).unwrap();
+
+        let results = storage
+            .search(
+                crate::search::SearchQuery::Fuzzy("new/key".to_string()),
+                100,
+            )
+            .unwrap();
+
+        // Destination key should appear exactly once and not be marked as trash.
+        let matching: Vec<_> = results.iter().filter(|r| r.key == new_key).collect();
+        assert_eq!(matching.len(), 1);
+        assert!(!matching[0].is_trash);
+
+        // Old key should be gone.
+        assert!(storage.get(&old_key, now).unwrap().is_none());
+    }
 }
 
 mod keys {

@@ -223,10 +223,16 @@ TTL expiration is based on `last_accessed`. Operations that update `last_accesse
     - Hidden from all interfaces immediately upon TTL expiration.
     - Physical data removed at next GC cycle.
 
-### Garbage Collection
+### Maintenance (Garbage Collection)
 
 - Moves items from Active to Trash based on TTL
 - Permanently removes items past purge TTL
 - Reclaims storage space from deleted blobs
+- May perform in-memory maintenance tasks (e.g., search index compaction) to avoid heavy work during active UI interaction
 
-Trigger: Window hide or app quit.
+Triggers:
+- Window hide
+- App quit
+- Periodically while running (configurable; default: 1 day)
+
+Note: Search results may be slightly outdated until maintenance runs.

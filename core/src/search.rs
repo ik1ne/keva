@@ -2,6 +2,10 @@
 //!
 //! Uses nucleo for fuzzy search.
 //! SearchEngine maintains incremental updates to avoid rebuilding on every mutation.
+//!
+//! Note: Some operations (e.g. overwrite-rename) can create a large number of stale entries
+//! in the underlying Nucleo index because Nucleo does not support in-place deletions.
+//! For those cases, callers can force a full rebuild to ensure deterministic results.
 
 use crate::types::Key;
 use nucleo::{Config as NucleoConfig, Matcher, Nucleo, Utf32String};
@@ -247,8 +251,11 @@ impl SearchEngine {
         }
     }
 
-    /// Rebuilds the entire index from scratch
-    fn rebuild(&mut self) {
+    /// Rebuilds the entire index from scratch.
+    ///
+    /// This is exposed to the crate so high-impact mutations (like overwrite rename)
+    /// can force a rebuild for deterministic results.
+    pub(crate) fn rebuild(&mut self) {
         self.nucleo.restart(true);
         self.pending_deletions = 0;
 
