@@ -700,75 +700,6 @@ mod rename {
     }
 }
 
-mod keys {
-    use super::common::{create_test_db, make_key};
-    use crate::core::db::ClipData;
-    use crate::types::value::versioned_value::latest_value::TextData;
-    use std::time::{Duration, SystemTime};
-
-    #[test]
-    fn test_keys_empty_database() {
-        let (db, _temp) = create_test_db();
-        let keys = db.keys().unwrap();
-        assert!(keys.is_empty());
-    }
-
-    #[test]
-    fn test_keys_multiple_entries() {
-        let (mut db, _temp) = create_test_db();
-        let now = SystemTime::now();
-
-        let key_names = ["alpha", "beta", "gamma"];
-        for name in &key_names {
-            let key = make_key(name);
-            db.insert(
-                &key,
-                now,
-                ClipData::Text(TextData::Inlined(format!("content-{}", name))),
-            )
-            .unwrap();
-        }
-
-        let keys = db.keys().unwrap();
-        assert_eq!(keys.len(), 3);
-
-        // Convert to strings for easier comparison
-        let key_strings: Vec<String> = keys.iter().map(|k| k.to_string()).collect();
-        for name in &key_names {
-            assert!(key_strings.contains(&name.to_string()));
-        }
-    }
-
-    #[test]
-    fn test_keys_includes_trashed() {
-        let (mut db, _temp) = create_test_db();
-        let now = SystemTime::now();
-
-        let active_key = make_key("active");
-        let trashed_key = make_key("trashed");
-
-        db.insert(
-            &active_key,
-            now,
-            ClipData::Text(TextData::Inlined("active".to_string())),
-        )
-        .unwrap();
-
-        db.insert(
-            &trashed_key,
-            now,
-            ClipData::Text(TextData::Inlined("trashed".to_string())),
-        )
-        .unwrap();
-
-        db.trash(&trashed_key, now + Duration::from_secs(10))
-            .unwrap();
-
-        let keys = db.keys().unwrap();
-        assert_eq!(keys.len(), 2);
-    }
-}
-
 mod gc {
     use super::common::{create_test_db, create_test_db_with_ttl, make_key};
     use crate::core::db::ClipData;
@@ -987,9 +918,6 @@ mod edge_cases {
             )
             .unwrap();
         }
-
-        let all_keys = db.keys().unwrap();
-        assert_eq!(all_keys.len(), 4);
 
         // Each key should be independently accessible
         for key_str in &keys {

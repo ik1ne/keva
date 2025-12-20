@@ -612,20 +612,6 @@ impl Database {
         Ok(())
     }
 
-    /// Returns all keys in the database.
-    pub fn keys(&self) -> Result<Vec<Key>, DatabaseError> {
-        let read_txn = self.db.begin_read()?;
-        let table = read_txn.open_table(MAIN_TABLE)?;
-
-        let mut keys = Vec::new();
-        for entry in table.iter()? {
-            let (key, _) = entry?;
-            keys.push(key.value());
-        }
-
-        Ok(keys)
-    }
-
     /// Returns all Active keys by iterating the TRASHED_TTL table.
     ///
     /// This is more efficient than iterating the main table and decoding values.

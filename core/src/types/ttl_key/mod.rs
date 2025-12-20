@@ -6,7 +6,7 @@ use std::time::{Duration, SystemTime};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TtlKey {
     /// The base timestamp for TTL calculation.
-    /// For trashed table: this is `updated_at` (Active → Trash threshold).
+    /// For trashed table: this is `last_accessed` (Active → Trash threshold).
     /// For purged table: this is `trashed_at` (Trash → Purge threshold).
     pub timestamp: SystemTime,
     pub key: Key,
