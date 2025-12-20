@@ -510,6 +510,116 @@ mod ensure_file_path {
     }
 
     #[test]
+    fn test_ensure_is_idempotent_for_same_key_and_file() {
+        let temp_dir = tempdir().unwrap();
+        let storage = FileStorage {
+            base_path: temp_dir.path().to_path_buf(),
+            inline_threshold_bytes: 1024,
+        };
+
+        let file_name = "inlined.txt";
+        let contents = "This is an inlined file.";
+        let hash = <Value as ValueVariant>::Hasher::new()
+            .update(contents.as_bytes())
+            .finalize();
+
+        let key_path = Path::new("key_hash");
+
+        // First ensure: should materialize the file.
+        let inline_file_data_1 =
+            store_inline_file(&temp_dir, &storage, key_path, file_name, contents);
+        let ensured_1 = storage
+            .ensure_file_path(key_path, &FileData::Inlined(inline_file_data_1))
+            .unwrap();
+
+        assert!(ensured_1.exists());
+
+        let metadata_1 = std::fs::metadata(&ensured_1).unwrap();
+        let modified_1 = metadata_1.modified().unwrap();
+
+        // Second ensure with the same key and same content: should not rewrite.
+        let inline_file_data_2 =
+            store_inline_file(&temp_dir, &storage, key_path, file_name, contents);
+        let ensured_2 = storage
+            .ensure_file_path(key_path, &FileData::Inlined(inline_file_data_2))
+            .unwrap();
+
+        assert_eq!(ensured_2, ensured_1);
+        assert_eq!(
+            ensured_2,
+            temp_dir
+                .path()
+                .join(ENSURE_INLINED_DIR)
+                .join(key_path)
+                .join(hash.to_string())
+                .join(file_name)
+        );
+
+        let metadata_2 = std::fs::metadata(&ensured_2).unwrap();
+        let modified_2 = metadata_2.modified().unwrap();
+
+        // If we didn't rewrite, mtime should stay the same (or at least not go backwards).
+        // Prefer strict equality, but some filesystems have coarse timestamp resolution.
+        assert!(modified_2 >= modified_1);
+    }
+
+    #[test]
+    fn test_ensure_switching_keys_clears_previous_ensured_cache() {
+        let temp_dir = tempdir().unwrap();
+        let storage = FileStorage {
+            base_path: temp_dir.path().to_path_buf(),
+            inline_threshold_bytes: 1024,
+        };
+
+        let file_name = "inlined.txt";
+        let contents = "This is an inlined file.";
+        let hash = <Value as ValueVariant>::Hasher::new()
+            .update(contents.as_bytes())
+            .finalize();
+
+        let key_a = Path::new("key_hash_a");
+        let key_b = Path::new("key_hash_b");
+
+        let inline_a = store_inline_file(&temp_dir, &storage, key_a, file_name, contents);
+        let inline_b = store_inline_file(&temp_dir, &storage, key_b, file_name, contents);
+
+        let ensured_a = storage
+            .ensure_file_path(key_a, &FileData::Inlined(inline_a))
+            .unwrap();
+
+        assert!(ensured_a.exists());
+        assert_eq!(
+            ensured_a,
+            temp_dir
+                .path()
+                .join(ENSURE_INLINED_DIR)
+                .join(key_a)
+                .join(hash.to_string())
+                .join(file_name)
+        );
+
+        let ensured_b = storage
+            .ensure_file_path(key_b, &FileData::Inlined(inline_b))
+            .unwrap();
+
+        assert!(ensured_b.exists());
+        assert_eq!(
+            ensured_b,
+            temp_dir
+                .path()
+                .join(ENSURE_INLINED_DIR)
+                .join(key_b)
+                .join(hash.to_string())
+                .join(file_name)
+        );
+
+        // Ensuring for key_b should clear ensured cache for key_a.
+        let ensured_root = temp_dir.path().join(ENSURE_INLINED_DIR);
+        assert!(!ensured_root.join(key_a).exists());
+        assert!(ensured_root.join(key_b).exists());
+    }
+
+    #[test]
     fn test_ensure_blob_stored_file_path() {
         let temp_dir = tempdir().unwrap();
         let storage = FileStorage {

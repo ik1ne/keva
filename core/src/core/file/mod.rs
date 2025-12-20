@@ -198,6 +198,14 @@ impl FileStorage {
         key_path: &Path,
         file: &FileData,
     ) -> Result<PathBuf, FileStorageError> {
+        // Keep ensured cache for the current key only (clipboard viability + space optimization).
+        //
+        // Important: ensure is called from "copy" flows and users often press Ctrl+C repeatedly.
+        // Make this idempotent and cheap:
+        // - First, clean up other keys' ensure caches (but keep this key).
+        // - Then, for inlined files, avoid rewriting if the ensured file already exists.
+        self.cleanup_ensure_cache(Some(key_path))?;
+
         let inline_dir = self.base_path.join(ENSURE_INLINED_DIR).join(key_path);
         match file {
             FileData::Inlined(InlineFileData { file_name, data }) => {
@@ -207,8 +215,13 @@ impl FileStorage {
                 let file_dir_path = inline_dir.join(hash.to_string());
                 std::fs::create_dir_all(file_dir_path.as_path())?;
                 let file_path = file_dir_path.join(file_name);
-                std::fs::write(file_path.as_path(), data)?;
 
+                // Fast path: if already ensured, don't rewrite on repeated copy.
+                if file_path.exists() {
+                    return Ok(file_path);
+                }
+
+                std::fs::write(file_path.as_path(), data)?;
                 Ok(file_path)
             }
             FileData::BlobStored(BlobStoredFileData { file_name, hash }) => {
@@ -229,14 +242,23 @@ impl FileStorage {
             return Ok(());
         }
 
+        // We only ever create per-key directories under `ensure_dir`:
+        // `{base}/temp_inline/{key_path}/...`
+        //
+        // So cleanup should delete *other key directories*, and keep exactly
+        // `{ensure_dir}/{keep_key_path}` when requested.
+        let keep_dir = keep_key_path.map(|k| ensure_dir.join(k));
+
         for entry in std::fs::read_dir(ensure_dir.as_path())? {
             let entry = entry?;
             let path = entry.path();
-            if let Some(keep_path) = keep_key_path
-                && path.ends_with(keep_path)
-            {
-                continue;
+
+            if let Some(ref keep_dir) = keep_dir {
+                if path == *keep_dir {
+                    continue;
+                }
             }
+
             if path.is_dir() {
                 std::fs::remove_dir_all(path.as_path())?;
             } else {
