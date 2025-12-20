@@ -8,7 +8,7 @@ use crate::core::db::error::DatabaseError;
 use crate::core::db::ttl_table::TtlTable;
 use crate::types::value::versioned_value::VersionedValue;
 use crate::types::value::versioned_value::latest_value::{
-    ClipData, FileData, LifecycleState, Metadata, Value as PersistedValue,
+    ClipData, FileData, LifecycleState, Metadata, TextData, Value as PersistedValue,
 };
 use crate::types::{Config, Key, TtlKey};
 use redb::{ReadableDatabase, ReadableTable, TableDefinition};
@@ -507,6 +507,81 @@ impl Database {
 
         write_txn.commit()?;
         Ok(())
+    }
+
+    /// Removes a single file entry from a Files value by index.
+    ///
+    /// - Only works on Active keys.
+    /// - Returns `Err(NotFound)` if the key doesn't exist or is not Active.
+    /// - Returns `Err(TypeMismatch)` if the key contains Text instead of Files.
+    /// - Returns `Err(NotFound)` if `index` is out of bounds.
+    ///
+    /// Returns the removed file entry so the caller can clean up blob storage if needed.
+    pub fn remove_file_at(
+        &mut self,
+        key: &Key,
+        now: SystemTime,
+        index: usize,
+    ) -> Result<FileData, DatabaseError> {
+        let write_txn = self.db.begin_write()?;
+
+        let removed_file = {
+            let mut main_table = write_txn.open_table(MAIN_TABLE)?;
+
+            let mut value = main_table
+                .get(key)?
+                .map(|g| Self::extract_latest(g.value()))
+                .ok_or(DatabaseError::NotFound)?;
+
+            // Only allow mutation on Active keys
+            if value.metadata.lifecycle_state != LifecycleState::Active {
+                return Err(DatabaseError::NotFound);
+            }
+
+            // Must be Files
+            let files = match &mut value.clip_data {
+                ClipData::Files(files) => files,
+                ClipData::Text(_) => return Err(DatabaseError::TypeMismatch),
+            };
+
+            if index >= files.len() {
+                return Err(DatabaseError::NotFound);
+            }
+
+            // Remove old TTL entry
+            let old_ttl_key = TtlKey {
+                timestamp: value.metadata.last_accessed,
+                key: key.clone(),
+            };
+            TRASHED_TTL.remove(&write_txn, &old_ttl_key)?;
+
+            // Remove file entry
+            let removed = files.remove(index);
+
+            // If this was the last file, convert to empty text (consistent with "empty value means empty text")
+            if files.is_empty() {
+                value.clip_data = ClipData::Text(TextData::Inlined(String::new()));
+            }
+
+            // Update timestamps
+            value.metadata.updated_at = now;
+            value.metadata.last_accessed = now;
+
+            // Add new TTL entry
+            let new_ttl_key = TtlKey {
+                timestamp: now,
+                key: key.clone(),
+            };
+            TRASHED_TTL.insert(&write_txn, &new_ttl_key)?;
+
+            // Store updated value
+            main_table.insert(key, &VersionedValue::V1(value))?;
+
+            removed
+        };
+
+        write_txn.commit()?;
+        Ok(removed_file)
     }
 
     /// Renames a key, overwriting any existing entry at new_key.

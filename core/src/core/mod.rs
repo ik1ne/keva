@@ -9,7 +9,7 @@ use crate::core::db::error::DatabaseError;
 use crate::core::file::FileStorage;
 use crate::core::file::error::FileStorageError;
 use crate::types::value::versioned_value::latest_value::{
-    ClipData, LifecycleState, TextData, Value,
+    BlobStoredFileData, ClipData, FileData, LifecycleState, TextData, Value,
 };
 use crate::types::{Config, Key};
 use std::borrow::Cow;
@@ -162,7 +162,26 @@ impl KevaCore {
         now: SystemTime,
     ) -> Result<(), StorageError> {
         let key_path = key_to_path(key);
+
+        // Determine whether we need to clean up an existing blob-stored text file.
+        // If the previous value was blob-stored text and the new representation is inlined,
+        // remove the old blob file to avoid leaving orphaned `text.txt` on disk.
+        let remove_old_blob_text = match self.get(key, now)? {
+            Some(v)
+                if v.metadata.lifecycle_state == LifecycleState::Active
+                    && matches!(v.clip_data, ClipData::Text(TextData::BlobStored)) =>
+            {
+                // We'll compute the new representation next; if it becomes inlined, remove old blob.
+                true
+            }
+            _ => false,
+        };
+
         let text_data = self.file.store_text(&key_path, Cow::Borrowed(text))?;
+
+        if remove_old_blob_text && matches!(text_data, TextData::Inlined(_)) {
+            self.file.remove_blob_stored_text(&key_path)?;
+        }
 
         match self.get(key, now)? {
             None => {
@@ -224,6 +243,29 @@ impl KevaCore {
                 return Err(DatabaseError::TypeMismatch.into());
             }
         }
+        Ok(())
+    }
+
+    /// Removes a single file entry from a Files value by index.
+    ///
+    /// - Only works on Active keys
+    /// - If the removed entry is blob-stored, deletes its blob file on disk
+    /// - If the last file is removed, the value becomes empty text (consistent with emptying text)
+    pub fn remove_file_at(
+        &mut self,
+        key: &Key,
+        index: usize,
+        now: SystemTime,
+    ) -> Result<(), StorageError> {
+        // DB mutation returns the removed entry so we can clean up blob storage.
+        let removed = self.db.remove_file_at(key, now, index)?;
+
+        if let FileData::BlobStored(BlobStoredFileData { file_name, hash }) = removed {
+            let key_path = key_to_path(key);
+            self.file
+                .remove_blob_stored_file(&key_path, &BlobStoredFileData { file_name, hash })?;
+        }
+
         Ok(())
     }
 

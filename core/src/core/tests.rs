@@ -104,6 +104,52 @@ mod upsert_text {
         let result = storage.upsert_text(&key, "second", now);
         assert!(matches!(result, Err(StorageError::KeyIsTrashed)));
     }
+
+    #[test]
+    fn test_upsert_blob_text_then_inline_removes_old_blob_file() {
+        let (mut storage, temp) = create_test_storage();
+        let key = make_key("test/blob_to_inline");
+        let now = SystemTime::now();
+
+        // Force blob storage by exceeding the inline threshold.
+        let large_text = "x".repeat(1024 * 1024 + 1);
+        storage.upsert_text(&key, &large_text, now).unwrap();
+
+        // Confirm it is blob-stored and the file exists on disk.
+        let v1 = storage.get(&key, now).unwrap().unwrap();
+        match v1.clip_data {
+            ClipData::Text(TextData::BlobStored) => {}
+            _ => panic!("expected blob-stored text after large upsert"),
+        }
+
+        // This matches the on-disk path used by keva_core for blob-stored text.
+        let key_path = {
+            let hash = blake3_v1::hash(key.as_str().as_bytes());
+            std::path::PathBuf::from(hash.to_hex().as_str())
+        };
+        let blob_text_path = temp
+            .path()
+            .join("blobs")
+            .join(key_path)
+            .join(crate::core::file::TEXT_FILE_NAME);
+
+        assert!(blob_text_path.exists());
+
+        // Now shrink it below the inline threshold.
+        let small_text = "small";
+        let later = now + std::time::Duration::from_secs(1);
+        storage.upsert_text(&key, small_text, later).unwrap();
+
+        // Ensure it is now inlined.
+        let v2 = storage.get(&key, later).unwrap().unwrap();
+        match v2.clip_data {
+            ClipData::Text(TextData::Inlined(s)) => assert_eq!(s, small_text),
+            _ => panic!("expected inlined text after shrinking"),
+        }
+
+        // Old blob file should be removed.
+        assert!(!blob_text_path.exists());
+    }
 }
 
 mod add_files {
@@ -169,6 +215,146 @@ mod add_files {
         assert!(matches!(
             result,
             Err(StorageError::Database(DatabaseError::TypeMismatch))
+        ));
+    }
+}
+
+mod remove_file_at {
+    use super::common::{create_test_file, create_test_storage, make_key};
+    use super::*;
+    use crate::types::value::versioned_value::latest_value::{FileData, InlineFileData, TextData};
+
+    #[test]
+    fn test_remove_file_at_removes_selected_entry() {
+        let (mut storage, temp) = create_test_storage();
+        let key = make_key("test/remove_file_at");
+        let now = SystemTime::now();
+
+        let file1 = create_test_file(&temp, "file1.txt", b"content1");
+        let file2 = create_test_file(&temp, "file2.txt", b"content2");
+
+        storage.add_files(&key, [&file1, &file2], now).unwrap();
+
+        // Remove the first entry (file1).
+        let later = now + std::time::Duration::from_secs(1);
+        storage.remove_file_at(&key, 0, later).unwrap();
+
+        let value = storage.get(&key, later).unwrap().unwrap();
+        match &value.clip_data {
+            ClipData::Files(files) => {
+                assert_eq!(files.len(), 1);
+                match &files[0] {
+                    FileData::Inlined(InlineFileData { file_name, data }) => {
+                        assert_eq!(file_name, "file2.txt");
+                        assert_eq!(data, b"content2");
+                    }
+                    _ => panic!("Expected remaining file to be inlined"),
+                }
+            }
+            _ => panic!("Expected Files variant after removing one file"),
+        }
+    }
+
+    #[test]
+    fn test_remove_file_at_removes_blob_stored_file_from_disk() {
+        let (mut storage, temp) = create_test_storage();
+        let key = make_key("test/remove_file_at_blob");
+        let now = SystemTime::now();
+
+        // Force blob storage by exceeding the inline threshold (1MB in create_test_storage()).
+        let big = vec![b'x'; 1024 * 1024 + 1];
+        let big_path = create_test_file(&temp, "big.bin", &big);
+
+        storage.add_files(&key, [&big_path], now).unwrap();
+
+        // Confirm it is blob-stored and the blob exists on disk at the expected path.
+        let v1 = storage.get(&key, now).unwrap().unwrap();
+        let (file_name, hash) = match &v1.clip_data {
+            ClipData::Files(files) => match &files[0] {
+                FileData::BlobStored(b) => (b.file_name.clone(), b.hash),
+                _ => panic!("expected blob-stored file after adding > threshold"),
+            },
+            _ => panic!("expected Files variant"),
+        };
+
+        let key_dir = {
+            let hash = blake3_v1::hash(key.as_str().as_bytes());
+            std::path::PathBuf::from(hash.to_hex().as_str())
+        };
+
+        let blob_path = temp
+            .path()
+            .join("blobs")
+            .join(&key_dir)
+            .join(hash.to_string())
+            .join(&file_name);
+
+        assert!(blob_path.exists());
+
+        // Remove the only file entry; core should remove the blob file from disk.
+        let later = now + std::time::Duration::from_secs(1);
+        storage.remove_file_at(&key, 0, later).unwrap();
+
+        assert!(!blob_path.exists());
+
+        // Value should become empty text.
+        let v2 = storage.get(&key, later).unwrap().unwrap();
+        match &v2.clip_data {
+            ClipData::Text(TextData::Inlined(s)) => assert_eq!(s, ""),
+            _ => panic!("expected empty inlined text after removing last file"),
+        }
+    }
+
+    #[test]
+    fn test_remove_file_at_last_file_becomes_empty_text() {
+        let (mut storage, temp) = create_test_storage();
+        let key = make_key("test/remove_file_at_last");
+        let now = SystemTime::now();
+
+        let file1 = create_test_file(&temp, "file1.txt", b"content1");
+        storage.add_files(&key, [&file1], now).unwrap();
+
+        let later = now + std::time::Duration::from_secs(1);
+        storage.remove_file_at(&key, 0, later).unwrap();
+
+        let value = storage.get(&key, later).unwrap().unwrap();
+        match &value.clip_data {
+            ClipData::Text(TextData::Inlined(s)) => assert_eq!(s, ""),
+            ClipData::Text(TextData::BlobStored) => {
+                panic!("Expected empty inlined text after removing last file")
+            }
+            _ => panic!("Expected Text variant after removing last file"),
+        }
+    }
+
+    #[test]
+    fn test_remove_file_at_on_text_fails() {
+        let (mut storage, _temp) = create_test_storage();
+        let key = make_key("test/remove_file_at_text");
+        let now = SystemTime::now();
+
+        storage.upsert_text(&key, "text content", now).unwrap();
+
+        let result = storage.remove_file_at(&key, 0, now);
+        assert!(matches!(
+            result,
+            Err(StorageError::Database(DatabaseError::TypeMismatch))
+        ));
+    }
+
+    #[test]
+    fn test_remove_file_at_out_of_bounds_fails() {
+        let (mut storage, temp) = create_test_storage();
+        let key = make_key("test/remove_file_at_oob");
+        let now = SystemTime::now();
+
+        let file1 = create_test_file(&temp, "file1.txt", b"content1");
+        storage.add_files(&key, [&file1], now).unwrap();
+
+        let result = storage.remove_file_at(&key, 1, now);
+        assert!(matches!(
+            result,
+            Err(StorageError::Database(DatabaseError::NotFound))
         ));
     }
 }
