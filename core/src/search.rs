@@ -288,7 +288,11 @@ impl SearchEngine {
         }
     }
 
-    fn search_fuzzy(&mut self, pattern: &str, timeout_ms: u64) -> Result<Vec<SearchResult>, SearchError> {
+    fn search_fuzzy(
+        &mut self,
+        pattern: &str,
+        timeout_ms: u64,
+    ) -> Result<Vec<SearchResult>, SearchError> {
         // Convert our CaseMatching to nucleo's
         let case_matching = match self.config.case_matching {
             CaseMatching::Sensitive => nucleo::pattern::CaseMatching::Respect,

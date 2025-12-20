@@ -11,7 +11,7 @@ fn create_test_storage() -> (KevaCore, TempDir) {
         saved: SavedConfig {
             trash_ttl: Duration::from_secs(30 * 24 * 60 * 60), // 30 days
             purge_ttl: Duration::from_secs(7 * 24 * 60 * 60),  // 7 days
-            inline_threshold_bytes: 1024 * 1024, // 1MB
+            inline_threshold_bytes: 1024 * 1024,               // 1MB
         },
     };
     let storage = KevaCore::open(config, SearchConfig::default()).unwrap();
@@ -310,7 +310,9 @@ mod keys_and_list {
         let (mut storage, _temp) = create_test_storage();
         let now = SystemTime::now();
 
-        storage.upsert_text(&make_key("active"), "content", now).unwrap();
+        storage
+            .upsert_text(&make_key("active"), "content", now)
+            .unwrap();
         storage
             .upsert_text(&make_key("trashed1"), "content", now)
             .unwrap();
@@ -327,53 +329,5 @@ mod keys_and_list {
         assert!(key_strings.contains(&"trashed1".to_string()));
         assert!(key_strings.contains(&"trashed2".to_string()));
         assert!(!key_strings.contains(&"active".to_string()));
-    }
-
-    #[test]
-    fn test_list_filters_by_prefix() {
-        let (mut storage, _temp) = create_test_storage();
-        let now = SystemTime::now();
-
-        storage
-            .upsert_text(&make_key("project/config"), "content", now)
-            .unwrap();
-        storage
-            .upsert_text(&make_key("project/data"), "content", now)
-            .unwrap();
-        storage
-            .upsert_text(&make_key("other/key"), "content", now)
-            .unwrap();
-
-        let project_keys = storage.list("project/", false, now).unwrap();
-        assert_eq!(project_keys.len(), 2);
-
-        let other_keys = storage.list("other/", false, now).unwrap();
-        assert_eq!(other_keys.len(), 1);
-    }
-
-    #[test]
-    fn test_list_include_trash_flag() {
-        let (mut storage, _temp) = create_test_storage();
-        let now = SystemTime::now();
-
-        storage
-            .upsert_text(&make_key("key/active"), "content", now)
-            .unwrap();
-        storage
-            .upsert_text(&make_key("key/trashed"), "content", now)
-            .unwrap();
-        storage.trash(&make_key("key/trashed"), now).unwrap();
-
-        // Without include_trash: only active keys
-        let keys = storage.list("key/", false, now).unwrap();
-        assert_eq!(keys.len(), 1);
-        assert_eq!(keys[0].as_str(), "key/active");
-
-        // With include_trash: both active and trashed keys
-        let keys = storage.list("key/", true, now).unwrap();
-        assert_eq!(keys.len(), 2);
-        let key_strings: Vec<&str> = keys.iter().map(|k| k.as_str()).collect();
-        assert!(key_strings.contains(&"key/active"));
-        assert!(key_strings.contains(&"key/trashed"));
     }
 }

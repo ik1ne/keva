@@ -30,8 +30,7 @@ use clipboard_rs::{Clipboard, ClipboardContext, ContentFormat};
 /// Read current clipboard content.
 /// Files take priority over text when both are present.
 pub(crate) fn read_clipboard() -> Result<ClipboardContent, ClipboardError> {
-    let ctx = ClipboardContext::new()
-        .map_err(|e| ClipboardError::AccessFailed(e.to_string()))?;
+    let ctx = ClipboardContext::new().map_err(|e| ClipboardError::AccessFailed(e.to_string()))?;
 
     // Check files first (higher priority)
     if ctx.has(ContentFormat::Files) {
@@ -61,8 +60,7 @@ pub(crate) fn read_clipboard() -> Result<ClipboardContent, ClipboardError> {
 
 /// Write text to clipboard.
 pub(crate) fn write_text(text: &str) -> Result<(), ClipboardError> {
-    let ctx = ClipboardContext::new()
-        .map_err(|e| ClipboardError::AccessFailed(e.to_string()))?;
+    let ctx = ClipboardContext::new().map_err(|e| ClipboardError::AccessFailed(e.to_string()))?;
 
     ctx.set_text(text.to_string())
         .map_err(|e| ClipboardError::WriteFailed(e.to_string()))
@@ -70,8 +68,7 @@ pub(crate) fn write_text(text: &str) -> Result<(), ClipboardError> {
 
 /// Write file paths to clipboard.
 pub(crate) fn write_files(paths: &[PathBuf]) -> Result<(), ClipboardError> {
-    let ctx = ClipboardContext::new()
-        .map_err(|e| ClipboardError::AccessFailed(e.to_string()))?;
+    let ctx = ClipboardContext::new().map_err(|e| ClipboardError::AccessFailed(e.to_string()))?;
 
     let file_strings: Vec<String> = paths
         .iter()

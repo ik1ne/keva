@@ -8,7 +8,9 @@ use crate::core::db::GcResult;
 use crate::core::db::error::DatabaseError;
 use crate::core::file::FileStorage;
 use crate::core::file::error::FileStorageError;
-use crate::types::value::versioned_value::latest_value::{ClipData, LifecycleState, TextData, Value};
+use crate::types::value::versioned_value::latest_value::{
+    ClipData, LifecycleState, TextData, Value,
+};
 use crate::types::{Config, Key};
 use std::borrow::Cow;
 use std::collections::HashSet;
@@ -79,11 +81,8 @@ impl KevaCore {
             inline_threshold_bytes: config.saved.inline_threshold_bytes,
         };
         let db = db::Database::new(config.clone())?;
-        let search_engine = crate::search::SearchEngine::new(
-            db.active_keys()?,
-            db.trashed_keys()?,
-            search_config,
-        );
+        let search_engine =
+            crate::search::SearchEngine::new(db.active_keys()?, db.trashed_keys()?, search_config);
         Ok(Self {
             db,
             file,
@@ -322,32 +321,6 @@ impl KevaCore {
     /// Returns all Trash keys efficiently by iterating the TTL table.
     pub fn trashed_keys(&self) -> Result<Vec<Key>, StorageError> {
         Ok(self.db.trashed_keys()?)
-    }
-
-    /// Returns all keys matching the given prefix.
-    ///
-    /// Uses btree range scan for efficiency.
-    /// - Always excludes keys with effective Purge state
-    /// - If `include_trash` is false (default), excludes Trash keys
-    /// - If `include_trash` is true, includes both Active and Trash keys
-    pub fn list(
-        &self,
-        prefix: &str,
-        include_trash: bool,
-        now: SystemTime,
-    ) -> Result<Vec<Key>, StorageError> {
-        let keys = self.db.list_prefix(prefix)?;
-        Ok(keys
-            .into_iter()
-            .filter_map(|k| {
-                let value = self.get(&k, now).ok()??;
-                match value.metadata.lifecycle_state {
-                    LifecycleState::Active => Some(k),
-                    LifecycleState::Trash if include_trash => Some(k),
-                    _ => None,
-                }
-            })
-            .collect())
     }
 
     /// Performs garbage collection.
