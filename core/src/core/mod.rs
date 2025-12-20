@@ -290,6 +290,7 @@ impl KevaCore {
         overwrite: bool,
         now: SystemTime,
     ) -> Result<(), StorageError> {
+        // Guardrail: renaming a key to itself is a no-op.
         if old_key == new_key {
             return Ok(());
         }
@@ -312,22 +313,14 @@ impl KevaCore {
 
         self.db.rename(old_key, new_key)?;
 
-        // Search index maintenance:
-        // Nucleo doesn't support in-place deletion, so we model removals via set membership
-        // + periodic rebuild. When overwriting an existing destination key, we must ensure any
-        // previous destination entry (active or trashed) is removed; then we remove the source
-        // and add the destination with the source's lifecycle (source is always Active here).
+        // Search index maintenance (two-index engine):
+        // - If overwriting, remove destination from both indices.
+        // - Rename is active-only at the KevaCore layer, so remove source and add destination as active.
         if destination_exists {
             self.search_engine.remove(new_key);
         }
         self.search_engine.remove(old_key);
         self.search_engine.add_active(new_key.clone());
-
-        // Overwrite-rename can otherwise leave stale duplicates in the underlying index until the
-        // rebuild threshold is reached; force rebuild for deterministic results.
-        if overwrite && destination_exists {
-            self.search_engine.rebuild();
-        }
 
         let old_path = key_to_path(old_key);
         let new_path = key_to_path(new_key);
@@ -375,6 +368,9 @@ impl KevaCore {
         for key in &result.purged {
             self.search_engine.remove(key);
         }
+
+        // Search index maintenance/compaction (avoid doing this during active UI interaction).
+        self.search_engine.maintenance_compact();
 
         // Clean up blob files for purged keys
         for key in &result.purged {

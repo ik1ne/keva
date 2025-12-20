@@ -251,6 +251,25 @@ mod rename {
     }
 
     #[test]
+    fn test_rename_to_same_key_is_noop() {
+        let (mut storage, _temp) = create_test_storage();
+        let key = make_key("same/key");
+        let now = SystemTime::now();
+
+        storage.upsert_text(&key, "content", now).unwrap();
+
+        // Should be a no-op and not error.
+        storage.rename(&key, &key, false, now).unwrap();
+
+        // Value should remain intact.
+        let value = storage.get(&key, now).unwrap().unwrap();
+        assert_eq!(
+            value.clip_data,
+            ClipData::Text(TextData::Inlined("content".to_string()))
+        );
+    }
+
+    #[test]
     fn test_rename_fails_if_destination_exists() {
         let (mut storage, _temp) = create_test_storage();
         let old_key = make_key("old/key");
