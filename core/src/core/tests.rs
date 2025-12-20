@@ -1,4 +1,5 @@
 use super::*;
+#[cfg(feature = "search")]
 use crate::search::SearchConfig;
 use crate::types::config::SavedConfig;
 use std::time::Duration;
@@ -18,7 +19,13 @@ mod common {
                 inline_threshold_bytes: 1024 * 1024,               // 1MB
             },
         };
+
+        #[cfg(feature = "search")]
         let storage = KevaCore::open(config, SearchConfig::default()).unwrap();
+
+        #[cfg(not(feature = "search"))]
+        let storage = KevaCore::open(config).unwrap();
+
         (storage, temp_dir)
     }
 
@@ -493,6 +500,7 @@ mod rename {
         );
     }
 
+    #[cfg(feature = "search")]
     #[test]
     fn test_rename_overwrite_normalizes_search_trash_status() {
         let (mut storage, _temp) = create_test_storage();
