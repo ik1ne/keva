@@ -323,6 +323,14 @@ impl KevaCore {
         Ok(self.db.trashed_keys()?)
     }
 
+    /// Updates `last_accessed` without modifying the value.
+    ///
+    /// This should be called when the value is actually accessed (e.g. shown in the UI),
+    /// not when keys are merely enumerated or searched.
+    pub fn touch(&mut self, key: &Key, now: SystemTime) -> Result<(), StorageError> {
+        Ok(self.db.touch(key, now)?)
+    }
+
     /// Performs garbage collection.
     ///
     /// This:

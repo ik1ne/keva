@@ -4,25 +4,42 @@ use crate::types::config::SavedConfig;
 use std::time::Duration;
 use tempfile::TempDir;
 
-fn create_test_storage() -> (KevaCore, TempDir) {
-    let temp_dir = TempDir::new().unwrap();
-    let config = Config {
-        base_path: temp_dir.path().to_path_buf(),
-        saved: SavedConfig {
-            trash_ttl: Duration::from_secs(30 * 24 * 60 * 60), // 30 days
-            purge_ttl: Duration::from_secs(7 * 24 * 60 * 60),  // 7 days
-            inline_threshold_bytes: 1024 * 1024,               // 1MB
-        },
-    };
-    let storage = KevaCore::open(config, SearchConfig::default()).unwrap();
-    (storage, temp_dir)
-}
+mod common {
+    use super::*;
+    use std::io::Write;
 
-fn make_key(s: &str) -> Key {
-    Key::try_from(s).unwrap()
+    pub(super) fn create_test_storage() -> (KevaCore, TempDir) {
+        let temp_dir = TempDir::new().unwrap();
+        let config = Config {
+            base_path: temp_dir.path().to_path_buf(),
+            saved: SavedConfig {
+                trash_ttl: Duration::from_secs(30 * 24 * 60 * 60), // 30 days
+                purge_ttl: Duration::from_secs(7 * 24 * 60 * 60),  // 7 days
+                inline_threshold_bytes: 1024 * 1024,               // 1MB
+            },
+        };
+        let storage = KevaCore::open(config, SearchConfig::default()).unwrap();
+        (storage, temp_dir)
+    }
+
+    pub(super) fn make_key(s: &str) -> Key {
+        Key::try_from(s).unwrap()
+    }
+
+    pub(super) fn create_test_file(
+        dir: &TempDir,
+        name: &str,
+        content: &[u8],
+    ) -> std::path::PathBuf {
+        let path = dir.path().join(name);
+        let mut file = std::fs::File::create(&path).unwrap();
+        file.write_all(content).unwrap();
+        path
+    }
 }
 
 mod upsert_text {
+    use super::common::{create_test_storage, make_key};
     use super::*;
     use crate::types::value::versioned_value::latest_value::TextData;
 
@@ -90,16 +107,9 @@ mod upsert_text {
 }
 
 mod add_files {
+    use super::common::{create_test_file, create_test_storage, make_key};
     use super::*;
     use crate::types::value::versioned_value::latest_value::{FileData, InlineFileData};
-    use std::io::Write;
-
-    fn create_test_file(dir: &TempDir, name: &str, content: &[u8]) -> std::path::PathBuf {
-        let path = dir.path().join(name);
-        let mut file = std::fs::File::create(&path).unwrap();
-        file.write_all(content).unwrap();
-        path
-    }
 
     #[test]
     fn test_add_files_creates_new_key() {
@@ -164,6 +174,7 @@ mod add_files {
 }
 
 mod trash {
+    use super::common::{create_test_storage, make_key};
     use super::*;
 
     #[test]
@@ -217,6 +228,7 @@ mod trash {
 }
 
 mod rename {
+    use super::common::{create_test_storage, make_key};
     use super::*;
     use crate::types::value::versioned_value::latest_value::TextData;
 
@@ -277,7 +289,8 @@ mod rename {
     }
 }
 
-mod keys_and_list {
+mod keys {
+    use super::common::{create_test_storage, make_key};
     use super::*;
 
     #[test]
@@ -329,5 +342,77 @@ mod keys_and_list {
         assert!(key_strings.contains(&"trashed1".to_string()));
         assert!(key_strings.contains(&"trashed2".to_string()));
         assert!(!key_strings.contains(&"active".to_string()));
+    }
+}
+
+mod touch {
+    use super::common::{create_test_storage, make_key};
+    use super::*;
+
+    #[test]
+    fn test_touch_updates_last_accessed() {
+        let (mut storage, _temp) = create_test_storage();
+
+        let key = make_key("k");
+        let t1 = SystemTime::now();
+        storage.upsert_text(&key, "content", t1).unwrap();
+
+        let v1 = storage.get(&key, t1).unwrap().unwrap();
+        let last_accessed_1 = v1.metadata.last_accessed;
+
+        // Ensure a strictly later time so the assertion is deterministic
+        let t2 = t1 + std::time::Duration::from_secs(1);
+
+        storage.touch(&key, t2).unwrap();
+
+        let v2 = storage.get(&key, t2).unwrap().unwrap();
+        assert!(v2.metadata.last_accessed >= t2);
+        assert!(v2.metadata.last_accessed > last_accessed_1);
+    }
+
+    #[test]
+    fn test_touch_nonexistent_key_fails() {
+        let (mut storage, _temp) = create_test_storage();
+        let now = SystemTime::now();
+
+        let result = storage.touch(&make_key("missing"), now);
+        assert!(matches!(
+            result,
+            Err(StorageError::Database(DatabaseError::NotFound))
+        ));
+    }
+
+    #[test]
+    fn test_touch_trashed_key_fails() {
+        let (mut storage, _temp) = create_test_storage();
+        let now = SystemTime::now();
+        let key = make_key("k");
+
+        storage.upsert_text(&key, "content", now).unwrap();
+        storage.trash(&key, now).unwrap();
+
+        let result = storage.touch(&key, now);
+        assert!(matches!(
+            result,
+            Err(StorageError::Database(DatabaseError::NotFound))
+        ));
+    }
+
+    #[test]
+    fn test_get_does_not_update_last_accessed() {
+        let (mut storage, _temp) = create_test_storage();
+
+        let key = make_key("k");
+        let t1 = SystemTime::now();
+        storage.upsert_text(&key, "content", t1).unwrap();
+
+        let v1 = storage.get(&key, t1).unwrap().unwrap();
+        let last_accessed_1 = v1.metadata.last_accessed;
+
+        // Read again at a later time. Contract: get() is a pure read and does not touch.
+        let t2 = t1 + std::time::Duration::from_secs(1);
+        let v2 = storage.get(&key, t2).unwrap().unwrap();
+
+        assert_eq!(v2.metadata.last_accessed, last_accessed_1);
     }
 }
