@@ -209,9 +209,9 @@ impl FileStorage {
         let inline_dir = self.base_path.join(ENSURE_INLINED_DIR).join(key_path);
         match file {
             FileData::Inlined(InlineFileData { file_name, data }) => {
-                let hash = <<Value as ValueVariant>::Hasher as FileHasher>::new()
-                    .update(data)
-                    .finalize();
+                let mut hasher = <<Value as ValueVariant>::Hasher as FileHasher>::new();
+                FileHasher::update(&mut hasher, data);
+                let hash = FileHasher::finalize(&hasher);
                 let file_dir_path = inline_dir.join(hash.to_string());
                 std::fs::create_dir_all(file_dir_path.as_path())?;
                 let file_path = file_dir_path.join(file_name);
