@@ -223,28 +223,6 @@ impl FileStorage {
         }
     }
 
-    pub fn ensure_text_path(
-        &self,
-        key_path: &Path,
-        text: &TextData,
-    ) -> Result<PathBuf, FileStorageError> {
-        match text {
-            TextData::Inlined(data) => {
-                let file_dir_path = self.base_path.join(ENSURE_INLINED_DIR).join(key_path);
-                std::fs::create_dir_all(file_dir_path.as_path())?;
-                let file_path = file_dir_path.join(TEXT_FILE_NAME);
-                std::fs::write(file_path.as_path(), data.as_bytes())?;
-
-                Ok(file_path)
-            }
-            TextData::BlobStored => {
-                let text_path = self.base_path.join(key_path).join(TEXT_FILE_NAME);
-
-                Ok(text_path)
-            }
-        }
-    }
-
     fn cleanup_ensure_cache(&self, keep_key_path: Option<&Path>) -> Result<(), FileStorageError> {
         let ensure_dir = self.base_path.join(ENSURE_INLINED_DIR);
         if !ensure_dir.exists() {

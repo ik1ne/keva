@@ -1,6 +1,6 @@
-//! Search module for fuzzy and regex search.
+//! Search module for fuzzy search.
 //!
-//! Uses nucleo for fuzzy search and regex crate for regex search.
+//! Uses nucleo for fuzzy search.
 //! SearchEngine maintains incremental updates to avoid rebuilding on every mutation.
 
 use crate::types::Key;
@@ -9,11 +9,12 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use thiserror::Error;
 
-/// Query with explicit search mode - no auto-detection
+/// Query type for search.
+///
+/// Currently supports fuzzy search only.
 #[derive(Debug, Clone)]
 pub enum SearchQuery {
     Fuzzy(String),
-    Regex(String),
 }
 
 /// Search result with key, score, and trash status
@@ -52,12 +53,12 @@ impl SearchConfig {
     }
 }
 
-/// Search error type
+/// Search error type.
+///
+/// Search is currently infallible, but we keep an explicit error type for API stability.
+/// This is intentionally uninhabited (no variants).
 #[derive(Debug, Error)]
-pub enum SearchError {
-    #[error("Invalid regex pattern: {0}")]
-    InvalidRegex(#[from] regex::Error),
-}
+pub enum SearchError {}
 
 /// Item stored in Nucleo index
 struct SearchItem {
@@ -276,7 +277,7 @@ impl SearchEngine {
         }
     }
 
-    /// Searches for keys matching the query
+    /// Searches for keys matching the query.
     pub(crate) fn search(
         &mut self,
         query: SearchQuery,
@@ -284,7 +285,6 @@ impl SearchEngine {
     ) -> Result<Vec<SearchResult>, SearchError> {
         match query {
             SearchQuery::Fuzzy(pattern) => self.search_fuzzy(&pattern, timeout_ms),
-            SearchQuery::Regex(pattern) => self.search_regex(&pattern),
         }
     }
 
@@ -353,50 +353,6 @@ impl SearchEngine {
 
         Ok(results)
     }
-
-    fn search_regex(&self, pattern: &str) -> Result<Vec<SearchResult>, SearchError> {
-        let regex = match self.config.case_matching {
-            CaseMatching::Sensitive => regex::RegexBuilder::new(pattern)
-                .case_insensitive(false)
-                .build()?,
-            CaseMatching::Insensitive => regex::RegexBuilder::new(pattern)
-                .case_insensitive(true)
-                .build()?,
-            CaseMatching::Smart => {
-                // Smart: case-insensitive unless pattern contains uppercase
-                let has_uppercase = pattern.chars().any(|c| c.is_uppercase());
-                regex::RegexBuilder::new(pattern)
-                    .case_insensitive(!has_uppercase)
-                    .build()?
-            }
-        };
-
-        let mut results = Vec::new();
-
-        // Search active keys
-        for key in &self.active_keys {
-            if regex.is_match(key.as_str()) {
-                results.push(SearchResult {
-                    key: key.clone(),
-                    score: 0, // Regex has no scoring
-                    is_trash: false,
-                });
-            }
-        }
-
-        // Search trashed keys
-        for key in &self.trashed_keys {
-            if regex.is_match(key.as_str()) {
-                results.push(SearchResult {
-                    key: key.clone(),
-                    score: 0, // Regex has no scoring
-                    is_trash: true,
-                });
-            }
-        }
-
-        Ok(results)
-    }
 }
 
 #[cfg(test)]
@@ -432,24 +388,6 @@ mod tests {
             .unwrap();
 
         // Should match "hello" and "help"
-        let keys: Vec<&str> = results.iter().map(|r| r.key.as_str()).collect();
-        assert!(keys.contains(&"hello"));
-        assert!(keys.contains(&"help"));
-        assert!(!keys.contains(&"world"));
-    }
-
-    #[test]
-    fn test_regex_search_basic() {
-        let active = vec![make_key("hello"), make_key("world"), make_key("help")];
-        let trashed = vec![];
-        let config = SearchConfig::default();
-
-        let mut engine = SearchEngine::new(active, trashed, config);
-
-        let results = engine
-            .search(SearchQuery::Regex("^hel".to_string()), 100)
-            .unwrap();
-
         let keys: Vec<&str> = results.iter().map(|r| r.key.as_str()).collect();
         assert!(keys.contains(&"hello"));
         assert!(keys.contains(&"help"));
@@ -525,17 +463,5 @@ mod tests {
 
         assert!(trashed_result.is_some());
         assert!(trashed_result.unwrap().is_trash);
-    }
-
-    #[test]
-    fn test_invalid_regex() {
-        let active = vec![];
-        let trashed = vec![];
-        let config = SearchConfig::default();
-
-        let mut engine = SearchEngine::new(active, trashed, config);
-
-        let result = engine.search(SearchQuery::Regex("[invalid".to_string()), 100);
-        assert!(result.is_err());
     }
 }
