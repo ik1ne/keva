@@ -3,22 +3,27 @@
 //! Files take priority over text when the clipboard contains both.
 
 use std::path::PathBuf;
-use thiserror::Error;
 
-#[derive(Debug, Error)]
-pub enum ClipboardError {
-    #[error("Failed to access clipboard: {0}")]
-    AccessFailed(String),
+pub mod error {
+    use thiserror::Error;
 
-    #[error("No content in clipboard")]
-    NoContent,
+    #[derive(Debug, Error)]
+    pub enum ClipboardError {
+        #[error("Failed to access clipboard: {0}")]
+        AccessFailed(String),
 
-    #[error("Failed to read clipboard: {0}")]
-    ReadFailed(String),
+        #[error("No content in clipboard")]
+        NoContent,
 
-    #[error("Failed to write to clipboard: {0}")]
-    WriteFailed(String),
+        #[error("Failed to read clipboard: {0}")]
+        ReadFailed(String),
+
+        #[error("Failed to write to clipboard: {0}")]
+        WriteFailed(String),
+    }
 }
+
+pub use error::ClipboardError;
 
 pub(crate) enum ClipboardContent {
     Text(String),
@@ -28,6 +33,7 @@ pub(crate) enum ClipboardContent {
 use clipboard_rs::{Clipboard, ClipboardContext, ContentFormat};
 
 /// Read current clipboard content.
+///
 /// Files take priority over text when both are present.
 pub(crate) fn read_clipboard() -> Result<ClipboardContent, ClipboardError> {
     let ctx = ClipboardContext::new().map_err(|e| ClipboardError::AccessFailed(e.to_string()))?;
