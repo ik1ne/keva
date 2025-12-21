@@ -170,9 +170,8 @@ impl KevaCore {
 
     /// Creates or updates a text value at the given key.
     ///
-    /// - If the key doesn't exist, creates a new entry
-    /// - If the key exists and is Active, updates the value (preserving created_at)
-    /// - If the key exists and is Trash, returns KeyIsTrashed error (must restore first)
+    /// If the existing value was blob-stored text (exceeding inline threshold) and the
+    /// new text is small enough to be inlined, the old blob file is automatically removed.
     pub fn upsert_text(
         &mut self,
         key: &Key,
@@ -414,42 +413,38 @@ impl KevaCore {
         Ok(self.db.touch(key, now)?)
     }
 
-    /// Performs periodic maintenance.
+    /// Runs garbage collection and blob cleanup.
     ///
-    /// This:
-    /// 1. Moves expired Active keys to Trash
-    /// 2. Permanently deletes expired Trash keys
-    /// 3. Cleans up blob files for purged keys
-    /// 4. Removes orphan blob directories (blobs without corresponding keys)
-    ///
-    /// Note: When search indexing is enabled, this method is also the intended hook for
-    /// search index maintenance/compaction to avoid doing heavy work during active UI interaction.
+    /// This is the intended hook for periodic maintenance, avoiding heavy work during
+    /// active UI interaction.
     pub fn maintenance(&mut self, now: SystemTime) -> Result<GcResult, StorageError> {
         let result = self.db.gc(now)?;
 
         #[cfg(feature = "search")]
         {
-            // Update search engine for trashed keys
             for key in &result.trashed {
                 self.search_engine.trash(key);
             }
-
-            // Update search engine for purged keys
             for key in &result.purged {
                 self.search_engine.remove(key);
             }
-
-            // Search index maintenance/compaction (avoid doing this during active UI interaction).
             self.search_engine.maintenance_compact();
         }
 
         // Clean up blob files for purged keys
         for key in &result.purged {
-            let key_path = key_to_path(key);
-            self.file.remove_all(&key_path)?;
+            self.file.remove_all(&key_to_path(key))?;
         }
 
-        // Clean up orphan blob directories
+        self.cleanup_orphan_blobs()?;
+        Ok(result)
+    }
+
+    /// Detects and removes orphan blob directories.
+    ///
+    /// Orphan blobs can occur if the process crashes after database purge but before
+    /// filesystem cleanup. This finds blob directories without corresponding keys.
+    fn cleanup_orphan_blobs(&self) -> Result<(), StorageError> {
         let active_paths: HashSet<_> = self
             .db
             .active_keys()?
@@ -469,7 +464,7 @@ impl KevaCore {
             }
         }
 
-        Ok(result)
+        Ok(())
     }
 
     /// Import clipboard content to a key.

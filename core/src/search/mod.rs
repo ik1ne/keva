@@ -1,18 +1,12 @@
-#![allow(dead_code)]
 //! Search module for fuzzy key search.
 //!
 //! Design:
-//! - Two independent fuzzy indexes:
-//!   - Active index (A)
-//!   - Trash index (T)
+//! - Two independent fuzzy indexes: Active and Trash.
 //! - Each index is append-only (Nucleo has no deletions), so we track:
-//!   - `all`: keys that have been injected at least once
-//!   - `removed`: tombstones for keys that should be considered removed from this index
+//!   - `injected_keys`: keys injected into Nucleo at least once
+//!   - `tombstones`: keys to filter out from search results
 //! - Search filters out stale Nucleo entries using `is_present(key)`.
-//! - Heavy compaction/rebuild is intended to run during periodic maintenance, not on every search.
-//!
-//! Note: This intentionally does NOT dedupe results per key. If Nucleo returns duplicate
-//! entries for the same key, those may surface in results. This is acceptable for now pre-release.
+//! - Heavy compaction/rebuild runs during periodic maintenance, not on every search.
 
 use crate::types::Key;
 use nucleo::{Config as NucleoConfig, Matcher, Nucleo, Utf32String};
@@ -74,22 +68,23 @@ pub enum SearchError {}
 /// Internal per-lifecycle fuzzy index.
 struct Index {
     nucleo: Nucleo<Key>,
-    all: HashSet<Key>,
-    removed: HashSet<Key>,
+    /// Keys that have been injected into Nucleo at least once.
+    injected_keys: HashSet<Key>,
+    /// Keys marked as removed (tombstones) - filtered out from search results.
+    tombstones: HashSet<Key>,
     pending_deletions: usize,
     rebuild_threshold: usize,
 }
 
 impl Index {
     fn new(initial: Vec<Key>, rebuild_threshold: usize) -> Self {
-        // No-op notify callback (sync API).
         let notify = Arc::new(|| {});
         let nucleo = Nucleo::new(NucleoConfig::DEFAULT, notify, None, 1);
 
         let mut index = Self {
             nucleo,
-            all: HashSet::new(),
-            removed: HashSet::new(),
+            injected_keys: HashSet::new(),
+            tombstones: HashSet::new(),
             pending_deletions: 0,
             rebuild_threshold,
         };
@@ -102,28 +97,26 @@ impl Index {
     }
 
     fn is_present(&self, key: &Key) -> bool {
-        self.all.contains(key) && !self.removed.contains(key)
+        self.injected_keys.contains(key) && !self.tombstones.contains(key)
     }
 
     fn insert(&mut self, key: Key) {
-        if self.all.insert(key.clone()) {
+        if self.injected_keys.insert(key.clone()) {
             let injector = self.nucleo.injector();
             injector.push(key, |item, cols| {
                 cols[0] = Utf32String::from(item.as_str());
             });
         } else {
-            // Already injected at least once; just "revive" if previously removed.
-            self.removed.remove(&key);
+            // Already injected; revive if previously tombstoned.
+            self.tombstones.remove(&key);
         }
     }
 
     fn remove(&mut self, key: &Key) {
-        if !self.all.contains(key) {
-            // Never injected into this index; nothing to do.
+        if !self.injected_keys.contains(key) {
             return;
         }
-        // Tombstone only once for accounting.
-        if self.removed.insert(key.clone()) {
+        if self.tombstones.insert(key.clone()) {
             self.pending_deletions += 1;
         }
     }
@@ -139,7 +132,7 @@ impl Index {
         self.pending_deletions = 0;
 
         let injector = self.nucleo.injector();
-        for key in self.all.difference(&self.removed) {
+        for key in self.injected_keys.difference(&self.tombstones) {
             let key_clone = key.clone();
             injector.push(key_clone, |item, cols| {
                 cols[0] = Utf32String::from(item.as_str());
@@ -178,8 +171,8 @@ impl SearchEngine {
     }
 
     /// Adds a key as trashed.
+    #[allow(dead_code)] // Reserved for future GUI integration
     pub(crate) fn add_trashed(&mut self, key: Key) {
-        // Ensure it isn't considered present in active.
         self.active.remove(&key);
         self.trash.insert(key);
     }
@@ -203,14 +196,7 @@ impl SearchEngine {
     }
 
     /// Renames a key within whichever index it is currently present in.
-    ///
-    /// Note: KevaCore typically orchestrates rename as:
-    /// - if overwrite: remove(dst) (both indices)
-    /// - remove(src) from active (rename is active-only in KevaCore)
-    /// - add_active(dst)
-    ///
-    /// This method is provided for convenience and correctness in cases where callers
-    /// want the search engine to decide source bucket.
+    #[allow(dead_code)] // Reserved for future GUI integration
     pub(crate) fn rename(&mut self, old: &Key, new: Key) {
         if self.active.is_present(old) {
             self.active.remove(old);
@@ -308,7 +294,7 @@ impl SearchEngine {
 
         let mut results = Vec::new();
         for item in snapshot.matched_items(..) {
-            let key: &Key = &item.data;
+            let key: &Key = item.data;
 
             // Stale entry filter: only include if key is currently present in this index.
             if !index.is_present(key) {

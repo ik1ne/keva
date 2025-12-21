@@ -47,7 +47,15 @@ pub struct FileStorage {
 }
 
 pub(crate) const TEXT_FILE_NAME: &str = "text.txt";
-pub(crate) const ENSURE_INLINED_DIR: &str = "temp_inline";
+pub(crate) const TEMP_INLINE_CACHE: &str = "temp_inline";
+
+/// Removes a directory if it exists and is empty.
+fn remove_dir_if_empty(path: &Path) -> Result<(), FileStorageError> {
+    if path.exists() && path.read_dir()?.next().is_none() {
+        std::fs::remove_dir(path)?;
+    }
+    Ok(())
+}
 
 impl FileStorage {
     pub fn store_file(&self, key_path: &Path, file: &Path) -> Result<FileData, FileStorageError> {
@@ -121,24 +129,17 @@ impl FileStorage {
             .join(key_path)
             .join(hash.to_string())
             .join(file_name);
+
         if file_path.exists() {
-            std::fs::remove_file(file_path.as_path())?;
+            std::fs::remove_file(&file_path)?;
         }
 
-        let Some(hash_path) = file_path.parent() else {
-            return Ok(());
-        };
-
-        if hash_path.read_dir()?.next().is_none() {
-            std::fs::remove_dir(hash_path)?;
-        }
-
-        let Some(key_path_dir) = hash_path.parent() else {
-            return Ok(());
-        };
-
-        if key_path_dir.read_dir()?.next().is_none() {
-            std::fs::remove_dir(key_path_dir)?;
+        // Clean up empty parent directories (hash dir, then key dir)
+        if let Some(hash_path) = file_path.parent() {
+            remove_dir_if_empty(hash_path)?;
+            if let Some(key_path_dir) = hash_path.parent() {
+                remove_dir_if_empty(key_path_dir)?;
+            }
         }
 
         Ok(())
@@ -146,16 +147,14 @@ impl FileStorage {
 
     pub fn remove_blob_stored_text(&self, key_path: &Path) -> Result<(), FileStorageError> {
         let text_path = self.base_path.join(key_path).join(TEXT_FILE_NAME);
+
         if text_path.exists() {
-            std::fs::remove_file(text_path.as_path())?;
+            std::fs::remove_file(&text_path)?;
         }
 
-        let Some(key_path_dir) = text_path.parent() else {
-            return Ok(());
-        };
-
-        if key_path_dir.read_dir()?.next().is_none() {
-            std::fs::remove_dir(key_path_dir)?;
+        // Clean up empty key directory
+        if let Some(key_path_dir) = text_path.parent() {
+            remove_dir_if_empty(key_path_dir)?;
         }
 
         Ok(())
@@ -192,7 +191,7 @@ impl FileStorage {
     /// Ensures that the file represented by `file` exists on disk, returning its path.
     ///
     /// If the file is inlined, it will be written to a temporary location under
-    /// [ENSURE_INLINED_DIR] within the `key_path` directory.
+    /// [TEMP_INLINE_CACHE] within the `key_path` directory.
     pub fn ensure_file_path(
         &self,
         key_path: &Path,
@@ -206,7 +205,7 @@ impl FileStorage {
         // - Then, for inlined files, avoid rewriting if the ensured file already exists.
         self.cleanup_ensure_cache(Some(key_path))?;
 
-        let inline_dir = self.base_path.join(ENSURE_INLINED_DIR).join(key_path);
+        let inline_dir = self.base_path.join(TEMP_INLINE_CACHE).join(key_path);
         match file {
             FileData::Inlined(InlineFileData { file_name, data }) => {
                 let mut hasher = <<Value as ValueVariant>::Hasher as FileHasher>::new();
@@ -236,27 +235,26 @@ impl FileStorage {
         }
     }
 
+    /// Cleans up the inline file cache, optionally preserving one key's cache.
+    ///
+    /// Called before `ensure_file_path` to bound disk usage. When `keep_key_path` is
+    /// provided, that key's cached files are preserved for repeated copy operations.
     fn cleanup_ensure_cache(&self, keep_key_path: Option<&Path>) -> Result<(), FileStorageError> {
-        let ensure_dir = self.base_path.join(ENSURE_INLINED_DIR);
+        let ensure_dir = self.base_path.join(TEMP_INLINE_CACHE);
         if !ensure_dir.exists() {
             return Ok(());
         }
 
-        // We only ever create per-key directories under `ensure_dir`:
-        // `{base}/temp_inline/{key_path}/...`
-        //
-        // So cleanup should delete *other key directories*, and keep exactly
-        // `{ensure_dir}/{keep_key_path}` when requested.
         let keep_dir = keep_key_path.map(|k| ensure_dir.join(k));
 
         for entry in std::fs::read_dir(ensure_dir.as_path())? {
             let entry = entry?;
             let path = entry.path();
 
-            if let Some(ref keep_dir) = keep_dir {
-                if path == *keep_dir {
-                    continue;
-                }
+            if let Some(ref keep_dir) = keep_dir
+                && path == *keep_dir
+            {
+                continue;
             }
 
             if path.is_dir() {
@@ -283,7 +281,7 @@ impl FileStorage {
             let entry = entry?;
             let path = entry.path();
             // Skip the temp_inline directory
-            if path.file_name() == Some(std::ffi::OsStr::new(ENSURE_INLINED_DIR)) {
+            if path.file_name() == Some(std::ffi::OsStr::new(TEMP_INLINE_CACHE)) {
                 continue;
             }
             if path.is_dir() {

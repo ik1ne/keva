@@ -93,3 +93,6 @@ impl TtlTable {
         Ok(keys)
     }
 }
+
+#[cfg(test)]
+mod tests;

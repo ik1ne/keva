@@ -332,7 +332,7 @@ mod remove_blob_stored_file {
         };
 
         let result = storage.remove_blob_stored_file(key_path, &blob_data);
-        result.unwrap_err();
+        result.unwrap(); // Should succeed (idempotent delete)
     }
 
     #[test]
@@ -469,7 +469,7 @@ mod remove_all {
 
 mod ensure_file_path {
     use crate::core::file::tests::common::{store_blob_file, store_inline_file};
-    use crate::core::file::{ENSURE_INLINED_DIR, FileStorage};
+    use crate::core::file::{FileStorage, TEMP_INLINE_CACHE};
     use crate::types::value::versioned_value::ValueVariant;
     use crate::types::value::versioned_value::latest_value::{FileData, Value};
     use std::path::Path;
@@ -502,7 +502,7 @@ mod ensure_file_path {
             result,
             temp_dir
                 .path()
-                .join(ENSURE_INLINED_DIR)
+                .join(TEMP_INLINE_CACHE)
                 .join(key_path)
                 .join(hash.to_string())
                 .join(file_name)
@@ -549,7 +549,7 @@ mod ensure_file_path {
             ensured_2,
             temp_dir
                 .path()
-                .join(ENSURE_INLINED_DIR)
+                .join(TEMP_INLINE_CACHE)
                 .join(key_path)
                 .join(hash.to_string())
                 .join(file_name)
@@ -592,7 +592,7 @@ mod ensure_file_path {
             ensured_a,
             temp_dir
                 .path()
-                .join(ENSURE_INLINED_DIR)
+                .join(TEMP_INLINE_CACHE)
                 .join(key_a)
                 .join(hash.to_string())
                 .join(file_name)
@@ -607,14 +607,14 @@ mod ensure_file_path {
             ensured_b,
             temp_dir
                 .path()
-                .join(ENSURE_INLINED_DIR)
+                .join(TEMP_INLINE_CACHE)
                 .join(key_b)
                 .join(hash.to_string())
                 .join(file_name)
         );
 
         // Ensuring for key_b should clear ensured cache for key_a.
-        let ensured_root = temp_dir.path().join(ENSURE_INLINED_DIR);
+        let ensured_root = temp_dir.path().join(TEMP_INLINE_CACHE);
         assert!(!ensured_root.join(key_a).exists());
         assert!(ensured_root.join(key_b).exists());
     }

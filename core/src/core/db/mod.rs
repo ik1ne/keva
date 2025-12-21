@@ -47,11 +47,11 @@ mod ttl_table;
 /// Main table: Key → VersionedValue
 const MAIN_TABLE: TableDefinition<Key, VersionedValue> = TableDefinition::new("main");
 
-/// TTL table for tracking when Active keys should move to Trash.
-const TRASHED_TTL: TtlTable = TtlTable::new("ttl_trashed");
+/// TTL table tracking when Active keys expire to Trash.
+const ACTIVE_EXPIRY: TtlTable = TtlTable::new("ttl_trashed");
 
-/// TTL table for tracking when Trashed keys should be purged.
-const PURGED_TTL: TtlTable = TtlTable::new("ttl_purged");
+/// TTL table tracking when Trash keys expire to Purge.
+const TRASH_EXPIRY: TtlTable = TtlTable::new("ttl_purged");
 
 /// The main database struct wrapping redb.
 pub struct Database {
@@ -83,8 +83,8 @@ impl Database {
         let write_txn = db.begin_write()?;
         {
             let _ = write_txn.open_table(MAIN_TABLE)?;
-            TRASHED_TTL.init(&write_txn)?;
-            PURGED_TTL.init(&write_txn)?;
+            ACTIVE_EXPIRY.init(&write_txn)?;
+            TRASH_EXPIRY.init(&write_txn)?;
         }
         write_txn.commit()?;
 
@@ -112,10 +112,8 @@ impl Database {
 
     /// Inserts a key-value pair, overwriting any existing entry.
     ///
-    /// This always overwrites - the caller (Storage) is responsible for checking
-    /// whether overwriting is allowed based on lifecycle state.
-    ///
-    /// Handles TTL table cleanup for any existing entry.
+    /// If the key already exists (in any lifecycle state), its TTL entry is removed
+    /// before inserting the new value. This prevents stale TTL entries.
     pub fn insert(
         &mut self,
         key: &Key,
@@ -127,43 +125,15 @@ impl Database {
         {
             let mut main_table = write_txn.open_table(MAIN_TABLE)?;
 
-            // Check if key already exists and clean up TTL tables
-            let existing_state = main_table
+            // Clean up TTL tables if key already exists
+            if let Some(existing) = main_table
                 .get(key)?
                 .map(|g| Self::extract_latest(g.value()))
-                .map(|v| {
-                    (
-                        v.metadata.lifecycle_state,
-                        v.metadata.last_accessed,
-                        v.metadata.trashed_at,
-                    )
-                });
-
-            if let Some((state, last_accessed, trashed_at)) = existing_state {
-                match state {
-                    LifecycleState::Active => {
-                        let old_ttl_key = TtlKey {
-                            timestamp: last_accessed,
-                            key: key.clone(),
-                        };
-                        TRASHED_TTL.remove(&write_txn, &old_ttl_key)?;
-                    }
-                    LifecycleState::Trash => {
-                        if let Some(trashed_at) = trashed_at {
-                            let old_ttl_key = TtlKey {
-                                timestamp: trashed_at,
-                                key: key.clone(),
-                            };
-                            PURGED_TTL.remove(&write_txn, &old_ttl_key)?;
-                        }
-                    }
-                    LifecycleState::Purge => {
-                        // No TTL entries to clean up
-                    }
-                }
+            {
+                Self::remove_ttl_entry(&write_txn, key, &existing.metadata)?;
             }
 
-            // Build the new value
+            // Build and store the new value
             let new_value = PersistedValue {
                 metadata: Metadata {
                     created_at: now,
@@ -175,14 +145,7 @@ impl Database {
                 clip_data,
             };
 
-            // Add TTL entry
-            let ttl_key = TtlKey {
-                timestamp: now,
-                key: key.clone(),
-            };
-            TRASHED_TTL.insert(&write_txn, &ttl_key)?;
-
-            // Store the value
+            Self::insert_active_ttl(&write_txn, key, now)?;
             main_table.insert(key, &VersionedValue::V1(new_value))?;
         }
 
@@ -190,10 +153,7 @@ impl Database {
         Ok(())
     }
 
-    /// Appends files to an existing key's value.
-    ///
-    /// - Updates `updated_at` to `now`
-    /// - Adds files to existing Files entry
+    /// Appends files to an existing Files entry.
     ///
     /// Returns `Err(NotFound)` if the key doesn't exist or is not Active.
     /// Returns `Err(TypeMismatch)` if the key contains Text instead of Files.
@@ -212,45 +172,27 @@ impl Database {
         {
             let mut main_table = write_txn.open_table(MAIN_TABLE)?;
 
-            // Get existing value
             let mut value = main_table
                 .get(key)?
                 .map(|g| Self::extract_latest(g.value()))
                 .ok_or(DatabaseError::NotFound)?;
 
-            // Can only append to Active keys
             if value.metadata.lifecycle_state != LifecycleState::Active {
                 return Err(DatabaseError::NotFound);
             }
 
-            // Can only append to Files entries
             let existing_files = match &mut value.clip_data {
                 ClipData::Files(f) => f,
                 ClipData::Text(_) => return Err(DatabaseError::TypeMismatch),
             };
 
-            // Remove old TTL entry
-            let old_ttl_key = TtlKey {
-                timestamp: value.metadata.last_accessed,
-                key: key.clone(),
-            };
-            TRASHED_TTL.remove(&write_txn, &old_ttl_key)?;
+            Self::remove_ttl_entry(&write_txn, key, &value.metadata)?;
 
-            // Update timestamps
             value.metadata.updated_at = now;
             value.metadata.last_accessed = now;
-
-            // Append files
             existing_files.extend(files);
 
-            // Add new TTL entry
-            let new_ttl_key = TtlKey {
-                timestamp: now,
-                key: key.clone(),
-            };
-            TRASHED_TTL.insert(&write_txn, &new_ttl_key)?;
-
-            // Store updated value
+            Self::insert_active_ttl(&write_txn, key, now)?;
             main_table.insert(key, &VersionedValue::V1(value))?;
         }
 
@@ -258,9 +200,8 @@ impl Database {
         Ok(())
     }
 
-    /// Updates the `last_accessed` timestamp without modifying the value.
+    /// Updates `last_accessed` timestamp to prevent garbage collection.
     ///
-    /// This is used to prevent a key from being garbage collected when accessed.
     /// Returns `Err(NotFound)` if the key doesn't exist or is not Active.
     pub fn touch(&mut self, key: &Key, now: SystemTime) -> Result<(), DatabaseError> {
         let write_txn = self.db.begin_write()?;
@@ -273,29 +214,15 @@ impl Database {
                 .map(|g| Self::extract_latest(g.value()))
                 .ok_or(DatabaseError::NotFound)?;
 
-            // Only touch Active keys
             if value.metadata.lifecycle_state != LifecycleState::Active {
                 return Err(DatabaseError::NotFound);
             }
 
-            // Remove old TTL entry
-            let old_ttl_key = TtlKey {
-                timestamp: value.metadata.last_accessed,
-                key: key.clone(),
-            };
-            TRASHED_TTL.remove(&write_txn, &old_ttl_key)?;
+            Self::remove_ttl_entry(&write_txn, key, &value.metadata)?;
 
-            // Update timestamp
             value.metadata.last_accessed = now;
 
-            // Add new TTL entry
-            let new_ttl_key = TtlKey {
-                timestamp: now,
-                key: key.clone(),
-            };
-            TRASHED_TTL.insert(&write_txn, &new_ttl_key)?;
-
-            // Store updated value
+            Self::insert_active_ttl(&write_txn, key, now)?;
             main_table.insert(key, &VersionedValue::V1(value))?;
         }
 
@@ -303,9 +230,8 @@ impl Database {
         Ok(())
     }
 
-    /// Updates an existing key's clip_data and updated_at, preserving created_at.
+    /// Updates an existing key's clip_data, preserving created_at.
     ///
-    /// This is used for editing an existing value without changing its creation timestamp.
     /// Returns `Err(NotFound)` if the key doesn't exist or is not Active.
     pub fn update(
         &mut self,
@@ -323,19 +249,12 @@ impl Database {
                 .map(|g| Self::extract_latest(g.value()))
                 .ok_or(DatabaseError::NotFound)?;
 
-            // Only update Active keys
             if value.metadata.lifecycle_state != LifecycleState::Active {
                 return Err(DatabaseError::NotFound);
             }
 
-            // Remove old TTL entry
-            let old_ttl_key = TtlKey {
-                timestamp: value.metadata.last_accessed,
-                key: key.clone(),
-            };
-            TRASHED_TTL.remove(&write_txn, &old_ttl_key)?;
+            Self::remove_ttl_entry(&write_txn, key, &value.metadata)?;
 
-            // Create updated value preserving created_at
             let new_value = PersistedValue {
                 metadata: Metadata {
                     created_at: value.metadata.created_at,
@@ -347,14 +266,7 @@ impl Database {
                 clip_data,
             };
 
-            // Add new TTL entry
-            let new_ttl_key = TtlKey {
-                timestamp: now,
-                key: key.clone(),
-            };
-            TRASHED_TTL.insert(&write_txn, &new_ttl_key)?;
-
-            // Store updated value
+            Self::insert_active_ttl(&write_txn, key, now)?;
             main_table.insert(key, &VersionedValue::V1(new_value))?;
         }
 
@@ -362,13 +274,9 @@ impl Database {
         Ok(())
     }
 
-    /// Soft-deletes a key by moving it to Trash state.
+    /// Soft-deletes a key by moving it from Active to Trash state.
     ///
-    /// - Sets `lifecycle_state` to `Trash`
-    /// - Sets `trashed_at` to `now`
-    /// - Removes from trashed TTL table, adds to purged TTL table
-    ///
-    /// Returns `Err(NotFound)` if the key doesn't exist or is already trashed/purged.
+    /// Returns `Err(NotFound)` if the key doesn't exist or is not Active.
     pub fn trash(&mut self, key: &Key, now: SystemTime) -> Result<(), DatabaseError> {
         let write_txn = self.db.begin_write()?;
 
@@ -380,30 +288,16 @@ impl Database {
                 .map(|g| Self::extract_latest(g.value()))
                 .ok_or(DatabaseError::NotFound)?;
 
-            // Can only trash Active keys
             if value.metadata.lifecycle_state != LifecycleState::Active {
                 return Err(DatabaseError::NotFound);
             }
 
-            // Remove from trashed TTL table
-            let old_ttl_key = TtlKey {
-                timestamp: value.metadata.last_accessed,
-                key: key.clone(),
-            };
-            TRASHED_TTL.remove(&write_txn, &old_ttl_key)?;
+            Self::remove_ttl_entry(&write_txn, key, &value.metadata)?;
 
-            // Update state
             value.metadata.lifecycle_state = LifecycleState::Trash;
             value.metadata.trashed_at = Some(now);
 
-            // Add to purged TTL table
-            let new_ttl_key = TtlKey {
-                timestamp: now,
-                key: key.clone(),
-            };
-            PURGED_TTL.insert(&write_txn, &new_ttl_key)?;
-
-            // Store updated value
+            Self::insert_trash_ttl(&write_txn, key, now)?;
             main_table.insert(key, &VersionedValue::V1(value))?;
         }
 
@@ -411,12 +305,7 @@ impl Database {
         Ok(())
     }
 
-    /// Restores a trashed key by moving it back to Active state.
-    ///
-    /// - Sets `lifecycle_state` to `Active`
-    /// - Clears `trashed_at`
-    /// - Updates `updated_at` to `now`
-    /// - Removes from purged TTL table, adds to trashed TTL table
+    /// Restores a key from Trash to Active state.
     ///
     /// Returns `Err(NotFound)` if the key doesn't exist or is not in Trash state.
     pub fn restore(&mut self, key: &Key, now: SystemTime) -> Result<(), DatabaseError> {
@@ -430,34 +319,18 @@ impl Database {
                 .map(|g| Self::extract_latest(g.value()))
                 .ok_or(DatabaseError::NotFound)?;
 
-            // Can only restore Trash keys
             if value.metadata.lifecycle_state != LifecycleState::Trash {
                 return Err(DatabaseError::NotFound);
             }
 
-            // Remove from purged TTL table
-            if let Some(trashed_at) = value.metadata.trashed_at {
-                let old_ttl_key = TtlKey {
-                    timestamp: trashed_at,
-                    key: key.clone(),
-                };
-                PURGED_TTL.remove(&write_txn, &old_ttl_key)?;
-            }
+            Self::remove_ttl_entry(&write_txn, key, &value.metadata)?;
 
-            // Update state
             value.metadata.lifecycle_state = LifecycleState::Active;
             value.metadata.trashed_at = None;
             value.metadata.updated_at = now;
             value.metadata.last_accessed = now;
 
-            // Add to trashed TTL table
-            let new_ttl_key = TtlKey {
-                timestamp: now,
-                key: key.clone(),
-            };
-            TRASHED_TTL.insert(&write_txn, &new_ttl_key)?;
-
-            // Store updated value
+            Self::insert_active_ttl(&write_txn, key, now)?;
             main_table.insert(key, &VersionedValue::V1(value))?;
         }
 
@@ -467,7 +340,6 @@ impl Database {
 
     /// Permanently deletes a key from the database.
     ///
-    /// This removes the key from both the main table and any TTL tables.
     /// Returns `Err(NotFound)` if the key doesn't exist.
     pub fn purge(&mut self, key: &Key) -> Result<(), DatabaseError> {
         let write_txn = self.db.begin_write()?;
@@ -475,34 +347,12 @@ impl Database {
         {
             let mut main_table = write_txn.open_table(MAIN_TABLE)?;
 
-            // Get and remove the value
             let value = main_table
                 .remove(key)?
                 .map(|g| Self::extract_latest(g.value()))
                 .ok_or(DatabaseError::NotFound)?;
 
-            // Remove from appropriate TTL table based on state
-            match value.metadata.lifecycle_state {
-                LifecycleState::Active => {
-                    let ttl_key = TtlKey {
-                        timestamp: value.metadata.last_accessed,
-                        key: key.clone(),
-                    };
-                    TRASHED_TTL.remove(&write_txn, &ttl_key)?;
-                }
-                LifecycleState::Trash => {
-                    if let Some(trashed_at) = value.metadata.trashed_at {
-                        let ttl_key = TtlKey {
-                            timestamp: trashed_at,
-                            key: key.clone(),
-                        };
-                        PURGED_TTL.remove(&write_txn, &ttl_key)?;
-                    }
-                }
-                LifecycleState::Purge => {
-                    // Already marked for purge, nothing in TTL tables
-                }
-            }
+            Self::remove_ttl_entry(&write_txn, key, &value.metadata)?;
         }
 
         write_txn.commit()?;
@@ -511,12 +361,12 @@ impl Database {
 
     /// Removes a single file entry from a Files value by index.
     ///
-    /// - Only works on Active keys.
-    /// - Returns `Err(NotFound)` if the key doesn't exist or is not Active.
-    /// - Returns `Err(TypeMismatch)` if the key contains Text instead of Files.
-    /// - Returns `Err(NotFound)` if `index` is out of bounds.
+    /// When removing the last file, converts to empty text (empty value = empty text).
     ///
-    /// Returns the removed file entry so the caller can clean up blob storage if needed.
+    /// Returns `Err(NotFound)` if the key doesn't exist, is not Active, or index is out of bounds.
+    /// Returns `Err(TypeMismatch)` if the key contains Text instead of Files.
+    ///
+    /// Returns the removed file entry so the caller can clean up blob storage.
     pub fn remove_file_at(
         &mut self,
         key: &Key,
@@ -533,12 +383,10 @@ impl Database {
                 .map(|g| Self::extract_latest(g.value()))
                 .ok_or(DatabaseError::NotFound)?;
 
-            // Only allow mutation on Active keys
             if value.metadata.lifecycle_state != LifecycleState::Active {
                 return Err(DatabaseError::NotFound);
             }
 
-            // Must be Files
             let files = match &mut value.clip_data {
                 ClipData::Files(files) => files,
                 ClipData::Text(_) => return Err(DatabaseError::TypeMismatch),
@@ -548,33 +396,18 @@ impl Database {
                 return Err(DatabaseError::NotFound);
             }
 
-            // Remove old TTL entry
-            let old_ttl_key = TtlKey {
-                timestamp: value.metadata.last_accessed,
-                key: key.clone(),
-            };
-            TRASHED_TTL.remove(&write_txn, &old_ttl_key)?;
+            Self::remove_ttl_entry(&write_txn, key, &value.metadata)?;
 
-            // Remove file entry
             let removed = files.remove(index);
 
-            // If this was the last file, convert to empty text (consistent with "empty value means empty text")
             if files.is_empty() {
                 value.clip_data = ClipData::Text(TextData::Inlined(String::new()));
             }
 
-            // Update timestamps
             value.metadata.updated_at = now;
             value.metadata.last_accessed = now;
 
-            // Add new TTL entry
-            let new_ttl_key = TtlKey {
-                timestamp: now,
-                key: key.clone(),
-            };
-            TRASHED_TTL.insert(&write_txn, &new_ttl_key)?;
-
-            // Store updated value
+            Self::insert_active_ttl(&write_txn, key, now)?;
             main_table.insert(key, &VersionedValue::V1(value))?;
 
             removed
@@ -586,12 +419,10 @@ impl Database {
 
     /// Renames a key, overwriting any existing entry at new_key.
     ///
-    /// Returns `Err(NotFound)` if the old key doesn't exist.
+    /// If new_key exists (in any lifecycle state), it is fully removed before the rename.
+    /// The source key's TTL entry is transferred with the same timestamp (preserving expiration).
     ///
-    /// This always overwrites new_key if it exists - the caller (Storage) is
-    /// responsible for checking whether overwriting is allowed.
-    ///
-    /// Handles TTL table cleanup for both old_key and any existing new_key.
+    /// Returns `Err(NotFound)` if old_key doesn't exist.
     pub fn rename(&mut self, old_key: &Key, new_key: &Key) -> Result<(), DatabaseError> {
         if old_key == new_key {
             return Ok(());
@@ -602,84 +433,26 @@ impl Database {
         {
             let mut main_table = write_txn.open_table(MAIN_TABLE)?;
 
-            // Check if new key exists and clean up its TTL tables
-            let new_key_state = main_table
+            // Extract destination metadata before mutating (to avoid borrow conflict)
+            let dest_metadata = main_table
                 .get(new_key)?
-                .map(|g| Self::extract_latest(g.value()))
-                .map(|v| {
-                    (
-                        v.metadata.lifecycle_state,
-                        v.metadata.last_accessed,
-                        v.metadata.trashed_at,
-                    )
-                });
+                .map(|g| Self::extract_latest(g.value()).metadata);
 
-            if let Some((state, last_accessed, trashed_at)) = new_key_state {
-                match state {
-                    LifecycleState::Active => {
-                        let ttl_key = TtlKey {
-                            timestamp: last_accessed,
-                            key: new_key.clone(),
-                        };
-                        TRASHED_TTL.remove(&write_txn, &ttl_key)?;
-                    }
-                    LifecycleState::Trash => {
-                        if let Some(trashed_at) = trashed_at {
-                            let ttl_key = TtlKey {
-                                timestamp: trashed_at,
-                                key: new_key.clone(),
-                            };
-                            PURGED_TTL.remove(&write_txn, &ttl_key)?;
-                        }
-                    }
-                    LifecycleState::Purge => {
-                        // No TTL entries to clean up
-                    }
-                }
-                // Remove the existing entry from main table
+            // Clean up destination if it exists
+            if let Some(metadata) = &dest_metadata {
+                Self::remove_ttl_entry(&write_txn, new_key, metadata)?;
                 main_table.remove(new_key)?;
             }
 
-            // Get and remove old entry, extract value immediately to release borrow
+            // Get and remove source
             let value = main_table
                 .remove(old_key)?
                 .map(|g| Self::extract_latest(g.value()))
                 .ok_or(DatabaseError::NotFound)?;
 
-            // Update TTL table (remove old key, insert new key)
-            match value.metadata.lifecycle_state {
-                LifecycleState::Active => {
-                    let old_ttl_key = TtlKey {
-                        timestamp: value.metadata.last_accessed,
-                        key: old_key.clone(),
-                    };
-                    let new_ttl_key = TtlKey {
-                        timestamp: value.metadata.last_accessed,
-                        key: new_key.clone(),
-                    };
-                    TRASHED_TTL.remove(&write_txn, &old_ttl_key)?;
-                    TRASHED_TTL.insert(&write_txn, &new_ttl_key)?;
-                }
-                LifecycleState::Trash => {
-                    if let Some(trashed_at) = value.metadata.trashed_at {
-                        let old_ttl_key = TtlKey {
-                            timestamp: trashed_at,
-                            key: old_key.clone(),
-                        };
-                        let new_ttl_key = TtlKey {
-                            timestamp: trashed_at,
-                            key: new_key.clone(),
-                        };
-                        PURGED_TTL.remove(&write_txn, &old_ttl_key)?;
-                        PURGED_TTL.insert(&write_txn, &new_ttl_key)?;
-                    }
-                }
-                LifecycleState::Purge => {
-                    // No TTL entries
-                }
-            }
+            // Transfer TTL entry from old_key to new_key
+            Self::transfer_ttl_entry(&write_txn, old_key, new_key, &value.metadata)?;
 
-            // Insert with new key
             main_table.insert(new_key, &VersionedValue::V1(value))?;
         }
 
@@ -687,37 +460,32 @@ impl Database {
         Ok(())
     }
 
-    /// Returns all Active keys by iterating the TRASHED_TTL table.
+    /// Returns all Active keys by iterating the ACTIVE_EXPIRY table.
     ///
     /// This is more efficient than iterating the main table and decoding values.
     pub fn active_keys(&self) -> Result<Vec<Key>, DatabaseError> {
         let read_txn = self.db.begin_read()?;
-        TRASHED_TTL.all_keys(&read_txn)
+        ACTIVE_EXPIRY.all_keys(&read_txn)
     }
 
-    /// Returns all Trash keys by iterating the PURGED_TTL table.
+    /// Returns all Trash keys by iterating the TRASH_EXPIRY table.
     ///
     /// This is more efficient than iterating the main table and decoding values.
     pub fn trashed_keys(&self) -> Result<Vec<Key>, DatabaseError> {
         let read_txn = self.db.begin_read()?;
-        PURGED_TTL.all_keys(&read_txn)
+        TRASH_EXPIRY.all_keys(&read_txn)
     }
 
-    /// Performs garbage collection.
+    /// Performs garbage collection: moves expired Active keys to Trash, deletes expired Trash keys.
     ///
-    /// This method:
-    /// 1. Finds all keys that have exceeded their TTL
-    /// 2. Moves Active keys to Trash
-    /// 3. Permanently deletes Trashed keys
-    ///
-    /// Returns `GcResult` containing the keys that were trashed and purged,
-    /// so the caller can perform filesystem cleanup for blob files.
+    /// Returns `GcResult` with keys that were trashed/purged for filesystem cleanup.
     pub fn gc(&mut self, now: SystemTime) -> Result<GcResult, DatabaseError> {
-        // First, find expired keys using read transaction
         let (to_trash, to_purge) = {
             let read_txn = self.db.begin_read()?;
-            let to_trash = TRASHED_TTL.expired_keys(&read_txn, now, self.config.saved.trash_ttl)?;
-            let to_purge = PURGED_TTL.expired_keys(&read_txn, now, self.config.saved.purge_ttl)?;
+            let to_trash =
+                ACTIVE_EXPIRY.expired_keys(&read_txn, now, self.config.saved.trash_ttl)?;
+            let to_purge =
+                TRASH_EXPIRY.expired_keys(&read_txn, now, self.config.saved.purge_ttl)?;
             (to_trash, to_purge)
         };
 
@@ -731,57 +499,34 @@ impl Database {
         {
             let mut main_table = write_txn.open_table(MAIN_TABLE)?;
 
-            // Process keys to trash
+            // Move expired Active keys to Trash
             for key in to_trash {
+                // Extract value to avoid borrow conflict with insert
                 let value_opt = main_table
                     .get(&key)?
                     .map(|guard| Self::extract_latest(guard.value()));
 
-                if let Some(mut value) = value_opt {
-                    // Only process if still Active
-                    if value.metadata.lifecycle_state == LifecycleState::Active {
-                        // Remove from trashed TTL table
-                        let old_ttl_key = TtlKey {
-                            timestamp: value.metadata.last_accessed,
-                            key: key.clone(),
-                        };
-                        TRASHED_TTL.remove(&write_txn, &old_ttl_key)?;
+                if let Some(mut value) = value_opt
+                    && value.metadata.lifecycle_state == LifecycleState::Active
+                {
+                    Self::remove_ttl_entry(&write_txn, &key, &value.metadata)?;
 
-                        // Update state
-                        value.metadata.lifecycle_state = LifecycleState::Trash;
-                        value.metadata.trashed_at = Some(now);
+                    value.metadata.lifecycle_state = LifecycleState::Trash;
+                    value.metadata.trashed_at = Some(now);
 
-                        // Add to purged TTL table
-                        let new_ttl_key = TtlKey {
-                            timestamp: now,
-                            key: key.clone(),
-                        };
-                        PURGED_TTL.insert(&write_txn, &new_ttl_key)?;
-
-                        // Store updated value
-                        main_table.insert(&key, &VersionedValue::V1(value))?;
-
-                        result.trashed.push(key);
-                    }
+                    Self::insert_trash_ttl(&write_txn, &key, now)?;
+                    main_table.insert(&key, &VersionedValue::V1(value))?;
+                    result.trashed.push(key);
                 }
             }
 
-            // Process keys to purge
+            // Permanently delete expired Trash keys
             for key in to_purge {
-                let value_opt = main_table
+                if let Some(value) = main_table
                     .remove(&key)?
-                    .map(|guard| Self::extract_latest(guard.value()));
-
-                if let Some(value) = value_opt {
-                    // Remove from purged TTL table
-                    if let Some(trashed_at) = value.metadata.trashed_at {
-                        let ttl_key = TtlKey {
-                            timestamp: trashed_at,
-                            key: key.clone(),
-                        };
-                        PURGED_TTL.remove(&write_txn, &ttl_key)?;
-                    }
-
+                    .map(|guard| Self::extract_latest(guard.value()))
+                {
+                    Self::remove_ttl_entry(&write_txn, &key, &value.metadata)?;
                     result.purged.push(key);
                 }
             }
@@ -796,6 +541,111 @@ impl Database {
         match versioned {
             VersionedValue::V1(v) => v,
         }
+    }
+}
+
+/// TTL table helpers for managing key expiration entries.
+///
+/// These helpers reduce duplication when manipulating TTL entries across
+/// lifecycle state transitions (Active → Trash → Purge).
+impl Database {
+    /// Removes a key's TTL entry based on its lifecycle state.
+    fn remove_ttl_entry(
+        txn: &redb::WriteTransaction,
+        key: &Key,
+        metadata: &Metadata,
+    ) -> Result<(), DatabaseError> {
+        match metadata.lifecycle_state {
+            LifecycleState::Active => {
+                let ttl_key = TtlKey {
+                    timestamp: metadata.last_accessed,
+                    key: key.clone(),
+                };
+                ACTIVE_EXPIRY.remove(txn, &ttl_key)?;
+            }
+            LifecycleState::Trash => {
+                if let Some(trashed_at) = metadata.trashed_at {
+                    let ttl_key = TtlKey {
+                        timestamp: trashed_at,
+                        key: key.clone(),
+                    };
+                    TRASH_EXPIRY.remove(txn, &ttl_key)?;
+                }
+            }
+            LifecycleState::Purge => {
+                // No TTL entries to clean up
+            }
+        }
+        Ok(())
+    }
+
+    /// Inserts a TTL entry for an Active key (tracks Active -> Trash expiration).
+    fn insert_active_ttl(
+        txn: &redb::WriteTransaction,
+        key: &Key,
+        timestamp: SystemTime,
+    ) -> Result<(), DatabaseError> {
+        let ttl_key = TtlKey {
+            timestamp,
+            key: key.clone(),
+        };
+        ACTIVE_EXPIRY.insert(txn, &ttl_key)?;
+        Ok(())
+    }
+
+    /// Inserts a TTL entry for a Trashed key (tracks Trash -> Purge expiration).
+    fn insert_trash_ttl(
+        txn: &redb::WriteTransaction,
+        key: &Key,
+        timestamp: SystemTime,
+    ) -> Result<(), DatabaseError> {
+        let ttl_key = TtlKey {
+            timestamp,
+            key: key.clone(),
+        };
+        TRASH_EXPIRY.insert(txn, &ttl_key)?;
+        Ok(())
+    }
+
+    /// Transfers a key's TTL entry to a new key, preserving the same timestamp.
+    fn transfer_ttl_entry(
+        txn: &redb::WriteTransaction,
+        old_key: &Key,
+        new_key: &Key,
+        metadata: &Metadata,
+    ) -> Result<(), DatabaseError> {
+        match metadata.lifecycle_state {
+            LifecycleState::Active => {
+                let old_ttl = TtlKey {
+                    timestamp: metadata.last_accessed,
+                    key: old_key.clone(),
+                };
+                let new_ttl = TtlKey {
+                    timestamp: metadata.last_accessed,
+                    key: new_key.clone(),
+                };
+                ACTIVE_EXPIRY.remove(txn, &old_ttl)?;
+                ACTIVE_EXPIRY.insert(txn, &new_ttl)?;
+            }
+            LifecycleState::Trash => {
+                if let Some(trashed_at) = metadata.trashed_at {
+                    let old_ttl = TtlKey {
+                        timestamp: trashed_at,
+                        key: old_key.clone(),
+                    };
+                    let new_ttl = TtlKey {
+                        timestamp: trashed_at,
+                        key: new_key.clone(),
+                    };
+                    TRASH_EXPIRY.remove(txn, &old_ttl)?;
+                    TRASH_EXPIRY.insert(txn, &new_ttl)?;
+                }
+            }
+            LifecycleState::Purge => {
+                // No TTL entries to transfer
+            }
+        }
+        Ok(())
     }
 }
 

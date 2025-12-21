@@ -41,9 +41,9 @@ mod common {
     }
 }
 
-mod crud {
+mod insert {
     use super::common::{create_test_db, make_key};
-    use crate::core::db::{ClipData, TRASHED_TTL};
+    use crate::core::db::{ClipData, ACTIVE_EXPIRY};
     use crate::types::TtlKey;
     use crate::types::value::versioned_value::latest_value::{
         FileData, InlineFileData, LifecycleState, TextData,
@@ -51,7 +51,7 @@ mod crud {
     use std::time::{Duration, SystemTime};
 
     #[test]
-    fn test_insert_and_get_text() {
+    fn test_insert_text() {
         let (mut db, _temp) = create_test_db();
         let key = make_key("test/key");
         let now = SystemTime::now();
@@ -72,19 +72,10 @@ mod crud {
         assert_eq!(value.metadata.created_at, now);
         assert_eq!(value.metadata.updated_at, now);
         assert!(value.metadata.trashed_at.is_none());
-
-        // Verify TTL table: key should be in TRASHED_TTL for auto-trash scheduling
-        let write_txn = db.db.begin_write().unwrap();
-        let ttl_key = TtlKey {
-            timestamp: now,
-            key: key.clone(),
-        };
-        // Key should be in TRASHED_TTL (remove returns true)
-        assert!(TRASHED_TTL.remove(&write_txn, &ttl_key).unwrap());
     }
 
     #[test]
-    fn test_insert_and_get_files() {
+    fn test_insert_files() {
         let (mut db, _temp) = create_test_db();
         let key = make_key("test/with-file");
         let now = SystemTime::now();
@@ -108,12 +99,25 @@ mod crud {
     }
 
     #[test]
-    fn test_get_nonexistent_key() {
-        let (db, _temp) = create_test_db();
-        let key = make_key("nonexistent");
+    fn test_insert_registers_in_ttl_table() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("test/ttl");
+        let now = SystemTime::now();
 
-        let result = db.get(&key).unwrap();
-        assert!(result.is_none());
+        db.insert(
+            &key,
+            now,
+            ClipData::Text(TextData::Inlined("content".to_string())),
+        )
+        .unwrap();
+
+        // Verify TTL table: key should be in ACTIVE_EXPIRY for auto-trash scheduling
+        let write_txn = db.db.begin_write().unwrap();
+        let ttl_key = TtlKey {
+            timestamp: now,
+            key: key.clone(),
+        };
+        assert!(ACTIVE_EXPIRY.remove(&write_txn, &ttl_key).unwrap());
     }
 
     #[test]
@@ -138,7 +142,6 @@ mod crud {
         )
         .unwrap();
 
-        // Value should be the new one
         let value = db.get(&key).unwrap().unwrap();
         assert_eq!(value.metadata.created_at, insert_time);
         assert_eq!(value.metadata.updated_at, insert_time);
@@ -161,10 +164,8 @@ mod crud {
         )
         .unwrap();
 
-        // Trash the key
         db.trash(&key, now + Duration::from_secs(10)).unwrap();
 
-        // Insert should overwrite the trashed key
         let insert_time = now + Duration::from_secs(100);
         db.insert(
             &key,
@@ -173,7 +174,6 @@ mod crud {
         )
         .unwrap();
 
-        // Value should be the new one, Active state
         let value = db.get(&key).unwrap().unwrap();
         assert_eq!(value.metadata.created_at, insert_time);
         assert_eq!(value.metadata.updated_at, insert_time);
@@ -186,7 +186,7 @@ mod crud {
     }
 
     #[test]
-    fn test_overwrite_with_purge_then_insert() {
+    fn test_insert_after_purge() {
         let (mut db, _temp) = create_test_db();
         let key = make_key("test/overwrite");
         let create_time = SystemTime::now();
@@ -198,7 +198,6 @@ mod crud {
         )
         .unwrap();
 
-        // To overwrite, must purge first
         db.purge(&key).unwrap();
 
         let update_time = create_time + Duration::from_secs(100);
@@ -209,7 +208,6 @@ mod crud {
         )
         .unwrap();
 
-        // Value should be the new one with new timestamps
         let value = db.get(&key).unwrap().unwrap();
         assert_eq!(value.metadata.created_at, update_time);
         assert_eq!(value.metadata.updated_at, update_time);
@@ -217,6 +215,61 @@ mod crud {
             value.clip_data,
             ClipData::Text(TextData::Inlined("second".to_string()))
         );
+    }
+}
+
+mod get {
+    use super::common::{create_test_db, make_key};
+    use crate::core::db::ClipData;
+    use crate::types::value::versioned_value::latest_value::{LifecycleState, TextData};
+    use std::time::SystemTime;
+
+    #[test]
+    fn test_get_existing_key() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("test/key");
+        let now = SystemTime::now();
+
+        db.insert(
+            &key,
+            now,
+            ClipData::Text(TextData::Inlined("content".to_string())),
+        )
+        .unwrap();
+
+        let value = db.get(&key).unwrap().unwrap();
+        assert_eq!(
+            value.clip_data,
+            ClipData::Text(TextData::Inlined("content".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_get_nonexistent_key() {
+        let (db, _temp) = create_test_db();
+        let key = make_key("nonexistent");
+
+        let result = db.get(&key).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_get_trashed_key() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("test/key");
+        let now = SystemTime::now();
+
+        db.insert(
+            &key,
+            now,
+            ClipData::Text(TextData::Inlined("content".to_string())),
+        )
+        .unwrap();
+
+        db.trash(&key, now).unwrap();
+
+        let value = db.get(&key).unwrap().unwrap();
+        assert_eq!(value.metadata.lifecycle_state, LifecycleState::Trash);
     }
 }
 
@@ -432,7 +485,7 @@ mod touch {
 
 mod trash {
     use super::common::{create_test_db, make_key};
-    use crate::core::db::{ClipData, DatabaseError, PURGED_TTL, TRASHED_TTL};
+    use crate::core::db::{ClipData, DatabaseError, TRASH_EXPIRY, ACTIVE_EXPIRY};
     use crate::types::TtlKey;
     use crate::types::value::versioned_value::latest_value::{LifecycleState, TextData};
     use std::time::{Duration, SystemTime};
@@ -458,7 +511,7 @@ mod trash {
         assert_eq!(value.metadata.lifecycle_state, LifecycleState::Trash);
         assert_eq!(value.metadata.trashed_at, Some(trash_time));
 
-        // Verify TTL tables: key should be moved from TRASHED_TTL to PURGED_TTL
+        // Verify TTL tables: key should be moved from ACTIVE_EXPIRY to TRASH_EXPIRY
         let write_txn = db.db.begin_write().unwrap();
         let old_ttl_key = TtlKey {
             timestamp: create_time,
@@ -468,10 +521,10 @@ mod trash {
             timestamp: trash_time,
             key: key.clone(),
         };
-        // Key should no longer be in TRASHED_TTL (remove returns false)
-        assert!(!TRASHED_TTL.remove(&write_txn, &old_ttl_key).unwrap());
-        // Key should be in PURGED_TTL (remove returns true)
-        assert!(PURGED_TTL.remove(&write_txn, &new_ttl_key).unwrap());
+        // Key should no longer be in ACTIVE_EXPIRY (remove returns false)
+        assert!(!ACTIVE_EXPIRY.remove(&write_txn, &old_ttl_key).unwrap());
+        // Key should be in TRASH_EXPIRY (remove returns true)
+        assert!(TRASH_EXPIRY.remove(&write_txn, &new_ttl_key).unwrap());
     }
 
     #[test]
@@ -928,5 +981,295 @@ mod edge_cases {
                 ClipData::Text(TextData::Inlined(key_str.to_string()))
             );
         }
+    }
+}
+
+mod update {
+    use super::common::{create_test_db, make_key};
+    use crate::core::db::{ClipData, DatabaseError};
+    use crate::types::value::versioned_value::latest_value::TextData;
+    use std::time::{Duration, SystemTime};
+
+    #[test]
+    fn test_update_text() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("test/update");
+        let create_time = SystemTime::now();
+
+        db.insert(
+            &key,
+            create_time,
+            ClipData::Text(TextData::Inlined("original".to_string())),
+        )
+        .unwrap();
+
+        let update_time = create_time + Duration::from_secs(50);
+        db.update(
+            &key,
+            update_time,
+            ClipData::Text(TextData::Inlined("updated".to_string())),
+        )
+        .unwrap();
+
+        let value = db.get(&key).unwrap().unwrap();
+        assert_eq!(
+            value.clip_data,
+            ClipData::Text(TextData::Inlined("updated".to_string()))
+        );
+        // created_at should be preserved
+        assert_eq!(value.metadata.created_at, create_time);
+        // updated_at should reflect update time
+        assert_eq!(value.metadata.updated_at, update_time);
+    }
+
+    #[test]
+    fn test_update_nonexistent_key() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("nonexistent");
+
+        let result = db.update(
+            &key,
+            SystemTime::now(),
+            ClipData::Text(TextData::Inlined("text".to_string())),
+        );
+        assert!(matches!(result, Err(DatabaseError::NotFound)));
+    }
+
+    #[test]
+    fn test_update_trashed_key() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("test/trashed");
+        let now = SystemTime::now();
+
+        db.insert(
+            &key,
+            now,
+            ClipData::Text(TextData::Inlined("original".to_string())),
+        )
+        .unwrap();
+
+        db.trash(&key, now + Duration::from_secs(10)).unwrap();
+
+        let result = db.update(
+            &key,
+            now + Duration::from_secs(20),
+            ClipData::Text(TextData::Inlined("updated".to_string())),
+        );
+        assert!(matches!(result, Err(DatabaseError::NotFound)));
+    }
+}
+
+mod restore {
+    use super::common::{create_test_db, make_key};
+    use crate::core::db::{ClipData, DatabaseError, ACTIVE_EXPIRY};
+    use crate::types::TtlKey;
+    use crate::types::value::versioned_value::latest_value::{LifecycleState, TextData};
+    use std::time::{Duration, SystemTime};
+
+    #[test]
+    fn test_restore_trashed_key() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("test/restore");
+        let create_time = SystemTime::now();
+
+        db.insert(
+            &key,
+            create_time,
+            ClipData::Text(TextData::Inlined("content".to_string())),
+        )
+        .unwrap();
+
+        let trash_time = create_time + Duration::from_secs(10);
+        db.trash(&key, trash_time).unwrap();
+
+        let restore_time = create_time + Duration::from_secs(20);
+        db.restore(&key, restore_time).unwrap();
+
+        let value = db.get(&key).unwrap().unwrap();
+        assert_eq!(value.metadata.lifecycle_state, LifecycleState::Active);
+        assert!(value.metadata.trashed_at.is_none());
+        assert_eq!(value.metadata.last_accessed, restore_time);
+
+        // Verify TTL table: key should be back in ACTIVE_EXPIRY
+        let write_txn = db.db.begin_write().unwrap();
+        let ttl_key = TtlKey {
+            timestamp: restore_time,
+            key: key.clone(),
+        };
+        assert!(ACTIVE_EXPIRY.remove(&write_txn, &ttl_key).unwrap());
+    }
+
+    #[test]
+    fn test_restore_nonexistent_key() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("nonexistent");
+
+        let result = db.restore(&key, SystemTime::now());
+        assert!(matches!(result, Err(DatabaseError::NotFound)));
+    }
+
+    #[test]
+    fn test_restore_active_key() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("test/active");
+        let now = SystemTime::now();
+
+        db.insert(
+            &key,
+            now,
+            ClipData::Text(TextData::Inlined("content".to_string())),
+        )
+        .unwrap();
+
+        // Trying to restore an active key should fail
+        let result = db.restore(&key, now + Duration::from_secs(10));
+        assert!(matches!(result, Err(DatabaseError::NotFound)));
+    }
+}
+
+mod remove_file_at {
+    use super::common::{create_test_db, make_key};
+    use crate::core::db::{ClipData, DatabaseError};
+    use crate::types::value::versioned_value::latest_value::{FileData, InlineFileData, TextData};
+    use std::time::{Duration, SystemTime};
+
+    #[test]
+    fn test_remove_file_at_removes_entry() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("test/remove_file_at");
+        let now = SystemTime::now();
+
+        db.insert(
+            &key,
+            now,
+            ClipData::Files(vec![
+                FileData::Inlined(InlineFileData {
+                    file_name: "file1.txt".to_string(),
+                    data: b"content1".to_vec(),
+                }),
+                FileData::Inlined(InlineFileData {
+                    file_name: "file2.txt".to_string(),
+                    data: b"content2".to_vec(),
+                }),
+            ]),
+        )
+        .unwrap();
+
+        let remove_time = now + Duration::from_secs(10);
+        let removed = db.remove_file_at(&key, remove_time, 0).unwrap();
+
+        match removed {
+            FileData::Inlined(data) => {
+                assert_eq!(data.file_name, "file1.txt");
+            }
+            _ => panic!("Expected inlined file"),
+        }
+
+        let value = db.get(&key).unwrap().unwrap();
+        match &value.clip_data {
+            ClipData::Files(files) => {
+                assert_eq!(files.len(), 1);
+                match &files[0] {
+                    FileData::Inlined(data) => assert_eq!(data.file_name, "file2.txt"),
+                    _ => panic!("Expected inlined file"),
+                }
+            }
+            _ => panic!("Expected Files variant"),
+        }
+        assert_eq!(value.metadata.updated_at, remove_time);
+    }
+
+    #[test]
+    fn test_remove_file_at_last_file_becomes_empty_text() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("test/remove_last");
+        let now = SystemTime::now();
+
+        db.insert(
+            &key,
+            now,
+            ClipData::Files(vec![FileData::Inlined(InlineFileData {
+                file_name: "only_file.txt".to_string(),
+                data: b"content".to_vec(),
+            })]),
+        )
+        .unwrap();
+
+        db.remove_file_at(&key, now + Duration::from_secs(10), 0)
+            .unwrap();
+
+        let value = db.get(&key).unwrap().unwrap();
+        assert_eq!(
+            value.clip_data,
+            ClipData::Text(TextData::Inlined(String::new()))
+        );
+    }
+
+    #[test]
+    fn test_remove_file_at_nonexistent_key() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("nonexistent");
+
+        let result = db.remove_file_at(&key, SystemTime::now(), 0);
+        assert!(matches!(result, Err(DatabaseError::NotFound)));
+    }
+
+    #[test]
+    fn test_remove_file_at_trashed_key() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("test/trashed");
+        let now = SystemTime::now();
+
+        db.insert(
+            &key,
+            now,
+            ClipData::Files(vec![FileData::Inlined(InlineFileData {
+                file_name: "file.txt".to_string(),
+                data: b"content".to_vec(),
+            })]),
+        )
+        .unwrap();
+
+        db.trash(&key, now + Duration::from_secs(10)).unwrap();
+
+        let result = db.remove_file_at(&key, now + Duration::from_secs(20), 0);
+        assert!(matches!(result, Err(DatabaseError::NotFound)));
+    }
+
+    #[test]
+    fn test_remove_file_at_on_text_fails() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("test/text");
+        let now = SystemTime::now();
+
+        db.insert(
+            &key,
+            now,
+            ClipData::Text(TextData::Inlined("text content".to_string())),
+        )
+        .unwrap();
+
+        let result = db.remove_file_at(&key, now, 0);
+        assert!(matches!(result, Err(DatabaseError::TypeMismatch)));
+    }
+
+    #[test]
+    fn test_remove_file_at_out_of_bounds() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("test/oob");
+        let now = SystemTime::now();
+
+        db.insert(
+            &key,
+            now,
+            ClipData::Files(vec![FileData::Inlined(InlineFileData {
+                file_name: "file.txt".to_string(),
+                data: b"content".to_vec(),
+            })]),
+        )
+        .unwrap();
+
+        let result = db.remove_file_at(&key, now, 5);
+        assert!(matches!(result, Err(DatabaseError::NotFound)));
     }
 }

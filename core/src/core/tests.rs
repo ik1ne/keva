@@ -663,3 +663,192 @@ mod touch {
         assert_eq!(v2.metadata.last_accessed, last_accessed_1);
     }
 }
+
+mod get {
+    use super::common::{create_test_storage, make_key};
+    use super::*;
+    use crate::types::value::versioned_value::latest_value::TextData;
+
+    #[test]
+    fn test_get_active_key() {
+        let (mut storage, _temp) = create_test_storage();
+        let key = make_key("test/key");
+        let now = SystemTime::now();
+
+        storage.upsert_text(&key, "content", now).unwrap();
+
+        let value = storage.get(&key, now).unwrap().unwrap();
+        assert_eq!(
+            value.clip_data,
+            ClipData::Text(TextData::Inlined("content".to_string()))
+        );
+        assert_eq!(value.metadata.lifecycle_state, LifecycleState::Active);
+    }
+
+    #[test]
+    fn test_get_trashed_key() {
+        let (mut storage, _temp) = create_test_storage();
+        let key = make_key("test/key");
+        let now = SystemTime::now();
+
+        storage.upsert_text(&key, "content", now).unwrap();
+        storage.trash(&key, now).unwrap();
+
+        // Get should still work for trashed keys
+        let value = storage.get(&key, now).unwrap().unwrap();
+        assert_eq!(value.metadata.lifecycle_state, LifecycleState::Trash);
+    }
+
+    #[test]
+    fn test_get_nonexistent_key() {
+        let (storage, _temp) = create_test_storage();
+        let key = make_key("nonexistent");
+        let now = SystemTime::now();
+
+        let result = storage.get(&key, now).unwrap();
+        assert!(result.is_none());
+    }
+}
+
+mod restore {
+    use super::common::{create_test_storage, make_key};
+    use super::*;
+
+    #[test]
+    fn test_restore_trashed_key() {
+        let (mut storage, _temp) = create_test_storage();
+        let key = make_key("test/key");
+        let now = SystemTime::now();
+
+        storage.upsert_text(&key, "content", now).unwrap();
+        storage.trash(&key, now).unwrap();
+
+        let value = storage.get(&key, now).unwrap().unwrap();
+        assert_eq!(value.metadata.lifecycle_state, LifecycleState::Trash);
+
+        storage.restore(&key, now).unwrap();
+
+        let restored = storage.get(&key, now).unwrap().unwrap();
+        assert_eq!(restored.metadata.lifecycle_state, LifecycleState::Active);
+    }
+
+    #[test]
+    fn test_restore_nonexistent_key_fails() {
+        let (mut storage, _temp) = create_test_storage();
+        let key = make_key("nonexistent");
+        let now = SystemTime::now();
+
+        let result = storage.restore(&key, now);
+        assert!(matches!(
+            result,
+            Err(StorageError::Database(DatabaseError::NotFound))
+        ));
+    }
+
+    #[test]
+    fn test_restore_active_key_is_noop() {
+        let (mut storage, _temp) = create_test_storage();
+        let key = make_key("test/key");
+        let now = SystemTime::now();
+
+        storage.upsert_text(&key, "content", now).unwrap();
+
+        // Restoring an active key is a no-op (succeeds silently)
+        storage.restore(&key, now).unwrap();
+
+        // Key should still be active
+        let value = storage.get(&key, now).unwrap().unwrap();
+        assert_eq!(value.metadata.lifecycle_state, LifecycleState::Active);
+    }
+
+    #[cfg(feature = "search")]
+    #[test]
+    fn test_restore_updates_search_index() {
+        let (mut storage, _temp) = create_test_storage();
+        let key = make_key("test/key");
+        let now = SystemTime::now();
+
+        storage.upsert_text(&key, "content", now).unwrap();
+        storage.trash(&key, now).unwrap();
+
+        // Should be in trash index
+        let results = storage
+            .search(crate::search::SearchQuery::Fuzzy("test".to_string()), 100)
+            .unwrap();
+        assert!(results.iter().any(|r| r.is_trash && r.key == key));
+
+        storage.restore(&key, now).unwrap();
+
+        // Should be in active index now
+        let results = storage
+            .search(crate::search::SearchQuery::Fuzzy("test".to_string()), 100)
+            .unwrap();
+        assert!(results.iter().any(|r| !r.is_trash && r.key == key));
+    }
+}
+
+mod purge {
+    use super::common::{create_test_storage, make_key};
+    use super::*;
+
+    #[test]
+    fn test_purge_active_key() {
+        let (mut storage, _temp) = create_test_storage();
+        let key = make_key("test/key");
+        let now = SystemTime::now();
+
+        storage.upsert_text(&key, "content", now).unwrap();
+        storage.purge(&key).unwrap();
+
+        assert!(storage.get(&key, now).unwrap().is_none());
+    }
+
+    #[test]
+    fn test_purge_trashed_key() {
+        let (mut storage, _temp) = create_test_storage();
+        let key = make_key("test/key");
+        let now = SystemTime::now();
+
+        storage.upsert_text(&key, "content", now).unwrap();
+        storage.trash(&key, now).unwrap();
+        storage.purge(&key).unwrap();
+
+        assert!(storage.get(&key, now).unwrap().is_none());
+    }
+
+    #[test]
+    fn test_purge_nonexistent_key_fails() {
+        let (mut storage, _temp) = create_test_storage();
+        let key = make_key("nonexistent");
+
+        let result = storage.purge(&key);
+        assert!(matches!(
+            result,
+            Err(StorageError::Database(DatabaseError::NotFound))
+        ));
+    }
+
+    #[cfg(feature = "search")]
+    #[test]
+    fn test_purge_removes_from_search_index() {
+        let (mut storage, _temp) = create_test_storage();
+        let key = make_key("test/key");
+        let now = SystemTime::now();
+
+        storage.upsert_text(&key, "content", now).unwrap();
+
+        // Should be in search index
+        let results = storage
+            .search(crate::search::SearchQuery::Fuzzy("test".to_string()), 100)
+            .unwrap();
+        assert!(results.iter().any(|r| r.key == key));
+
+        storage.purge(&key).unwrap();
+
+        // Should not be in search index anymore
+        let results = storage
+            .search(crate::search::SearchQuery::Fuzzy("test".to_string()), 100)
+            .unwrap();
+        assert!(!results.iter().any(|r| r.key == key));
+    }
+}
