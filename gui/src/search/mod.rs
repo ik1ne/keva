@@ -11,12 +11,11 @@
 //! Non-blocking API:
 //! - `set_query()`: Sets the search pattern
 //! - `tick()`: Drives search forward without blocking (calls nucleo.tick(0))
-//! - `state()`: Returns current results as owned data
+//! - Query methods directly on SearchEngine (no intermediate state object)
 
 use keva_core::types::Key;
-use nucleo::{Config as NucleoConfig, Nucleo, Utf32String};
+use nucleo::{Config as NucleoConfig, Nucleo, Snapshot, Utf32String};
 use std::collections::HashSet;
-use std::ops::{Bound, RangeBounds};
 use std::sync::Arc;
 
 /// Query type for search.
@@ -48,60 +47,22 @@ pub struct SearchConfig {
     pub rebuild_threshold: usize,
 }
 
-/// Current search state with owned data.
+/// Search results snapshot that provides zero-copy iteration.
 ///
-/// This struct owns the matched keys, avoiding lifetime complexity.
-/// Call `SearchEngine::state()` to get a snapshot of current results.
-#[derive(Debug, Clone)]
-pub struct SearchState {
-    active_finished: bool,
-    trashed_finished: bool,
-    active_keys: Vec<Key>,
-    trashed_keys: Vec<Key>,
+/// Borrows from the SearchEngine. Use `iter()` to iterate over
+/// matched keys without collecting.
+pub struct SearchResults<'a> {
+    snapshot: &'a Snapshot<Key>,
+    tombstones: &'a HashSet<Key>,
 }
 
-impl SearchState {
-    /// Returns true if both indexes have finished searching.
-    pub fn is_finished(&self) -> bool {
-        self.active_finished && self.trashed_finished
-    }
-
-    /// Returns the total count of matched active keys.
-    pub fn active_key_count(&self) -> usize {
-        self.active_keys.len()
-    }
-
-    /// Returns the total count of matched trashed keys.
-    pub fn trashed_key_count(&self) -> usize {
-        self.trashed_keys.len()
-    }
-
-    /// Returns active keys in the given range.
-    ///
-    /// Use `..` for all keys, `0..10` for first 10, etc.
-    pub fn active_keys(&self, range: impl RangeBounds<usize>) -> Vec<Key> {
-        self.slice_range(&self.active_keys, range)
-    }
-
-    /// Returns trashed keys in the given range.
-    ///
-    /// Use `..` for all keys, `0..10` for first 10, etc.
-    pub fn trashed_keys(&self, range: impl RangeBounds<usize>) -> Vec<Key> {
-        self.slice_range(&self.trashed_keys, range)
-    }
-
-    fn slice_range(&self, keys: &[Key], range: impl RangeBounds<usize>) -> Vec<Key> {
-        let start = match range.start_bound() {
-            Bound::Included(&n) => n,
-            Bound::Excluded(&n) => n.saturating_add(1),
-            Bound::Unbounded => 0,
-        };
-        let end = match range.end_bound() {
-            Bound::Included(&n) => n.saturating_add(1).min(keys.len()),
-            Bound::Excluded(&n) => n.min(keys.len()),
-            Bound::Unbounded => keys.len(),
-        };
-        keys.get(start..end).map(|s| s.to_vec()).unwrap_or_default()
+impl<'a> SearchResults<'a> {
+    /// Iterates over matched keys, filtering out tombstoned entries.
+    pub fn iter(&self) -> impl Iterator<Item = &Key> + '_ {
+        self.snapshot
+            .matched_items(..)
+            .filter(|item| !self.tombstones.contains(item.data))
+            .map(|item| item.data)
     }
 }
 
@@ -195,18 +156,11 @@ impl Index {
         }
     }
 
-    fn collect_keys(&self) -> Vec<Key> {
-        let snapshot = self.nucleo.snapshot();
-        let mut results = Vec::new();
-
-        for item in snapshot.matched_items(..) {
-            let key: &Key = item.data;
-            if self.is_present(key) {
-                results.push(key.clone());
-            }
+    fn results(&self) -> SearchResults<'_> {
+        SearchResults {
+            snapshot: self.nucleo.snapshot(),
+            tombstones: &self.tombstones,
         }
-
-        results
     }
 }
 
@@ -257,12 +211,6 @@ impl SearchEngine {
         self.active.insert(key);
     }
 
-    /// Adds a key as trashed.
-    pub fn add_trashed(&mut self, key: Key) {
-        self.active.remove(&key);
-        self.trash.insert(key);
-    }
-
     /// Moves a key from active to trashed.
     pub fn trash(&mut self, key: &Key) {
         self.active.remove(key);
@@ -301,7 +249,7 @@ impl SearchEngine {
     ///
     /// This reconfigures the Nucleo pattern for both indexes. The search runs
     /// asynchronously on Nucleo's background threadpool. Call `tick()` to
-    /// synchronize and `state()` to read current results.
+    /// drive the search forward.
     pub fn set_query(&mut self, query: SearchQuery) {
         let SearchQuery::Fuzzy(ref pattern) = query;
 
@@ -334,7 +282,7 @@ impl SearchEngine {
     ///
     /// This calls `nucleo.tick(0)` on both indexes, which returns immediately.
     /// Call this from the GUI event loop (e.g., after receiving a notify callback
-    /// or on each frame while `!state().is_finished()`).
+    /// or on each frame while `!is_finished()`).
     pub fn tick(&mut self) {
         let active_status = self.active.nucleo.tick(0);
         let trash_status = self.trash.nucleo.tick(0);
@@ -343,18 +291,19 @@ impl SearchEngine {
         self.trashed_finished = !trash_status.running;
     }
 
-    /// Returns the current search state with owned data.
-    ///
-    /// This collects all matching keys from both indexes, filtering out
-    /// tombstoned entries. The returned `SearchState` owns its data,
-    /// allowing concurrent access to other methods.
-    pub fn state(&self) -> SearchState {
-        SearchState {
-            active_finished: self.active_finished,
-            trashed_finished: self.trashed_finished,
-            active_keys: self.active.collect_keys(),
-            trashed_keys: self.trash.collect_keys(),
-        }
+    /// Returns true if both indexes have finished searching.
+    pub fn is_finished(&self) -> bool {
+        self.active_finished && self.trashed_finished
+    }
+
+    /// Returns active search results for zero-copy iteration.
+    pub fn active_results(&self) -> SearchResults<'_> {
+        self.active.results()
+    }
+
+    /// Returns trashed search results for zero-copy iteration.
+    pub fn trashed_results(&self) -> SearchResults<'_> {
+        self.trash.results()
     }
 }
 
