@@ -3,15 +3,10 @@ name = "keva_core"
 version = "0.1.0"
 edition = "2024"
 
-[features]
-default = []
-search = ["dep:nucleo"]
-
 [dependencies]
 blake3_v1 = { package = "blake3", version = "1", features = ["serde"] }
 clipboard-rs = "0.3"
 nutype = { version = "0.6", features = ["new_unchecked", "serde"] }
-nucleo = { version = "0.5", optional = true }
 postcard = { version = "1", features = ["alloc"] }
 redb = "3"
 serde = { version = "1", features = ["derive"] }

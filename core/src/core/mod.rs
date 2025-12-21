@@ -17,9 +17,6 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-#[cfg(feature = "search")]
-use crate::search::SearchEngine;
-
 pub(crate) mod db;
 pub(crate) mod file;
 
@@ -27,9 +24,6 @@ pub mod error {
     use super::*;
     use crate::clipboard::ClipboardError;
     use thiserror::Error;
-
-    #[cfg(feature = "search")]
-    use crate::search::SearchError;
 
     #[derive(Debug, Error)]
     pub enum StorageError {
@@ -41,10 +35,6 @@ pub mod error {
 
         #[error("Clipboard error: {0}")]
         Clipboard(#[from] ClipboardError),
-
-        #[cfg(feature = "search")]
-        #[error("Search error: {0:?}")]
-        Search(#[from] SearchError),
 
         #[error("Key is in Trash state - restore it first")]
         KeyIsTrashed,
@@ -73,33 +63,10 @@ pub struct KevaCore {
     db: db::Database,
     file: FileStorage,
     config: Config,
-    #[cfg(feature = "search")]
-    search_engine: SearchEngine,
 }
 
 impl KevaCore {
     /// Opens or creates a storage at the configured path.
-    #[cfg(feature = "search")]
-    pub fn open(
-        config: Config,
-        search_config: crate::search::SearchConfig,
-    ) -> Result<Self, StorageError> {
-        let file = FileStorage {
-            base_path: config.blob_path(),
-            inline_threshold_bytes: config.saved.inline_threshold_bytes,
-        };
-        let db = db::Database::new(config.clone())?;
-        let search_engine = SearchEngine::new(db.active_keys()?, db.trashed_keys()?, search_config);
-        Ok(Self {
-            db,
-            file,
-            config,
-            search_engine,
-        })
-    }
-
-    /// Opens or creates a storage at the configured path (search disabled).
-    #[cfg(not(feature = "search"))]
     pub fn open(config: Config) -> Result<Self, StorageError> {
         let file = FileStorage {
             base_path: config.blob_path(),
@@ -203,12 +170,9 @@ impl KevaCore {
         match self.get(key, now)? {
             None => {
                 self.db.insert(key, now, ClipData::Text(text_data))?;
-                #[cfg(feature = "search")]
-                self.search_engine.add_active(key.clone());
             }
             Some(v) if v.metadata.lifecycle_state == LifecycleState::Active => {
                 self.db.update(key, now, ClipData::Text(text_data))?;
-                // Key already exists in search index, no update needed
             }
             Some(_) => {
                 // Key exists but is trashed - must restore first
@@ -243,15 +207,12 @@ impl KevaCore {
         match self.get(key, now)? {
             None => {
                 self.db.insert(key, now, ClipData::Files(files))?;
-                #[cfg(feature = "search")]
-                self.search_engine.add_active(key.clone());
             }
             Some(v)
                 if v.metadata.lifecycle_state == LifecycleState::Active
                     && matches!(v.clip_data, ClipData::Files(_)) =>
             {
                 self.db.append_files(key, now, files)?;
-                // Key already exists in search index, no update needed
             }
             Some(v) if v.metadata.lifecycle_state == LifecycleState::Trash => {
                 // Key is trashed - must restore first
@@ -297,8 +258,6 @@ impl KevaCore {
             None => Err(DatabaseError::NotFound.into()),
             Some(v) if v.metadata.lifecycle_state == LifecycleState::Active => {
                 self.db.trash(key, now)?;
-                #[cfg(feature = "search")]
-                self.search_engine.trash(key);
                 Ok(())
             }
             Some(_) => Err(StorageError::AlreadyTrashed),
@@ -320,8 +279,6 @@ impl KevaCore {
             }
             Some(v) if v.metadata.lifecycle_state == LifecycleState::Trash => {
                 self.db.restore(key, now)?;
-                #[cfg(feature = "search")]
-                self.search_engine.restore(key);
                 Ok(())
             }
             Some(_) => {
@@ -335,8 +292,6 @@ impl KevaCore {
     ///
     /// This removes the key from the database and cleans up blob files.
     pub fn purge(&mut self, key: &Key) -> Result<(), StorageError> {
-        #[cfg(feature = "search")]
-        self.search_engine.remove(key);
         self.db.purge(key)?;
         let key_path = key_to_path(key);
         self.file.remove_all(&key_path)?;
@@ -377,18 +332,6 @@ impl KevaCore {
 
         self.db.rename(old_key, new_key)?;
 
-        // Search index maintenance (two-index engine):
-        // - If overwriting, remove destination from both indices.
-        // - Rename is active-only at the KevaCore layer, so remove source and add destination as active.
-        #[cfg(feature = "search")]
-        {
-            if destination_exists {
-                self.search_engine.remove(new_key);
-            }
-            self.search_engine.remove(old_key);
-            self.search_engine.add_active(new_key.clone());
-        }
-
         let old_path = key_to_path(old_key);
         let new_path = key_to_path(new_key);
         self.file.rename(&old_path, &new_path)?;
@@ -419,17 +362,6 @@ impl KevaCore {
     /// active UI interaction.
     pub fn maintenance(&mut self, now: SystemTime) -> Result<GcResult, StorageError> {
         let result = self.db.gc(now)?;
-
-        #[cfg(feature = "search")]
-        {
-            for key in &result.trashed {
-                self.search_engine.trash(key);
-            }
-            for key in &result.purged {
-                self.search_engine.remove(key);
-            }
-            self.search_engine.maintenance_compact();
-        }
 
         // Clean up blob files for purged keys
         for key in &result.purged {
@@ -522,23 +454,6 @@ impl KevaCore {
                 std::fs::read_to_string(&text_path).map_err(|e| FileStorageError::Io(e).into())
             }
         }
-    }
-
-    /// Searches for keys matching the query.
-    ///
-    /// Returns results separated into active and trashed containers.
-    /// Use `active_range` and `trashed_range` to limit/paginate results (e.g., `0..10` or `..` for all).
-    #[cfg(feature = "search")]
-    pub fn search(
-        &mut self,
-        query: crate::search::SearchQuery,
-        timeout_ms: u64,
-        active_range: impl std::ops::RangeBounds<usize>,
-        trashed_range: impl std::ops::RangeBounds<usize>,
-    ) -> Result<crate::search::SearchResults, StorageError> {
-        Ok(self
-            .search_engine
-            .search(query, timeout_ms, active_range, trashed_range)?)
     }
 }
 

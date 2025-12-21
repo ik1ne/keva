@@ -1,6 +1,4 @@
 use super::*;
-#[cfg(feature = "search")]
-use crate::search::SearchConfig;
 use crate::types::config::SavedConfig;
 use std::time::Duration;
 use tempfile::TempDir;
@@ -20,18 +18,6 @@ mod common {
             },
         };
 
-        #[cfg(feature = "search")]
-        let storage = KevaCore::open(
-            config,
-            SearchConfig {
-                case_matching: crate::search::CaseMatching::Smart,
-                unicode_normalization: true,
-                rebuild_threshold: 100,
-            },
-        )
-        .unwrap();
-
-        #[cfg(not(feature = "search"))]
         let storage = KevaCore::open(config).unwrap();
 
         (storage, temp_dir)
@@ -507,43 +493,6 @@ mod rename {
             ClipData::Text(TextData::Inlined("old content".to_string()))
         );
     }
-
-    #[cfg(feature = "search")]
-    #[test]
-    fn test_rename_overwrite_normalizes_search_trash_status() {
-        let (mut storage, _temp) = create_test_storage();
-        let now = SystemTime::now();
-
-        let old_key = make_key("old/key");
-        let new_key = make_key("new/key");
-
-        // Source must be active.
-        storage.upsert_text(&old_key, "old content", now).unwrap();
-
-        // Destination exists and is trashed, so search index has it as trash.
-        storage.upsert_text(&new_key, "new content", now).unwrap();
-        storage.trash(&new_key, now).unwrap();
-
-        // Overwrite rename should replace destination and normalize its search state to active.
-        storage.rename(&old_key, &new_key, true, now).unwrap();
-
-        let results = storage
-            .search(
-                crate::search::SearchQuery::Fuzzy("new/key".to_string()),
-                100,
-                ..,
-                ..,
-            )
-            .unwrap();
-
-        // Destination key should appear exactly once in active results.
-        let matching: Vec<_> = results.active.iter().filter(|k| *k == &new_key).collect();
-        assert_eq!(matching.len(), 1);
-        assert!(results.trashed.iter().all(|k| k != &new_key));
-
-        // Old key should be gone.
-        assert!(storage.get(&old_key, now).unwrap().is_none());
-    }
 }
 
 mod keys {
@@ -770,31 +719,6 @@ mod restore {
         let value = storage.get(&key, now).unwrap().unwrap();
         assert_eq!(value.metadata.lifecycle_state, LifecycleState::Active);
     }
-
-    #[cfg(feature = "search")]
-    #[test]
-    fn test_restore_updates_search_index() {
-        let (mut storage, _temp) = create_test_storage();
-        let key = make_key("test/key");
-        let now = SystemTime::now();
-
-        storage.upsert_text(&key, "content", now).unwrap();
-        storage.trash(&key, now).unwrap();
-
-        // Should be in trash index
-        let results = storage
-            .search(crate::search::SearchQuery::Fuzzy("test".to_string()), 100, .., ..)
-            .unwrap();
-        assert!(results.trashed.iter().any(|k| k == &key));
-
-        storage.restore(&key, now).unwrap();
-
-        // Should be in active index now
-        let results = storage
-            .search(crate::search::SearchQuery::Fuzzy("test".to_string()), 100, .., ..)
-            .unwrap();
-        assert!(results.active.iter().any(|k| k == &key));
-    }
 }
 
 mod purge {
@@ -838,28 +762,4 @@ mod purge {
         ));
     }
 
-    #[cfg(feature = "search")]
-    #[test]
-    fn test_purge_removes_from_search_index() {
-        let (mut storage, _temp) = create_test_storage();
-        let key = make_key("test/key");
-        let now = SystemTime::now();
-
-        storage.upsert_text(&key, "content", now).unwrap();
-
-        // Should be in search index
-        let results = storage
-            .search(crate::search::SearchQuery::Fuzzy("test".to_string()), 100, .., ..)
-            .unwrap();
-        assert!(results.active.iter().any(|k| k == &key));
-
-        storage.purge(&key).unwrap();
-
-        // Should not be in search index anymore
-        let results = storage
-            .search(crate::search::SearchQuery::Fuzzy("test".to_string()), 100, .., ..)
-            .unwrap();
-        assert!(!results.active.iter().any(|k| k == &key));
-        assert!(!results.trashed.iter().any(|k| k == &key));
-    }
 }

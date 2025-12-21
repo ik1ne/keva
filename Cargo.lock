@@ -367,7 +367,6 @@ version = "0.1.0"
 dependencies = [
  "blake3",
  "clipboard-rs",
- "nucleo",
  "nutype",
  "postcard",
  "redb",
@@ -382,6 +381,7 @@ name = "keva_gui"
 version = "0.1.0"
 dependencies = [
  "keva_core",
+ "nucleo",
 ]
 
 [[package]]
