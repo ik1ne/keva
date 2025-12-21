@@ -62,7 +62,6 @@ fn key_to_path(key: &Key) -> PathBuf {
 pub struct KevaCore {
     db: db::Database,
     file: FileStorage,
-    config: Config,
 }
 
 impl KevaCore {
@@ -72,69 +71,50 @@ impl KevaCore {
             base_path: config.blob_path(),
             inline_threshold_bytes: config.saved.inline_threshold_bytes,
         };
-        let db = db::Database::new(config.clone())?;
-        Ok(Self { db, file, config })
+        let db = db::Database::new(config)?;
+        Ok(Self { db, file })
     }
+}
 
-    /// Computes the effective lifecycle state based on TTL expiration.
-    ///
-    /// The DB stores the state at the time of the last operation, but the effective
-    /// state may have changed due to TTL expiration:
-    /// - Active key with `last_accessed + trash_ttl <= now` → effective Trash
-    /// - Trash key with `trashed_at + purge_ttl <= now` → effective Purge
-    fn effective_lifecycle_state(&self, value: &Value, now: SystemTime) -> LifecycleState {
-        match value.metadata.lifecycle_state {
-            LifecycleState::Active => {
-                let expires_at = value.metadata.last_accessed + self.config.saved.trash_ttl;
-                if expires_at <= now {
-                    LifecycleState::Trash
-                } else {
-                    LifecycleState::Active
-                }
-            }
-            LifecycleState::Trash => {
-                if let Some(trashed_at) = value.metadata.trashed_at {
-                    let expires_at = trashed_at + self.config.saved.purge_ttl;
-                    if expires_at <= now {
-                        LifecycleState::Purge
-                    } else {
-                        LifecycleState::Trash
-                    }
-                } else {
-                    // trashed_at should always be set for Trash keys, but be defensive
-                    LifecycleState::Trash
-                }
-            }
-            LifecycleState::Purge => LifecycleState::Purge,
-        }
-    }
-
+/// Read operations.
+impl KevaCore {
     /// Retrieves a value by key.
     ///
-    /// Returns the value with its effective lifecycle state:
-    /// - Active keys are returned
-    /// - Trash keys are returned (GUI can display them)
-    /// - Purge keys (effective) return `None`
-    ///
-    /// The effective state is computed from TTL expiration, so an Active key
-    /// in the DB may be returned as Trash if its TTL has expired.
-    pub fn get(&self, key: &Key, now: SystemTime) -> Result<Option<Value>, StorageError> {
-        let Some(mut value) = self.db.get(key)? else {
-            return Ok(None);
-        };
+    /// Returns the raw value from the database. Stale entries (past TTL) are
+    /// still returned - only GC transitions lifecycle states.
+    pub fn get(&self, key: &Key) -> Result<Option<Value>, StorageError> {
+        Ok(self.db.get(key)?)
+    }
 
-        let effective_state = self.effective_lifecycle_state(&value, now);
+    /// Returns all Active keys efficiently by iterating the TTL table.
+    pub fn active_keys(&self) -> Result<Vec<Key>, StorageError> {
+        Ok(self.db.active_keys()?)
+    }
 
-        match effective_state {
-            LifecycleState::Purge => Ok(None), // Treat as deleted
-            _ => {
-                // Update lifecycle_state to effective state
-                value.metadata.lifecycle_state = effective_state;
-                Ok(Some(value))
+    /// Returns all Trash keys efficiently by iterating the TTL table.
+    pub fn trashed_keys(&self) -> Result<Vec<Key>, StorageError> {
+        Ok(self.db.trashed_keys()?)
+    }
+
+    /// Resolves text content (handles BlobStored case).
+    fn resolve_text(&self, key: &Key, text_data: &TextData) -> Result<String, StorageError> {
+        match text_data {
+            TextData::Inlined(s) => Ok(s.clone()),
+            TextData::BlobStored => {
+                let key_path = key_to_path(key);
+                let text_path = self
+                    .file
+                    .base_path
+                    .join(&key_path)
+                    .join(file::TEXT_FILE_NAME);
+                std::fs::read_to_string(&text_path).map_err(|e| FileStorageError::Io(e).into())
             }
         }
     }
+}
 
+/// Write operations.
+impl KevaCore {
     /// Creates or updates a text value at the given key.
     ///
     /// If the existing value was blob-stored text (exceeding inline threshold) and the
@@ -150,7 +130,7 @@ impl KevaCore {
         // Determine whether we need to clean up an existing blob-stored text file.
         // If the previous value was blob-stored text and the new representation is inlined,
         // remove the old blob file to avoid leaving orphaned `text.txt` on disk.
-        let remove_old_blob_text = match self.get(key, now)? {
+        let remove_old_blob_text = match self.get(key)? {
             Some(v)
                 if v.metadata.lifecycle_state == LifecycleState::Active
                     && matches!(v.clip_data, ClipData::Text(TextData::BlobStored)) =>
@@ -167,7 +147,7 @@ impl KevaCore {
             self.file.remove_blob_stored_text(&key_path)?;
         }
 
-        match self.get(key, now)? {
+        match self.get(key)? {
             None => {
                 self.db.insert(key, now, ClipData::Text(text_data))?;
             }
@@ -204,7 +184,7 @@ impl KevaCore {
             return Ok(());
         }
 
-        match self.get(key, now)? {
+        match self.get(key)? {
             None => {
                 self.db.insert(key, now, ClipData::Files(files))?;
             }
@@ -249,11 +229,22 @@ impl KevaCore {
         Ok(())
     }
 
+    /// Updates `last_accessed` without modifying the value.
+    ///
+    /// This should be called when the value is actually accessed (e.g. shown in the UI),
+    /// not when keys are merely enumerated or searched.
+    pub fn touch(&mut self, key: &Key, now: SystemTime) -> Result<(), StorageError> {
+        Ok(self.db.touch(key, now)?)
+    }
+}
+
+/// Lifecycle operations.
+impl KevaCore {
     /// Soft-deletes a key by moving it to Trash state.
     ///
     /// Only works on Active keys. Returns error if key is already trashed.
     pub fn trash(&mut self, key: &Key, now: SystemTime) -> Result<(), StorageError> {
-        let value = self.get(key, now)?;
+        let value = self.get(key)?;
         match value {
             None => Err(DatabaseError::NotFound.into()),
             Some(v) if v.metadata.lifecycle_state == LifecycleState::Active => {
@@ -268,9 +259,9 @@ impl KevaCore {
     ///
     /// - If Trash → move to Active
     /// - If Active → no-op (idempotent)
-    /// - If Purge/None → Error
+    /// - If None → Error
     pub fn restore(&mut self, key: &Key, now: SystemTime) -> Result<(), StorageError> {
-        let value = self.get(key, now)?;
+        let value = self.get(key)?;
         match value {
             None => Err(DatabaseError::NotFound.into()),
             Some(v) if v.metadata.lifecycle_state == LifecycleState::Active => {
@@ -282,7 +273,7 @@ impl KevaCore {
                 Ok(())
             }
             Some(_) => {
-                // Purge state - should not happen since get() returns None for Purge
+                // Purge state - should not happen as keys are deleted by GC
                 Err(DatabaseError::NotFound.into())
             }
         }
@@ -297,7 +288,10 @@ impl KevaCore {
         self.file.remove_all(&key_path)?;
         Ok(())
     }
+}
 
+/// Key management operations.
+impl KevaCore {
     /// Renames a key.
     ///
     /// Only works on Active source keys. If `overwrite` is false and destination
@@ -307,7 +301,6 @@ impl KevaCore {
         old_key: &Key,
         new_key: &Key,
         overwrite: bool,
-        now: SystemTime,
     ) -> Result<(), StorageError> {
         // Guardrail: renaming a key to itself is a no-op.
         if old_key == new_key {
@@ -315,7 +308,7 @@ impl KevaCore {
         }
 
         // Check source key is Active
-        let value = self.get(old_key, now)?;
+        let value = self.get(old_key)?;
         match value {
             None => return Err(DatabaseError::NotFound.into()),
             Some(v) if v.metadata.lifecycle_state != LifecycleState::Active => {
@@ -325,7 +318,7 @@ impl KevaCore {
         }
 
         // Check destination doesn't exist (unless overwrite is true)
-        let destination_exists = self.get(new_key, now)?.is_some();
+        let destination_exists = self.get(new_key)?.is_some();
         if !overwrite && destination_exists {
             return Err(StorageError::DestinationExists);
         }
@@ -337,25 +330,10 @@ impl KevaCore {
         self.file.rename(&old_path, &new_path)?;
         Ok(())
     }
+}
 
-    /// Returns all Active keys efficiently by iterating the TTL table.
-    pub fn active_keys(&self) -> Result<Vec<Key>, StorageError> {
-        Ok(self.db.active_keys()?)
-    }
-
-    /// Returns all Trash keys efficiently by iterating the TTL table.
-    pub fn trashed_keys(&self) -> Result<Vec<Key>, StorageError> {
-        Ok(self.db.trashed_keys()?)
-    }
-
-    /// Updates `last_accessed` without modifying the value.
-    ///
-    /// This should be called when the value is actually accessed (e.g. shown in the UI),
-    /// not when keys are merely enumerated or searched.
-    pub fn touch(&mut self, key: &Key, now: SystemTime) -> Result<(), StorageError> {
-        Ok(self.db.touch(key, now)?)
-    }
-
+/// Maintenance operations.
+impl KevaCore {
     /// Runs garbage collection and blob cleanup.
     ///
     /// This is the intended hook for periodic maintenance, avoiding heavy work during
@@ -398,8 +376,12 @@ impl KevaCore {
 
         Ok(())
     }
+}
 
+/// Clipboard operations.
+impl KevaCore {
     /// Import clipboard content to a key.
+    ///
     /// Files take priority over text when both are present.
     pub fn import_clipboard(&mut self, key: &Key, now: SystemTime) -> Result<(), StorageError> {
         let content = crate::clipboard::read_clipboard()?;
@@ -412,7 +394,7 @@ impl KevaCore {
 
     /// Copy key's value to clipboard and update access time.
     pub fn copy_to_clipboard(&mut self, key: &Key, now: SystemTime) -> Result<(), StorageError> {
-        let value = self.get(key, now)?.ok_or(DatabaseError::NotFound)?;
+        let value = self.get(key)?.ok_or(DatabaseError::NotFound)?;
 
         // Only copy Active keys
         if value.metadata.lifecycle_state != LifecycleState::Active {
@@ -438,22 +420,6 @@ impl KevaCore {
         self.db.touch(key, now)?;
 
         Ok(())
-    }
-
-    /// Helper: resolve text content (handles BlobStored case)
-    fn resolve_text(&self, key: &Key, text_data: &TextData) -> Result<String, StorageError> {
-        match text_data {
-            TextData::Inlined(s) => Ok(s.clone()),
-            TextData::BlobStored => {
-                let key_path = key_to_path(key);
-                let text_path = self
-                    .file
-                    .base_path
-                    .join(&key_path)
-                    .join(crate::core::file::TEXT_FILE_NAME);
-                std::fs::read_to_string(&text_path).map_err(|e| FileStorageError::Io(e).into())
-            }
-        }
     }
 }
 
