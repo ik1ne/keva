@@ -3,7 +3,6 @@ use tempfile::tempdir;
 
 mod common {
     use super::*;
-    pub(super) use redb::ReadableDatabase;
 
     pub(super) const TEST_TABLE: TtlTable = TtlTable::new("test_ttl");
 
@@ -36,11 +35,6 @@ mod init {
         TEST_TABLE.init(&write_txn).unwrap();
 
         write_txn.commit().unwrap();
-
-        // Verify table exists by reading from it
-        let read_txn = db.begin_read().unwrap();
-        let keys = TEST_TABLE.all_keys(&read_txn).unwrap();
-        assert!(keys.is_empty());
     }
 
     #[test]
@@ -61,6 +55,7 @@ mod init {
 mod insert {
     use super::common::*;
     use super::*;
+    use redb::ReadableDatabase;
 
     #[test]
     fn test_insert_single_key() {
@@ -76,8 +71,7 @@ mod insert {
 
         let read_txn = db.begin_read().unwrap();
         let keys = TEST_TABLE.all_keys(&read_txn).unwrap();
-        assert_eq!(keys.len(), 1);
-        assert_eq!(keys[0].as_str(), "key1");
+        assert_eq!(&keys, &[make_key("key1")]);
     }
 
     #[test]
@@ -106,7 +100,10 @@ mod insert {
 
         let read_txn = db.begin_read().unwrap();
         let keys = TEST_TABLE.all_keys(&read_txn).unwrap();
-        assert_eq!(keys.len(), 3);
+        assert_eq!(
+            &keys,
+            &[make_key("key1"), make_key("key2"), make_key("key3")]
+        );
     }
 
     #[test]
@@ -123,13 +120,14 @@ mod insert {
 
         let read_txn = db.begin_read().unwrap();
         let keys = TEST_TABLE.all_keys(&read_txn).unwrap();
-        assert_eq!(keys.len(), 1);
+        assert_eq!(&keys, &[make_key("key1")]);
     }
 }
 
 mod remove {
     use super::common::*;
     use super::*;
+    use redb::ReadableDatabase;
 
     #[test]
     fn test_remove_existing_key() {
@@ -150,7 +148,7 @@ mod remove {
 
         let read_txn = db.begin_read().unwrap();
         let keys = TEST_TABLE.all_keys(&read_txn).unwrap();
-        assert!(keys.is_empty());
+        assert_eq!(keys, vec![]);
     }
 
     #[test]
@@ -198,13 +196,14 @@ mod remove {
 
         let read_txn = db.begin_read().unwrap();
         let keys = TEST_TABLE.all_keys(&read_txn).unwrap();
-        assert_eq!(keys.len(), 1);
+        assert_eq!(&keys, &[make_key("key1")]);
     }
 }
 
 mod expired_keys {
     use super::common::*;
     use super::*;
+    use redb::ReadableDatabase;
 
     #[test]
     fn test_no_expired_keys() {
@@ -278,8 +277,7 @@ mod expired_keys {
             .expired_keys(&read_txn, now, Duration::from_secs(100))
             .unwrap();
 
-        assert_eq!(expired.len(), 1);
-        assert_eq!(expired[0].as_str(), "expired");
+        assert_eq!(&expired, &[make_key("expired")]);
     }
 
     #[test]
@@ -314,10 +312,10 @@ mod expired_keys {
             .unwrap();
 
         // Should be returned in timestamp order (oldest first)
-        assert_eq!(expired.len(), 3);
-        assert_eq!(expired[0].as_str(), "first");
-        assert_eq!(expired[1].as_str(), "second");
-        assert_eq!(expired[2].as_str(), "third");
+        assert_eq!(
+            &expired,
+            &[make_key("first"), make_key("second"), make_key("third")]
+        );
     }
 
     #[test]
@@ -332,11 +330,18 @@ mod expired_keys {
         TEST_TABLE
             .insert(&write_txn, &make_ttl_key("boundary", now - ttl))
             .unwrap();
-        // Just before expiration
+        // Just before expiration (use millis for cross-platform precision)
         TEST_TABLE
             .insert(
                 &write_txn,
-                &make_ttl_key("not_expired", now - ttl + Duration::from_secs(1)),
+                &make_ttl_key("not_expired", now - ttl + Duration::from_millis(1)),
+            )
+            .unwrap();
+        // Just after expiration
+        TEST_TABLE
+            .insert(
+                &write_txn,
+                &make_ttl_key("expired", now - ttl - Duration::from_millis(1)),
             )
             .unwrap();
         write_txn.commit().unwrap();
@@ -344,15 +349,15 @@ mod expired_keys {
         let read_txn = db.begin_read().unwrap();
         let expired = TEST_TABLE.expired_keys(&read_txn, now, ttl).unwrap();
 
-        // Boundary case: expires_at <= now means exactly at boundary is expired
-        assert_eq!(expired.len(), 1);
-        assert_eq!(expired[0].as_str(), "boundary");
+        // Boundary case: expires_at < now means exactly at boundary is not expired
+        assert_eq!(&expired, &[make_key("expired")]);
     }
 }
 
 mod all_keys {
     use super::common::*;
     use super::*;
+    use redb::ReadableDatabase;
 
     #[test]
     fn test_all_keys_empty() {
@@ -388,6 +393,11 @@ mod all_keys {
         let read_txn = db.begin_read().unwrap();
         let keys = TEST_TABLE.all_keys(&read_txn).unwrap();
 
-        assert_eq!(keys.len(), 5);
+        assert_eq!(
+            keys,
+            (0..5)
+                .map(|i| make_key(&format!("key{}", i)))
+                .collect::<Vec<_>>()
+        );
     }
 }

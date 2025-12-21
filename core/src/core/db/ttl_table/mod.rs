@@ -50,7 +50,7 @@ impl TtlTable {
 
     /// Finds all keys that have expired based on the given TTL duration.
     ///
-    /// A key is considered expired if `timestamp + ttl_duration <= now`.
+    /// A key is considered expired if `timestamp + ttl_duration < now`.
     ///
     /// Returns keys in timestamp order (oldest first).
     pub fn expired_keys(
@@ -59,23 +59,26 @@ impl TtlTable {
         now: SystemTime,
         ttl_duration: Duration,
     ) -> Result<Vec<Key>, DatabaseError> {
+        let Some(expires_at) = now.checked_sub(ttl_duration) else {
+            // If ttl_duration is greater than now, no keys can be expired
+            return Ok(vec![]);
+        };
+
         let table = txn.open_table(self.definition)?;
-        let mut expired = Vec::new();
 
-        for entry in table.iter()? {
-            let (ttl_key_guard, _) = entry?;
-            let ttl_key = ttl_key_guard.value();
-
-            let expires_at = ttl_key.timestamp + ttl_duration;
-            if expires_at <= now {
-                expired.push(ttl_key.key);
-            } else {
-                // Table is sorted by timestamp, so we can stop early
-                break;
-            }
-        }
-
-        Ok(expired)
+        table
+            .range(
+                ..TtlKey {
+                    timestamp: expires_at,
+                    // SAFETY: This key is only used for range querying, so the empty value is not stored.
+                    key: unsafe { Key::new_unchecked(String::new()) },
+                },
+            )?
+            .map(|ttl_key| {
+                let (ttl_key_guard, _) = ttl_key?;
+                Ok(ttl_key_guard.value().key.clone())
+            })
+            .collect()
     }
 
     /// Returns all keys in this TTL table.
