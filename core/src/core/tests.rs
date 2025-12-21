@@ -641,7 +641,7 @@ mod touch {
         let result = storage.touch(&key, now);
         assert!(matches!(
             result,
-            Err(StorageError::Database(DatabaseError::NotFound))
+            Err(StorageError::Database(DatabaseError::Trashed))
         ));
     }
 
