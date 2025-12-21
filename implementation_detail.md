@@ -25,8 +25,8 @@ keva/
 |-------------|-------------------------|-----------------------------------------------------------|
 | `core/`     | `core/src/core/`        | Main `KevaCore` struct, database operations, file storage |
 | `types/`    | `core/src/types/`       | Key, Value, Config, TTL types                             |
-| `search`    | `core/src/search.rs`    | Fuzzy and regex search engine                             |
 | `clipboard` | `core/src/clipboard.rs` | Clipboard read/write operations                           |
+| `search`    | `gui/src/search/`       | Fuzzy search engine (lives in GUI crate)                  |
 
 ---
 
@@ -75,7 +75,7 @@ Active  ──[trash_ttl expires]──►  Trash  ──[purge_ttl expires]─�
 - `last_accessed` - When key was last viewed/copied (drives trash TTL)
 - `trashed_at` - When key was moved to Trash (drives purge TTL)
 
-**TTL Calculation**: Effective lifecycle state computed at query time (no stale states).
+**TTL Enforcement**: GC is the single source of truth for state transitions. Stale entries remain visible until GC runs.
 
 ### 5. Garbage Collection
 
@@ -86,23 +86,20 @@ Active  ──[trash_ttl expires]──►  Trash  ──[purge_ttl expires]─�
 
 ### 6. Search Engine
 
-**Fuzzy Search** (v1 GUI):
+Lives in `keva_gui` crate for non-blocking UI integration.
+
+**Fuzzy Search**:
 
 - Uses `nucleo` library
-- Score-based ranking
+- Non-blocking API: `set_query()` + `tick()` + zero-copy iteration
 - Smart case matching (case-insensitive unless query contains uppercase)
-
-**Regex Search** (implemented, not exposed in v1 GUI):
-
-- Uses `regex` library
-- Full regex pattern support
-- Reserved for future GUI exposure (see Planned.md)
+- Callback-based notification for UI updates
 
 **Index Management**:
 
-- Incremental updates (avoids full rebuild)
-- Tracks Active vs Trash status for proper result ordering
-- Rebuild threshold for efficiency
+- Incremental updates via mutation methods (`add_active`, `trash`, `restore`, etc.)
+- Separate indexes for Active and Trash keys
+- Tombstone tracking for pending deletions
 
 ### 7. Clipboard Integration
 
@@ -115,39 +112,49 @@ Active  ──[trash_ttl expires]──►  Trash  ──[purge_ttl expires]─�
 
 ## KevaCore API
 
-### Data Operations
+### Read Operations
 
-| Method                        | Description                                       |
-|-------------------------------|---------------------------------------------------|
-| `upsert_text(key, text, now)` | Create or update text value                       |
-| `add_files(key, paths, now)`  | Add files to a key                                |
-| `get(key, now)`               | Retrieve value by key                             |
-| `copy_to_clipboard(key, now)` | Copy value to clipboard (updates `last_accessed`) |
-| `import_clipboard(key, now)`  | Import clipboard content to key                   |
+| Method           | Description         |
+|------------------|---------------------|
+| `get(key)`       | Retrieve value      |
+| `active_keys()`  | Get all Active keys |
+| `trashed_keys()` | Get all Trash keys  |
+
+### Write Operations
+
+| Method                          | Description                 |
+|---------------------------------|-----------------------------|
+| `upsert_text(key, text, now)`   | Create or update text value |
+| `add_files(key, paths, now)`    | Add files to a key          |
+| `remove_file_at(key, idx, now)` | Remove file by index        |
+| `touch(key, now)`               | Update last_accessed        |
 
 ### Lifecycle Operations
 
-| Method                                     | Description                  |
-|--------------------------------------------|------------------------------|
-| `trash(key, now)`                          | Soft-delete to Trash state   |
-| `restore(key, now)`                        | Restore from Trash to Active |
-| `purge(key)`                               | Permanently delete           |
-| `rename(old_key, new_key, overwrite, now)` | Rename key                   |
+| Method              | Description                  |
+|---------------------|------------------------------|
+| `trash(key, now)`   | Soft-delete to Trash state   |
+| `restore(key, now)` | Restore from Trash to Active |
+| `purge(key)`        | Permanently delete           |
 
-### Query Operations
+### Key Management Operations
 
-| Method                             | Description           |
-|------------------------------------|-----------------------|
-| `active_keys()`                    | Get all Active keys   |
-| `trashed_keys()`                   | Get all Trash keys    |
-| `list(prefix, include_trash, now)` | List keys by prefix   |
-| `search(query, timeout_ms)`        | Fuzzy or regex search |
+| Method                                | Description |
+|---------------------------------------|-------------|
+| `rename(old_key, new_key, overwrite)` | Rename key  |
+
+### Clipboard Operations
+
+| Method                        | Description                                       |
+|-------------------------------|---------------------------------------------------|
+| `copy_to_clipboard(key, now)` | Copy value to clipboard (updates `last_accessed`) |
+| `import_clipboard(key, now)`  | Import clipboard content to key                   |
 
 ### Maintenance
 
-| Method    | Description            |
-|-----------|------------------------|
-| `gc(now)` | Run garbage collection |
+| Method             | Description                    |
+|--------------------|--------------------------------|
+| `maintenance(now)` | Run GC and orphan blob cleanup |
 
 ---
 
@@ -172,18 +179,23 @@ Active  ──[trash_ttl expires]──►  Trash  ──[purge_ttl expires]─�
 
 ## Dependencies
 
-| Crate          | Version | Purpose                                |
-|----------------|---------|----------------------------------------|
-| `redb`         | 3.x     | Embedded ACID database                 |
-| `nucleo`       | 0.5     | Fuzzy search (v1 GUI)                  |
-| `regex`        | 1.x     | Regex search (implemented, future GUI) |
-| `blake3`       | 1.x     | Content hashing                        |
-| `clipboard-rs` | 0.3     | Clipboard I/O                          |
-| `postcard`     | -       | Binary serialization                   |
-| `serde`        | -       | Serialization framework                |
-| `nutype`       | 0.6     | Validated string types                 |
-| `thiserror`    | -       | Error handling                         |
-| `tracing`      | -       | Logging                                |
+### keva_core
+
+| Crate          | Version | Purpose                 |
+|----------------|---------|-------------------------|
+| `redb`         | 3.x     | Embedded ACID database  |
+| `blake3`       | 1.x     | Content hashing         |
+| `clipboard-rs` | 0.3     | Clipboard I/O           |
+| `postcard`     | -       | Binary serialization    |
+| `serde`        | -       | Serialization framework |
+| `nutype`       | 0.6     | Validated string types  |
+| `thiserror`    | -       | Error handling          |
+
+### keva_gui
+
+| Crate    | Version | Purpose      |
+|----------|---------|--------------|
+| `nucleo` | 0.5     | Fuzzy search |
 
 ---
 
@@ -192,8 +204,9 @@ Active  ──[trash_ttl expires]──►  Trash  ──[purge_ttl expires]─�
 | Test Module    | Location                    | Coverage                      |
 |----------------|-----------------------------|-------------------------------|
 | Database tests | `core/src/core/db/tests.rs` | CRUD, TTL, GC, transactions   |
-| KevaCore tests | `core/src/core/tests.rs`    | Integration tests             |
+| KevaCore tests | `core/src/core/tests.rs`    | Integration tests (132 tests) |
 | Type tests     | `core/src/types/*/tests.rs` | Key, Value, Config validation |
+| Search tests   | `gui/src/search/tests.rs`   | Fuzzy search, index mutations |
 
 ---
 
@@ -209,20 +222,19 @@ Active  ──[trash_ttl expires]──►  Trash  ──[purge_ttl expires]─�
 
 ### From Planned.md (Future Scope)
 
-| Feature                                 | Status                                        |
-|-----------------------------------------|-----------------------------------------------|
-| CLI interface                           | Placeholder exists, not v1 scope              |
-| Regex search mode (GUI exposure)        | Implemented in core, awaiting GUI integration |
-| Rich format support (HTML, RTF, images) | Not implemented                               |
-| Value content search                    | Not implemented                               |
-| Binary output for programmatic access   | Not implemented                               |
+| Feature                                 | Status                           |
+|-----------------------------------------|----------------------------------|
+| CLI interface                           | Placeholder exists, not v1 scope |
+| Regex search mode                       | Not implemented                  |
+| Rich format support (HTML, RTF, images) | Not implemented                  |
+| Value content search                    | Not implemented                  |
 
 ---
 
 ## Architecture Summary
 
 ```
-KevaCore (Orchestrator)
+keva_core (Storage Layer)
 ├── Database (redb)
 │   ├── Main Table: Key → VersionedValue
 │   ├── TRASHED_TTL Table
@@ -230,18 +242,20 @@ KevaCore (Orchestrator)
 ├── FileStorage
 │   ├── Inline data (< threshold) in DB
 │   └── Blob data with BLAKE3 addressing
-├── SearchEngine
-│   ├── Nucleo fuzzy search (v1 GUI)
-│   ├── Regex search (implemented, future GUI)
-│   └── Incremental index
 └── Clipboard
     └── Cross-platform I/O
+
+keva_gui (UI Layer)
+└── SearchEngine
+    ├── Nucleo fuzzy search
+    ├── Non-blocking tick-based API
+    └── Zero-copy result iteration
 ```
 
 **Key Design Decisions**:
 
 1. **Content-Addressable Storage**: BLAKE3 enables deduplication
-2. **TTL-on-Read**: Lifecycle states computed at query time
-3. **Incremental Search**: Avoids full index rebuilds
+2. **GC as Source of Truth**: State transitions only happen during maintenance
+3. **Non-Blocking Search**: GUI-owned search with callback notifications
 4. **Single Writer Model**: redb supports multi-reader/single-writer
 5. **Versioned Values**: Supports future schema migrations

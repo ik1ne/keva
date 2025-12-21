@@ -103,9 +103,7 @@ Each key displays on hover/selection:
 - **Ranking:** Exact match > Prefix > Substring > Subsequence
 - **Case Sensitivity:** Smart case (case-insensitive unless query contains uppercase)
 - **Trash Handling:** Trash items included but ranked at bottom with 🗑️ icon
-- **TTL Filtering:**
-    - Items past trash TTL shown as trash (even if GC hasn't run)
-    - Items past purge TTL excluded from results
+- **Stale Items:** Items past TTL remain visible until GC runs (GC is the single source of truth for state transitions)
 
 ### Keyboard Shortcuts
 
@@ -228,9 +226,11 @@ TTL expiration is based on `last_accessed`. Operations that update `last_accesse
 - Moves items from Active to Trash based on TTL
 - Permanently removes items past purge TTL
 - Reclaims storage space from deleted blobs
-- May perform in-memory maintenance tasks (e.g., search index compaction) to avoid heavy work during active UI interaction
+- May perform in-memory maintenance tasks (e.g., search index compaction) to avoid heavy work during active UI
+  interaction
 
 Triggers:
+
 - Window hide
 - App quit
 - Periodically while running (configurable; default: 1 day)

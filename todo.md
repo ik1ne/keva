@@ -8,8 +8,10 @@ describes the GUI implementation using egui/eframe.
 **Reference documents:**
 
 - `Spec.md` - Product specification (source of truth for behavior)
-- `implementation_detail.md` - keva_core API reference
+- `implementation_detail.md` - keva_core and keva_gui API reference
 - `Planned.md` - Future features (not in scope)
+
+**Note:** Search functionality lives in `keva_gui::search`, not `keva_core`.
 
 **Project structure:**
 
@@ -26,11 +28,17 @@ keva/
 
 ## Dependencies
 
-Add to `gui/Cargo.toml`:
+Current `gui/Cargo.toml` dependencies:
 
 ```toml
 [dependencies]
 keva_core = { path = "../core" }
+nucleo = "0.5"  # For search
+```
+
+Additional dependencies needed for GUI:
+
+```toml
 eframe = "0.29"
 egui = "0.29"
 toml = "0.8"
@@ -140,14 +148,16 @@ pub enum DeleteStyle {
 **Tasks:**
 
 1. Add `search_query: String` to `KevaApp` state
-2. Bind search bar input to `search_query`
-3. When `search_query` is non-empty:
-    - Call `keva_core.search(query, timeout_ms)`
-    - Display results instead of full key list
-    - Maintain ranking order from search results
-4. When `search_query` is empty:
+2. Create `SearchEngine` instance in `KevaApp` (from `keva_gui::search`)
+3. Bind search bar input to `search_query`
+4. When `search_query` changes:
+    - Call `search_engine.set_query(SearchQuery::Fuzzy(query))`
+5. Each frame:
+    - Call `search_engine.tick()` for non-blocking updates
+    - Get results via `search_engine.active_results().iter()` and `trashed_results().iter()`
+6. When `search_query` is empty:
     - Show all keys (active + trashed)
-5. Clear selection when search query changes
+7. Clear selection when search query changes
 
 **Acceptance criteria:**
 
@@ -164,7 +174,7 @@ pub enum DeleteStyle {
 
 **Tasks:**
 
-1. When key selected, call `keva_core.get(key, now)`
+1. When key selected, call `keva_core.get(key)`
 2. Display based on value type:
     - **Text:** Show text content in read-only text area
     - **Files:** Show file list with names and sizes
@@ -224,7 +234,7 @@ pub enum DeleteStyle {
     - Click button → key text becomes editable
     - Enter confirms, Escape cancels
     - If new key exists, show confirmation dialog
-    - Call `keva_core.rename(old, new, overwrite, now)`
+    - Call `keva_core.rename(old, new, overwrite)`
 3. Delete flow:
     - Check `config.delete_style`
     - If `Soft`: call `keva_core.trash(key, now)`
@@ -335,7 +345,7 @@ impl KevaCore {
 
 1. On window close event:
     - Trigger auto-save if pending edits
-    - Call `keva_core.gc(now)`
+    - Call `keva_core.maintenance(now)`
     - Exit application
 2. Ensure single-instance behavior (optional for v1):
     - Check for existing instance on launch
@@ -373,7 +383,10 @@ gui/
 
 ## Notes
 
-- Use `std::time::Instant::now()` for `now` parameter in keva_core calls that need timestamp
-- Convert to appropriate timestamp type as required by keva_core API
+- Use `std::time::SystemTime::now()` for `now` parameter in keva_core write/lifecycle operations
+- `get(key)` does not require timestamp (returns raw DB state)
+- `rename(old, new, overwrite)` does not require timestamp
+- Search is managed separately via `SearchEngine` from `keva_gui::search`
+- Sync search index manually: `search_engine.add_active(key)`, `search_engine.trash(key)`, etc.
 - Test with small dataset first, then verify performance with larger key counts
 - Refer to Spec.md for exact UI behavior details
