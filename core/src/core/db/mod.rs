@@ -189,7 +189,8 @@ impl Database {
 impl Database {
     /// Updates an existing key's clip_data, preserving created_at.
     ///
-    /// Returns `Err(NotFound)` if the key doesn't exist or is not Active.
+    /// Returns `Err(NotFound)` if the key doesn't exist.
+    /// Returns `Err(Trashed)` if the key is trashed.
     pub fn update(
         &mut self,
         key: &Key,
@@ -233,7 +234,8 @@ impl Database {
 
     /// Updates `last_accessed` timestamp to prevent garbage collection.
     ///
-    /// Returns `Err(NotFound)` if the key doesn't exist or is not Active.
+    /// Returns `Err(NotFound)` if the key doesn't exist.
+    /// Returns `Err(Trashed)` if the key is trashed.
     pub fn touch(&mut self, key: &Key, now: SystemTime) -> Result<(), DatabaseError> {
         let write_txn = self.db.begin_write()?;
 
@@ -314,7 +316,8 @@ impl Database {
     ///
     /// When removing the last file, converts to empty text (empty value = empty text).
     ///
-    /// Returns `Err(NotFound)` if the key doesn't exist, is not Active, or index is out of bounds.
+    /// Returns `Err(NotFound)` if the key doesn't exist or index is out of bounds.
+    /// Returns `Err(Trashed)` if the key is trashed.
     /// Returns `Err(TypeMismatch)` if the key contains Text instead of Files.
     ///
     /// Returns the removed file entry so the caller can clean up blob storage.
@@ -416,7 +419,8 @@ impl Database {
 impl Database {
     /// Soft-deletes a key by moving it from Active to Trash state.
     ///
-    /// Returns `Err(NotFound)` if the key doesn't exist or is not Active.
+    /// Returns `Err(NotFound)` if the key doesn't exist.
+    /// Returns `Err(Trashed)` if the key is already trashed.
     pub fn trash(&mut self, key: &Key, now: SystemTime) -> Result<(), DatabaseError> {
         let write_txn = self.db.begin_write()?;
 
