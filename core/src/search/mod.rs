@@ -9,9 +9,11 @@
 //! - Heavy compaction/rebuild runs during periodic maintenance, not on every search.
 
 use crate::types::Key;
-use nucleo::{Config as NucleoConfig, Matcher, Nucleo, Utf32String};
+use nucleo::{Config as NucleoConfig, Nucleo, Utf32String};
 use std::collections::HashSet;
+use std::ops::{Bound, RangeBounds};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use thiserror::Error;
 
 /// Query type for search.
@@ -22,12 +24,11 @@ pub enum SearchQuery {
     Fuzzy(String),
 }
 
-/// Search result with key, score, and trash status.
+/// Search results separated by lifecycle state.
 #[derive(Debug, Clone)]
-pub struct SearchResult {
-    pub key: Key,
-    pub score: u32,
-    pub is_trash: bool,
+pub struct SearchResults {
+    pub active: Vec<Key>,
+    pub trashed: Vec<Key>,
 }
 
 /// Case matching behavior for search.
@@ -43,19 +44,12 @@ pub enum CaseMatching {
 }
 
 /// Configuration for search behavior.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct SearchConfig {
     pub case_matching: CaseMatching,
     pub unicode_normalization: bool,
-}
-
-impl SearchConfig {
-    pub fn new() -> Self {
-        Self {
-            case_matching: CaseMatching::Smart,
-            unicode_normalization: true,
-        }
-    }
+    /// Number of pending deletions before triggering index rebuild.
+    pub rebuild_threshold: usize,
 }
 
 /// Search error type.
@@ -128,11 +122,23 @@ impl Index {
     }
 
     fn rebuild(&mut self) {
+        // Compute surviving keys before clearing state.
+        let surviving: HashSet<Key> = self
+            .injected_keys
+            .difference(&self.tombstones)
+            .cloned()
+            .collect();
+
         self.nucleo.restart(true);
         self.pending_deletions = 0;
 
+        // Update tracking sets to reflect the new Nucleo state.
+        // This ensures insert() works correctly for previously-tombstoned keys.
+        self.injected_keys = surviving;
+        self.tombstones.clear();
+
         let injector = self.nucleo.injector();
-        for key in self.injected_keys.difference(&self.tombstones) {
+        for key in &self.injected_keys {
             let key_clone = key.clone();
             injector.push(key_clone, |item, cols| {
                 cols[0] = Utf32String::from(item.as_str());
@@ -153,8 +159,7 @@ pub(crate) struct SearchEngine {
 impl SearchEngine {
     /// Creates a new search engine with initial keys.
     pub(crate) fn new(active: Vec<Key>, trashed: Vec<Key>, config: SearchConfig) -> Self {
-        // Threshold can be tuned; default is conservative to avoid frequent rebuilds.
-        let rebuild_threshold = 100;
+        let rebuild_threshold = config.rebuild_threshold;
 
         Self {
             active: Index::new(active, rebuild_threshold),
@@ -177,12 +182,6 @@ impl SearchEngine {
         self.trash.insert(key);
     }
 
-    /// Removes a key from both indexes (purge).
-    pub(crate) fn remove(&mut self, key: &Key) {
-        self.active.remove(key);
-        self.trash.remove(key);
-    }
-
     /// Moves a key from active to trashed.
     pub(crate) fn trash(&mut self, key: &Key) {
         self.active.remove(key);
@@ -193,6 +192,12 @@ impl SearchEngine {
     pub(crate) fn restore(&mut self, key: &Key) {
         self.trash.remove(key);
         self.active.insert(key.clone());
+    }
+
+    /// Removes a key from both indexes (purge).
+    pub(crate) fn remove(&mut self, key: &Key) {
+        self.active.remove(key);
+        self.trash.remove(key);
     }
 
     /// Renames a key within whichever index it is currently present in.
@@ -209,61 +214,68 @@ impl SearchEngine {
         }
     }
 
-    /// Performs search index maintenance.
-    ///
-    /// Intended to be called during `KevaCore::maintenance(...)` to avoid heavy work
-    /// during active UI interactions.
-    pub(crate) fn maintenance_compact(&mut self) {
-        self.active.rebuild_if_needed();
-        self.trash.rebuild_if_needed();
-    }
-
     /// Searches for keys matching the query.
     ///
-    /// Returns active results first, then trash results.
+    /// Returns results separated into active and trashed containers.
+    /// Use `active_range` and `trashed_range` to limit/paginate results (e.g., `0..10` or `..` for all).
     pub(crate) fn search(
         &mut self,
         query: SearchQuery,
         timeout_ms: u64,
-    ) -> Result<Vec<SearchResult>, SearchError> {
+        active_range: impl RangeBounds<usize>,
+        trashed_range: impl RangeBounds<usize>,
+    ) -> Result<SearchResults, SearchError> {
+        let active_bounds = Self::to_bounds(&active_range);
+        let trashed_bounds = Self::to_bounds(&trashed_range);
+
         match query {
-            SearchQuery::Fuzzy(pattern) => Ok(self.search_fuzzy(&pattern, timeout_ms)),
+            SearchQuery::Fuzzy(pattern) => {
+                Ok(self.search_fuzzy(&pattern, timeout_ms, active_bounds, trashed_bounds))
+            }
         }
     }
 
-    fn search_fuzzy(&mut self, pattern: &str, timeout_ms: u64) -> Vec<SearchResult> {
-        let mut out = Vec::new();
+    fn to_bounds(range: &impl RangeBounds<usize>) -> (usize, usize) {
+        let start = match range.start_bound() {
+            Bound::Included(&n) => n,
+            Bound::Excluded(&n) => n.saturating_add(1),
+            Bound::Unbounded => 0,
+        };
+        let end = match range.end_bound() {
+            Bound::Included(&n) => n.saturating_add(1),
+            Bound::Excluded(&n) => n,
+            Bound::Unbounded => usize::MAX,
+        };
+        (start, end)
+    }
+
+    fn search_fuzzy(
+        &mut self,
+        pattern: &str,
+        timeout_ms: u64,
+        active_bounds: (usize, usize),
+        trashed_bounds: (usize, usize),
+    ) -> SearchResults {
+        let deadline = Instant::now() + Duration::from_millis(timeout_ms);
 
         // Clone config so we don't hold an immutable borrow of `self` while mutably borrowing indexes.
         let config = self.config.clone();
 
-        // Active first.
-        out.extend(Self::search_fuzzy_in_index(
-            &config,
-            &mut self.active,
-            pattern,
-            timeout_ms,
-            false,
-        ));
-        // Trash last.
-        out.extend(Self::search_fuzzy_in_index(
-            &config,
-            &mut self.trash,
-            pattern,
-            timeout_ms,
-            true,
-        ));
+        let active =
+            Self::search_fuzzy_in_index(&config, &mut self.active, pattern, deadline, active_bounds);
+        let trashed =
+            Self::search_fuzzy_in_index(&config, &mut self.trash, pattern, deadline, trashed_bounds);
 
-        out
+        SearchResults { active, trashed }
     }
 
     fn search_fuzzy_in_index(
         config: &SearchConfig,
         index: &mut Index,
         pattern: &str,
-        timeout_ms: u64,
-        is_trash: bool,
-    ) -> Vec<SearchResult> {
+        deadline: Instant,
+        bounds: (usize, usize),
+    ) -> Vec<Key> {
         // Convert our CaseMatching to nucleo's.
         let case_matching = match config.case_matching {
             CaseMatching::Sensitive => nucleo::pattern::CaseMatching::Respect,
@@ -283,16 +295,22 @@ impl SearchEngine {
             .reparse(0, pattern, case_matching, normalization, false);
 
         loop {
-            let status = index.nucleo.tick(timeout_ms);
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            if remaining.is_zero() {
+                break;
+            }
+            let status = index.nucleo.tick(remaining.as_millis() as u64);
             if !status.running {
                 break;
             }
         }
 
         let snapshot = index.nucleo.snapshot();
-        let mut matcher = Matcher::new(NucleoConfig::DEFAULT);
 
         let mut results = Vec::new();
+        let mut count = 0usize;
+        let (skip, take) = (bounds.0, bounds.1.saturating_sub(bounds.0));
+
         for item in snapshot.matched_items(..) {
             let key: &Key = item.data;
 
@@ -301,20 +319,25 @@ impl SearchEngine {
                 continue;
             }
 
-            let score = snapshot
-                .pattern()
-                .column_pattern(0)
-                .score(item.matcher_columns[0].slice(..), &mut matcher)
-                .unwrap_or(0);
-
-            results.push(SearchResult {
-                key: key.clone(),
-                score,
-                is_trash,
-            });
+            if count >= skip {
+                results.push(key.clone());
+                if results.len() >= take {
+                    break;
+                }
+            }
+            count += 1;
         }
 
         results
+    }
+
+    /// Performs search index maintenance.
+    ///
+    /// Intended to be called during `KevaCore::maintenance(...)` to avoid heavy work
+    /// during active UI interactions.
+    pub(crate) fn maintenance_compact(&mut self) {
+        self.active.rebuild_if_needed();
+        self.trash.rebuild_if_needed();
     }
 }
 

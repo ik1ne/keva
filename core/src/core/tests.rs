@@ -21,7 +21,15 @@ mod common {
         };
 
         #[cfg(feature = "search")]
-        let storage = KevaCore::open(config, SearchConfig::default()).unwrap();
+        let storage = KevaCore::open(
+            config,
+            SearchConfig {
+                case_matching: crate::search::CaseMatching::Smart,
+                unicode_normalization: true,
+                rebuild_threshold: 100,
+            },
+        )
+        .unwrap();
 
         #[cfg(not(feature = "search"))]
         let storage = KevaCore::open(config).unwrap();
@@ -523,13 +531,15 @@ mod rename {
             .search(
                 crate::search::SearchQuery::Fuzzy("new/key".to_string()),
                 100,
+                ..,
+                ..,
             )
             .unwrap();
 
-        // Destination key should appear exactly once and not be marked as trash.
-        let matching: Vec<_> = results.iter().filter(|r| r.key == new_key).collect();
+        // Destination key should appear exactly once in active results.
+        let matching: Vec<_> = results.active.iter().filter(|k| *k == &new_key).collect();
         assert_eq!(matching.len(), 1);
-        assert!(!matching[0].is_trash);
+        assert!(results.trashed.iter().all(|k| k != &new_key));
 
         // Old key should be gone.
         assert!(storage.get(&old_key, now).unwrap().is_none());
@@ -773,17 +783,17 @@ mod restore {
 
         // Should be in trash index
         let results = storage
-            .search(crate::search::SearchQuery::Fuzzy("test".to_string()), 100)
+            .search(crate::search::SearchQuery::Fuzzy("test".to_string()), 100, .., ..)
             .unwrap();
-        assert!(results.iter().any(|r| r.is_trash && r.key == key));
+        assert!(results.trashed.iter().any(|k| k == &key));
 
         storage.restore(&key, now).unwrap();
 
         // Should be in active index now
         let results = storage
-            .search(crate::search::SearchQuery::Fuzzy("test".to_string()), 100)
+            .search(crate::search::SearchQuery::Fuzzy("test".to_string()), 100, .., ..)
             .unwrap();
-        assert!(results.iter().any(|r| !r.is_trash && r.key == key));
+        assert!(results.active.iter().any(|k| k == &key));
     }
 }
 
@@ -839,16 +849,17 @@ mod purge {
 
         // Should be in search index
         let results = storage
-            .search(crate::search::SearchQuery::Fuzzy("test".to_string()), 100)
+            .search(crate::search::SearchQuery::Fuzzy("test".to_string()), 100, .., ..)
             .unwrap();
-        assert!(results.iter().any(|r| r.key == key));
+        assert!(results.active.iter().any(|k| k == &key));
 
         storage.purge(&key).unwrap();
 
         // Should not be in search index anymore
         let results = storage
-            .search(crate::search::SearchQuery::Fuzzy("test".to_string()), 100)
+            .search(crate::search::SearchQuery::Fuzzy("test".to_string()), 100, .., ..)
             .unwrap();
-        assert!(!results.iter().any(|r| r.key == key));
+        assert!(!results.active.iter().any(|k| k == &key));
+        assert!(!results.trashed.iter().any(|k| k == &key));
     }
 }

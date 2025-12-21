@@ -526,14 +526,19 @@ impl KevaCore {
 
     /// Searches for keys matching the query.
     ///
-    /// Returns results sorted by score (fuzzy) or in arbitrary order (regex).
+    /// Returns results separated into active and trashed containers.
+    /// Use `active_range` and `trashed_range` to limit/paginate results (e.g., `0..10` or `..` for all).
     #[cfg(feature = "search")]
     pub fn search(
         &mut self,
         query: crate::search::SearchQuery,
         timeout_ms: u64,
-    ) -> Result<Vec<crate::search::SearchResult>, StorageError> {
-        Ok(self.search_engine.search(query, timeout_ms)?)
+        active_range: impl std::ops::RangeBounds<usize>,
+        trashed_range: impl std::ops::RangeBounds<usize>,
+    ) -> Result<crate::search::SearchResults, StorageError> {
+        Ok(self
+            .search_engine
+            .search(query, timeout_ms, active_range, trashed_range)?)
     }
 }
 

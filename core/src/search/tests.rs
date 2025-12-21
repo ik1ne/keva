@@ -8,19 +8,27 @@ mod common {
         Key::try_new(s.to_string()).unwrap()
     }
 
+    pub(super) fn test_config() -> SearchConfig {
+        SearchConfig {
+            case_matching: CaseMatching::Smart,
+            unicode_normalization: true,
+            rebuild_threshold: 100,
+        }
+    }
+
     pub(super) fn create_engine() -> SearchEngine {
-        SearchEngine::new(vec![], vec![], SearchConfig::default())
+        SearchEngine::new(vec![], vec![], test_config())
     }
 
     pub(super) fn create_engine_with_active(keys: &[&str]) -> SearchEngine {
         let active = keys.iter().map(|s| make_key(s)).collect();
-        SearchEngine::new(active, vec![], SearchConfig::default())
+        SearchEngine::new(active, vec![], test_config())
     }
 
     pub(super) fn create_engine_with_both(active: &[&str], trashed: &[&str]) -> SearchEngine {
         let active_keys = active.iter().map(|s| make_key(s)).collect();
         let trashed_keys = trashed.iter().map(|s| make_key(s)).collect();
-        SearchEngine::new(active_keys, trashed_keys, SearchConfig::default())
+        SearchEngine::new(active_keys, trashed_keys, test_config())
     }
 }
 
@@ -33,24 +41,24 @@ mod new {
         let mut engine = create_engine_with_active(&["key1", "key2"]);
 
         let results = engine
-            .search(SearchQuery::Fuzzy("key".to_string()), 100)
+            .search(SearchQuery::Fuzzy("key".to_string()), 100, .., ..)
             .unwrap();
 
-        assert_eq!(results.len(), 2);
-        assert!(results.iter().all(|r| !r.is_trash));
+        assert_eq!(results.active.len(), 2);
+        assert!(results.trashed.is_empty());
     }
 
     #[test]
     fn test_new_with_trashed_keys() {
         let trashed = vec![make_key("trashed1"), make_key("trashed2")];
-        let mut engine = SearchEngine::new(vec![], trashed, SearchConfig::default());
+        let mut engine = SearchEngine::new(vec![], trashed, test_config());
 
         let results = engine
-            .search(SearchQuery::Fuzzy("trashed".to_string()), 100)
+            .search(SearchQuery::Fuzzy("trashed".to_string()), 100, .., ..)
             .unwrap();
 
-        assert_eq!(results.len(), 2);
-        assert!(results.iter().all(|r| r.is_trash));
+        assert!(results.active.is_empty());
+        assert_eq!(results.trashed.len(), 2);
     }
 
     #[test]
@@ -58,15 +66,11 @@ mod new {
         let mut engine = create_engine_with_both(&["active"], &["trashed"]);
 
         let results = engine
-            .search(SearchQuery::Fuzzy("a".to_string()), 100)
+            .search(SearchQuery::Fuzzy("a".to_string()), 100, .., ..)
             .unwrap();
 
-        // Both should be searchable
-        let active_results: Vec<_> = results.iter().filter(|r| !r.is_trash).collect();
-        let trash_results: Vec<_> = results.iter().filter(|r| r.is_trash).collect();
-
-        assert_eq!(active_results.len(), 1);
-        assert_eq!(trash_results.len(), 1);
+        assert_eq!(results.active.len(), 1);
+        assert_eq!(results.trashed.len(), 1);
     }
 
     #[test]
@@ -74,10 +78,11 @@ mod new {
         let mut engine = create_engine();
 
         let results = engine
-            .search(SearchQuery::Fuzzy("anything".to_string()), 100)
+            .search(SearchQuery::Fuzzy("anything".to_string()), 100, .., ..)
             .unwrap();
 
-        assert!(results.is_empty());
+        assert!(results.active.is_empty());
+        assert!(results.trashed.is_empty());
     }
 }
 
@@ -92,11 +97,11 @@ mod add_active {
         engine.add_active(make_key("new_key"));
 
         let results = engine
-            .search(SearchQuery::Fuzzy("new_key".to_string()), 100)
+            .search(SearchQuery::Fuzzy("new_key".to_string()), 100, .., ..)
             .unwrap();
 
-        assert_eq!(results.len(), 1);
-        assert!(!results[0].is_trash);
+        assert_eq!(results.active.len(), 1);
+        assert!(results.trashed.is_empty());
     }
 
     #[test]
@@ -105,18 +110,19 @@ mod add_active {
 
         // Verify key is in trash
         let before = engine
-            .search(SearchQuery::Fuzzy("key".to_string()), 100)
+            .search(SearchQuery::Fuzzy("key".to_string()), 100, .., ..)
             .unwrap();
-        assert!(before[0].is_trash);
+        assert!(before.active.is_empty());
+        assert_eq!(before.trashed.len(), 1);
 
         // Add as active should move it from trash
         engine.add_active(make_key("key"));
 
         let after = engine
-            .search(SearchQuery::Fuzzy("key".to_string()), 100)
+            .search(SearchQuery::Fuzzy("key".to_string()), 100, .., ..)
             .unwrap();
-        assert_eq!(after.len(), 1);
-        assert!(!after[0].is_trash);
+        assert_eq!(after.active.len(), 1);
+        assert!(after.trashed.is_empty());
     }
 
     #[test]
@@ -127,11 +133,11 @@ mod add_active {
         engine.add_active(make_key("key")); // Add again
 
         let results = engine
-            .search(SearchQuery::Fuzzy("key".to_string()), 100)
+            .search(SearchQuery::Fuzzy("key".to_string()), 100, .., ..)
             .unwrap();
 
         // Should only appear once
-        assert_eq!(results.len(), 1);
+        assert_eq!(results.active.len(), 1);
     }
 }
 
@@ -145,17 +151,18 @@ mod trash {
 
         // Verify key is active
         let before = engine
-            .search(SearchQuery::Fuzzy("key".to_string()), 100)
+            .search(SearchQuery::Fuzzy("key".to_string()), 100, .., ..)
             .unwrap();
-        assert!(!before[0].is_trash);
+        assert_eq!(before.active.len(), 1);
+        assert!(before.trashed.is_empty());
 
         engine.trash(&make_key("key"));
 
         let after = engine
-            .search(SearchQuery::Fuzzy("key".to_string()), 100)
+            .search(SearchQuery::Fuzzy("key".to_string()), 100, .., ..)
             .unwrap();
-        assert_eq!(after.len(), 1);
-        assert!(after[0].is_trash);
+        assert!(after.active.is_empty());
+        assert_eq!(after.trashed.len(), 1);
     }
 
     #[test]
@@ -166,10 +173,10 @@ mod trash {
         engine.trash(&make_key("key"));
 
         let results = engine
-            .search(SearchQuery::Fuzzy("key".to_string()), 100)
+            .search(SearchQuery::Fuzzy("key".to_string()), 100, .., ..)
             .unwrap();
-        assert_eq!(results.len(), 1);
-        assert!(results[0].is_trash);
+        assert!(results.active.is_empty());
+        assert_eq!(results.trashed.len(), 1);
     }
 }
 
@@ -184,10 +191,10 @@ mod restore {
         engine.restore(&make_key("key"));
 
         let results = engine
-            .search(SearchQuery::Fuzzy("key".to_string()), 100)
+            .search(SearchQuery::Fuzzy("key".to_string()), 100, .., ..)
             .unwrap();
-        assert_eq!(results.len(), 1);
-        assert!(!results[0].is_trash);
+        assert_eq!(results.active.len(), 1);
+        assert!(results.trashed.is_empty());
     }
 
     #[test]
@@ -198,10 +205,10 @@ mod restore {
         engine.restore(&make_key("key"));
 
         let results = engine
-            .search(SearchQuery::Fuzzy("key".to_string()), 100)
+            .search(SearchQuery::Fuzzy("key".to_string()), 100, .., ..)
             .unwrap();
-        assert_eq!(results.len(), 1);
-        assert!(!results[0].is_trash);
+        assert_eq!(results.active.len(), 1);
+        assert!(results.trashed.is_empty());
     }
 
     #[test]
@@ -210,25 +217,26 @@ mod restore {
 
         // Initially active
         let r1 = engine
-            .search(SearchQuery::Fuzzy("foo".to_string()), 100)
+            .search(SearchQuery::Fuzzy("foo".to_string()), 100, .., ..)
             .unwrap();
-        assert!(r1.iter().any(|r| r.key.as_str() == "foo" && !r.is_trash));
+        assert!(r1.active.iter().any(|k| k.as_str() == "foo"));
+        assert!(r1.trashed.is_empty());
 
         // Trash it
         engine.trash(&make_key("foo"));
         let r2 = engine
-            .search(SearchQuery::Fuzzy("foo".to_string()), 100)
+            .search(SearchQuery::Fuzzy("foo".to_string()), 100, .., ..)
             .unwrap();
-        assert!(r2.iter().any(|r| r.key.as_str() == "foo" && r.is_trash));
-        assert!(!r2.iter().any(|r| r.key.as_str() == "foo" && !r.is_trash));
+        assert!(r2.active.is_empty());
+        assert!(r2.trashed.iter().any(|k| k.as_str() == "foo"));
 
         // Restore it
         engine.restore(&make_key("foo"));
         let r3 = engine
-            .search(SearchQuery::Fuzzy("foo".to_string()), 100)
+            .search(SearchQuery::Fuzzy("foo".to_string()), 100, .., ..)
             .unwrap();
-        assert!(r3.iter().any(|r| r.key.as_str() == "foo" && !r.is_trash));
-        assert!(!r3.iter().any(|r| r.key.as_str() == "foo" && r.is_trash));
+        assert!(r3.active.iter().any(|k| k.as_str() == "foo"));
+        assert!(r3.trashed.is_empty());
     }
 }
 
@@ -243,9 +251,10 @@ mod remove {
         engine.remove(&make_key("key"));
 
         let results = engine
-            .search(SearchQuery::Fuzzy("key".to_string()), 100)
+            .search(SearchQuery::Fuzzy("key".to_string()), 100, .., ..)
             .unwrap();
-        assert!(results.is_empty());
+        assert!(results.active.is_empty());
+        assert!(results.trashed.is_empty());
     }
 
     #[test]
@@ -255,9 +264,10 @@ mod remove {
         engine.remove(&make_key("key"));
 
         let results = engine
-            .search(SearchQuery::Fuzzy("key".to_string()), 100)
+            .search(SearchQuery::Fuzzy("key".to_string()), 100, .., ..)
             .unwrap();
-        assert!(results.is_empty());
+        assert!(results.active.is_empty());
+        assert!(results.trashed.is_empty());
     }
 
     #[test]
@@ -268,10 +278,10 @@ mod remove {
         engine.remove(&make_key("k2"));
 
         let results = engine
-            .search(SearchQuery::Fuzzy("k".to_string()), 100)
+            .search(SearchQuery::Fuzzy("k".to_string()), 100, .., ..)
             .unwrap();
-        assert!(!results.iter().any(|x| x.key.as_str() == "k"));
-        assert!(!results.iter().any(|x| x.key.as_str() == "k2"));
+        assert!(!results.active.iter().any(|k| k.as_str() == "k"));
+        assert!(!results.trashed.iter().any(|k| k.as_str() == "k2"));
     }
 
     #[test]
@@ -288,45 +298,19 @@ mod search {
     use super::*;
 
     #[test]
-    fn test_search_active_results_first() {
+    fn test_search_separates_active_and_trashed() {
         let mut engine = create_engine_with_both(&["a1", "a2"], &["t1"]);
 
         let results = engine
-            .search(SearchQuery::Fuzzy("1".to_string()), 100)
+            .search(SearchQuery::Fuzzy("1".to_string()), 100, .., ..)
             .unwrap();
 
-        // Active results should come first
-        let keys: Vec<(&str, bool)> = results
-            .iter()
-            .map(|r| (r.key.as_str(), r.is_trash))
-            .collect();
+        // Active and trashed results are in separate containers
+        let active_keys: Vec<&str> = results.active.iter().map(|k| k.as_str()).collect();
+        let trashed_keys: Vec<&str> = results.trashed.iter().map(|k| k.as_str()).collect();
 
-        assert!(keys.contains(&("a1", false)));
-        assert!(keys.contains(&("t1", true)));
-
-        // Find positions
-        let active_pos = keys.iter().position(|k| k == &("a1", false)).unwrap();
-        let trash_pos = keys.iter().position(|k| k == &("t1", true)).unwrap();
-        assert!(active_pos < trash_pos);
-    }
-
-    #[test]
-    fn test_search_returns_scores() {
-        let mut engine = create_engine_with_active(&["exact_match", "partial"]);
-
-        let results = engine
-            .search(SearchQuery::Fuzzy("exact_match".to_string()), 100)
-            .unwrap();
-
-        // Exact match should have higher score
-        let exact = results.iter().find(|r| r.key.as_str() == "exact_match");
-        let partial = results.iter().find(|r| r.key.as_str() == "partial");
-
-        assert!(exact.is_some());
-        // Partial may or may not match; if it does, exact should score higher
-        if let Some(p) = partial {
-            assert!(exact.unwrap().score >= p.score);
-        }
+        assert!(active_keys.contains(&"a1"));
+        assert!(trashed_keys.contains(&"t1"));
     }
 
     #[test]
@@ -334,11 +318,11 @@ mod search {
         let mut engine = create_engine_with_active(&["key1", "key2"]);
 
         let results = engine
-            .search(SearchQuery::Fuzzy(String::new()), 100)
+            .search(SearchQuery::Fuzzy(String::new()), 100, .., ..)
             .unwrap();
 
         // Empty pattern matches everything
-        assert_eq!(results.len(), 2);
+        assert_eq!(results.active.len(), 2);
     }
 
     #[test]
@@ -346,10 +330,11 @@ mod search {
         let mut engine = create_engine_with_active(&["apple", "banana"]);
 
         let results = engine
-            .search(SearchQuery::Fuzzy("xyz".to_string()), 100)
+            .search(SearchQuery::Fuzzy("xyz".to_string()), 100, .., ..)
             .unwrap();
 
-        assert!(results.is_empty());
+        assert!(results.active.is_empty());
+        assert!(results.trashed.is_empty());
     }
 }
 
@@ -362,6 +347,7 @@ mod config {
         let config = SearchConfig {
             case_matching: CaseMatching::Sensitive,
             unicode_normalization: true,
+            rebuild_threshold: 100,
         };
         let mut engine = SearchEngine::new(
             vec![make_key("TestKey"), make_key("testkey")],
@@ -371,10 +357,10 @@ mod config {
 
         // Should only match "TestKey" with capital T
         let results = engine
-            .search(SearchQuery::Fuzzy("Test".to_string()), 100)
+            .search(SearchQuery::Fuzzy("Test".to_string()), 100, .., ..)
             .unwrap();
 
-        let keys: Vec<&str> = results.iter().map(|r| r.key.as_str()).collect();
+        let keys: Vec<&str> = results.active.iter().map(|k| k.as_str()).collect();
         assert!(keys.contains(&"TestKey"));
         // "testkey" should not match when searching for "Test" (capital T)
     }
@@ -384,6 +370,7 @@ mod config {
         let config = SearchConfig {
             case_matching: CaseMatching::Insensitive,
             unicode_normalization: true,
+            rebuild_threshold: 100,
         };
         let mut engine = SearchEngine::new(
             vec![make_key("TestKey"), make_key("testkey")],
@@ -392,11 +379,11 @@ mod config {
         );
 
         let results = engine
-            .search(SearchQuery::Fuzzy("TEST".to_string()), 100)
+            .search(SearchQuery::Fuzzy("TEST".to_string()), 100, .., ..)
             .unwrap();
 
         // Both should match
-        assert_eq!(results.len(), 2);
+        assert_eq!(results.active.len(), 2);
     }
 
     #[test]
@@ -404,6 +391,7 @@ mod config {
         let config = SearchConfig {
             case_matching: CaseMatching::Smart,
             unicode_normalization: true,
+            rebuild_threshold: 100,
         };
         let mut engine = SearchEngine::new(
             vec![make_key("TestKey"), make_key("testkey")],
@@ -413,10 +401,10 @@ mod config {
 
         // Lowercase query should match both (case-insensitive)
         let results = engine
-            .search(SearchQuery::Fuzzy("test".to_string()), 100)
+            .search(SearchQuery::Fuzzy("test".to_string()), 100, .., ..)
             .unwrap();
 
-        assert_eq!(results.len(), 2);
+        assert_eq!(results.active.len(), 2);
     }
 
     #[test]
@@ -424,6 +412,7 @@ mod config {
         let config = SearchConfig {
             case_matching: CaseMatching::Smart,
             unicode_normalization: true,
+            rebuild_threshold: 100,
         };
         let mut engine = SearchEngine::new(
             vec![make_key("TestKey"), make_key("testkey")],
@@ -433,11 +422,11 @@ mod config {
 
         // Query with uppercase should be case-sensitive
         let results = engine
-            .search(SearchQuery::Fuzzy("Test".to_string()), 100)
+            .search(SearchQuery::Fuzzy("Test".to_string()), 100, .., ..)
             .unwrap();
 
         // With smart case, "Test" matches "TestKey" but not "testkey"
-        let keys: Vec<&str> = results.iter().map(|r| r.key.as_str()).collect();
+        let keys: Vec<&str> = results.active.iter().map(|k| k.as_str()).collect();
         assert!(keys.contains(&"TestKey"));
     }
 }
@@ -458,11 +447,11 @@ mod maintenance {
 
         // Search should still work correctly
         let results = engine
-            .search(SearchQuery::Fuzzy("key".to_string()), 100)
+            .search(SearchQuery::Fuzzy("key".to_string()), 100, .., ..)
             .unwrap();
 
-        assert_eq!(results.len(), 2);
-        let keys: Vec<&str> = results.iter().map(|r| r.key.as_str()).collect();
+        assert_eq!(results.active.len(), 2);
+        let keys: Vec<&str> = results.active.iter().map(|k| k.as_str()).collect();
         assert!(!keys.contains(&"key1"));
         assert!(keys.contains(&"key2"));
         assert!(keys.contains(&"key3"));
@@ -487,9 +476,47 @@ mod maintenance {
 
         // Remaining keys should still be searchable
         let results = engine
-            .search(SearchQuery::Fuzzy("key".to_string()), 100)
+            .search(SearchQuery::Fuzzy("key".to_string()), 100, .., ..)
             .unwrap();
 
-        assert_eq!(results.len(), 40);
+        assert_eq!(results.active.len(), 40);
+    }
+
+    /// Re-adding a previously-removed key after rebuild must work.
+    ///
+    /// Regression test: before the fix, rebuild left stale entries in
+    /// `injected_keys` and `tombstones`, causing re-added keys to be
+    /// "revived" in tracking but not re-injected into Nucleo.
+    #[test]
+    fn test_insert_after_rebuild_of_removed_key() {
+        let mut engine = create_engine();
+
+        // Add target key
+        engine.add_active(make_key("target"));
+
+        // Add and remove many keys to trigger rebuild
+        for i in 0..110 {
+            engine.add_active(make_key(&format!("filler{}", i)));
+        }
+        for i in 0..110 {
+            engine.remove(&make_key(&format!("filler{}", i)));
+        }
+
+        // Remove target key (now tombstoned)
+        engine.remove(&make_key("target"));
+
+        // Trigger rebuild
+        engine.maintenance_compact();
+
+        // Re-add the same key
+        engine.add_active(make_key("target"));
+
+        // Key must be searchable
+        let results = engine
+            .search(SearchQuery::Fuzzy("target".to_string()), 100, .., ..)
+            .unwrap();
+
+        assert_eq!(results.active.len(), 1);
+        assert_eq!(results.active[0].as_str(), "target");
     }
 }
