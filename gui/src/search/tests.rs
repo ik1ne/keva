@@ -539,6 +539,7 @@ mod tick_behavior {
     use super::common::*;
     use super::*;
     use std::sync::atomic::{AtomicBool, Ordering};
+    use std::time::Duration;
 
     #[test]
     fn test_tick_zero_is_non_blocking() {
@@ -571,7 +572,7 @@ mod tick_behavior {
             if engine.is_finished() {
                 break;
             }
-            std::thread::sleep(std::time::Duration::from_millis(10));
+            std::thread::sleep(Duration::from_millis(10));
         }
 
         // Callback should have been invoked
@@ -590,7 +591,7 @@ mod tick_behavior {
             if engine.is_finished() {
                 break;
             }
-            std::thread::sleep(std::time::Duration::from_millis(10));
+            std::thread::sleep(Duration::from_millis(10));
         }
 
         assert!(engine.is_finished());

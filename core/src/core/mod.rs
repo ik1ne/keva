@@ -14,7 +14,7 @@ use crate::types::value::versioned_value::latest_value::{
 use crate::types::{Config, Key};
 use std::borrow::Cow;
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 pub(crate) mod db;
@@ -171,7 +171,7 @@ impl KevaCore {
     pub fn add_files(
         &mut self,
         key: &Key,
-        file_paths: impl IntoIterator<Item = impl AsRef<std::path::Path>>,
+        file_paths: impl IntoIterator<Item = impl AsRef<Path>>,
         now: SystemTime,
     ) -> Result<(), StorageError> {
         let key_path = key_to_path(key);
