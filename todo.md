@@ -3,7 +3,7 @@
 ## Context
 
 Keva is a local key-value store for clipboard-like data. The core library (`keva_core`) is implemented. This document
-describes the GUI implementation using egui/eframe.
+describes the GUI implementation using gpui (Zed's GPU-accelerated UI framework).
 
 **Reference documents:**
 
@@ -33,9 +33,10 @@ keva/
 # Core
 keva_core = { path = "../core" }
 nucleo = "0.5"
-eframe = "0.33"
+gpui = "0.2"
+gpui-component = "0.4"
 
-# System integration
+# System integration (future milestones)
 tray-icon = "0.21"
 global-hotkey = "0.7"
 
@@ -62,17 +63,18 @@ dirs = "5"
 
 ### M1: Window Skeleton + Custom Chrome ✓ (DONE)
 
-Already implemented with eframe 0.33.
+Implemented with gpui 0.2 + gpui-component 0.4.
 
 **Completed:**
 
-- Borderless window (`with_decorations(false)`)
-- 5px resize border + 3px drag border
+- Borderless window (`titlebar: None`)
+- 3px drag border (via `WindowControlArea::Drag`)
 - Search icon drag handle
-- Esc hides (when focused), Cmd+Q quits (when focused)
+- Esc minimizes globally (true hide to tray in M7)
 - Three-pane layout (search bar, key list, inspector)
+- Resizable left panel (150px min, 250px default)
 
-**Files:** `gui/src/app.rs`, `gui/src/theme.rs`, `gui/src/panels/*`
+**Files:** `gui/src/main.rs`, `gui/src/app.rs`, `gui/src/theme.rs`
 
 ---
 

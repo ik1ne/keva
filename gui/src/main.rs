@@ -1,32 +1,33 @@
 mod app;
-mod panels;
-mod search;
 mod theme;
 
 use app::KevaApp;
-use eframe::egui;
+use gpui::{px, size, App, AppContext, Application, Bounds, WindowBounds, WindowOptions};
+use gpui_component::Root;
+use theme::window_options;
 
-fn main() -> eframe::Result<()> {
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size(theme::WINDOW_DEFAULT_SIZE)
-            .with_min_inner_size(theme::WINDOW_MIN_SIZE)
-            .with_decorations(false)
-            .with_transparent(false),
-        persist_window: false,
-        // Disable vsync to reduce input latency
-        vsync: false,
-        ..Default::default()
-    };
+fn main() {
+    Application::new().run(|cx: &mut App| {
+        gpui_component::init(cx);
 
-    eframe::run_native(
-        "Keva",
-        options,
-        Box::new(|cc| {
-            // Force dark theme first, then apply our custom visuals
-            cc.egui_ctx.set_theme(egui::Theme::Dark);
-            theme::apply_theme(&cc.egui_ctx);
-            Ok(Box::new(KevaApp::new(cc)))
-        }),
-    )
+        // Global keystroke interceptor (fires before other handlers)
+        // Leak subscription to keep it alive for app lifetime
+        std::mem::forget(cx.intercept_keystrokes(|event, window, _cx| {
+            if event.keystroke.key.as_str() == "escape" {
+                window.minimize_window();
+            }
+        }));
+
+        let bounds = Bounds::centered(None, size(px(800.0), px(600.0)), cx);
+        let options = WindowOptions {
+            window_bounds: Some(WindowBounds::Windowed(bounds)),
+            ..window_options()
+        };
+
+        cx.open_window(options, |window, cx| {
+            let app_view = cx.new(|cx| KevaApp::new(window, cx));
+            cx.new(|cx| Root::new(app_view, window, cx))
+        })
+        .unwrap();
+    });
 }
