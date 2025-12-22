@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 keva_core = { path = "../core" }
 nucleo = "0.5"
+eframe = "0.33"
