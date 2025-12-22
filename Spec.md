@@ -155,14 +155,14 @@ Search bar and left pane selection are independent:
 - Shows text input with placeholder: `Write or paste value for "<key>"`
 - Accepts:
     - Text input → stored as plain text
-    - `Ctrl+V` with files → stored as files, shows preview
-    - `Ctrl+V` with plain text → inserted at cursor
+    - Paste (`Cmd+V` / `Ctrl+V`) with files → stored as files, shows preview
+    - Paste (`Cmd+V` / `Ctrl+V`) with plain text → inserted at cursor
     - Drag & drop file → stored as file contents, shows preview
 
 **Text Editing State (plain text value exists):**
 
 - Standard text editor behavior
-- `Ctrl+V`:
+- Paste (`Cmd+V` / `Ctrl+V`):
     - If clipboard contains plain text → insert at cursor
     - If clipboard contains only files → blocked, show hint: "Clear text to paste files"
 - Auto-save after 3 seconds of inactivity or on window hide
@@ -215,7 +215,7 @@ Each key displays on hover/selection:
 On very first launch (no config.toml exists):
 
 1. Show welcome dialog with:
-    - Brief explanation: "Keva runs in the background. Use Cmd+Shift+K to show the window."
+    - Brief explanation: "Keva runs in the background. Use Cmd+Shift+K (macOS) / Ctrl+Shift+K (Windows) to show the window."
     - Checkbox: "Launch Keva at login" (checked by default)
     - Button: "Get Started"
 2. If checkbox is checked, register login item
@@ -240,6 +240,9 @@ On very first launch (no config.toml exists):
 | Data      | Large File Threshold | Size limit before confirmation prompt |
 | Lifecycle | Trash TTL            | Days before items auto-trash          |
 | Lifecycle | Purge TTL            | Days before trashed items are deleted |
+
+**Note:** If tray icon is hidden and window is also hidden, user can still access settings by relaunching the app
+(which shows the existing instance's window) and pressing `Cmd+,` / `Ctrl+,`.
 
 ### Drag & Drop
 
