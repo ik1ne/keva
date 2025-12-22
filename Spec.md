@@ -49,6 +49,32 @@ Single-process application containing GUI window and keva-core storage layer.
 
 ## 4. GUI
 
+### Cross-Platform Consistency
+
+The UI is identical on macOS and Windows:
+
+- Custom-drawn window (no native decorations)
+- No title bar, close/minimize/maximize buttons
+- Same fonts, colors, and layout on all platforms
+- Only keyboard shortcuts differ (`Cmd` on macOS, `Ctrl` on Windows)
+
+### Window Behavior
+
+**Window Controls:**
+
+- `Esc` → Hide window (process stays alive in background)
+- `Cmd+Q` / `Alt+F4` → Quit app entirely (process terminates)
+
+**Resize and Move:**
+
+The window has a thin border area (approximately 4px total):
+
+- **Outer 1px:** Resize handle (standard edge resize behavior)
+- **Inner 2-3px:** Drag to move window
+
+Additionally, the search icon (🔍) in the search bar acts as a drag handle. Clicking it does nothing; dragging it moves
+the window.
+
 ### Layout
 
 Split pane with three components:
@@ -109,6 +135,9 @@ Each key displays on hover/selection:
 
 | State                             | Key           | Action                                            |
 |-----------------------------------|---------------|---------------------------------------------------|
+| Any                               | `Esc`         | Hide window (process stays alive)                 |
+| Any                               | `Cmd+Q`       | Quit app entirely (macOS)                         |
+| Any                               | `Alt+F4`      | Quit app entirely (Windows)                       |
 | Key selected in left pane         | `Shift+Enter` | Copy value to clipboard, hide window              |
 | Key selected in left pane         | `Enter`       | Focus right pane for editing                      |
 | No selection, search bar has text | `Enter`       | Focus right pane for editing (creates key if new) |
