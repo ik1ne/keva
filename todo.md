@@ -28,22 +28,25 @@ keva/
 
 ## Dependencies
 
+**Current (M1):**
 ```toml
 [dependencies]
-# Core
 keva_core = { path = "../core" }
 nucleo = "0.5"
 gpui = "0.2"
 gpui-component = "0.4"
+```
 
-# System integration (future milestones)
-tray-icon = "0.21"
-global-hotkey = "0.7"
-
-# Config
+**Future milestones will add:**
+```toml
+# Config (M2)
 toml = "0.8"
 serde = { version = "1", features = ["derive"] }
 dirs = "5"
+
+# System integration (M7-M10)
+tray-icon = "0.21"
+global-hotkey = "0.7"
 ```
 
 ---
@@ -120,7 +123,7 @@ Implemented with gpui 0.2 + gpui-component 0.4.
 **Tasks:**
 
 1. Fetch keys from `keva_core.active_keys()` and `keva_core.trashed_keys()`
-2. Render scrollable list using `egui::ScrollArea`
+2. Render scrollable list (gpui's scroll container or List component)
 3. Each key as selectable label
 4. Track selected key: `selected_key: Option<Key>`
 5. Trashed keys shown at bottom with 🗑️ prefix
@@ -362,7 +365,7 @@ Implemented with gpui 0.2 + gpui-component 0.4.
 
 **Tasks:**
 
-1. Enable drag-drop in eframe
+1. Enable drag-drop in gpui window
 2. Handle drop on right pane → store to target key
 3. Handle drop on left pane key → store to that key
 4. Check size against threshold, confirm if large
@@ -398,23 +401,20 @@ Implemented with gpui 0.2 + gpui-component 0.4.
 gui/
 ├── Cargo.toml
 └── src/
-    ├── main.rs           # Entry point, first-run detection
-    ├── app.rs            # KevaApp, main update loop
-    ├── config.rs         # GuiConfig, load/save/validate
-    ├── settings.rs       # Settings dialog
-    ├── tray.rs           # System tray integration
-    ├── hotkey.rs         # Global shortcut registration
-    ├── instance.rs       # Single instance handling
-    ├── startup.rs        # Launch at login
-    ├── panels/
-    │   ├── mod.rs
-    │   ├── search_bar.rs
-    │   ├── key_list.rs
-    │   └── inspector.rs
-    ├── search/           # (existing)
-    │   ├── mod.rs
-    │   └── tests.rs
-    └── theme.rs          # Colors, sizes, theme handling
+    ├── main.rs           # Entry point, global key interceptor, Root wrapper
+    ├── app.rs            # KevaApp (all UI rendering in one file for now)
+    ├── theme.rs          # Colors, sizes, window options
+    │
+    │   # Future milestones will add:
+    ├── config.rs         # M2: GuiConfig, load/save/validate
+    ├── settings.rs       # M12: Settings dialog
+    ├── tray.rs           # M7: System tray integration
+    ├── hotkey.rs         # M8: Global shortcut registration
+    ├── instance.rs       # M9: Single instance handling
+    ├── startup.rs        # M10: Launch at login
+    └── search/           # M4: Fuzzy search (nucleo)
+        ├── mod.rs
+        └── tests.rs
 ```
 
 ---
