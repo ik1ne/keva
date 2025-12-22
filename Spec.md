@@ -6,7 +6,7 @@ Keva is a local key-value store designed for clipboard-like data management. It 
 fuzzy search capabilities.
 
 - **Name:** Keva
-- **Platforms:** macOS (.app bundle), Windows (installer)
+- **Platforms:** macOS (.app bundle), Windows (installer with uninstaller)
 
 ## 2. Core Concepts
 
@@ -40,12 +40,41 @@ When clipboard contains both files and text, **files take priority** (text is di
 
 Single-process application containing GUI window and keva-core storage layer.
 
+**Process Behavior:**
+
+- Starts as background process (no window on launch)
+- No dock/taskbar icon
+- Menu bar icon (macOS) / System tray icon (Windows) visible by default
 - Window hidden keeps process alive in background
-- No persistent dock icon
-- Menu bar icon optional (configurable)
-- Search index built on launch, persists in memory while process runs
-- Relaunch app (Spotlight, double-click) → shows existing instance's window
-- Cmd+Q with window focused → quits app
+
+**Launch and Activation:**
+
+- Global shortcut `Cmd+Shift+K` (macOS) / `Ctrl+Shift+K` (Windows) shows window
+- Launch at login: user opts in via first-run dialog (see Section 4)
+    - macOS: Login Items via `SMAppService`
+    - Windows: Registry `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run`
+- Must appear correctly in OS startup settings (Task Manager on Windows, Login Items on macOS)
+
+**Single Instance:**
+
+- Only one instance runs at a time
+- Relaunch app (Spotlight, double-click) → activates existing instance's window
+- Implementation:
+    - Windows: Named mutex + `WM_COPYDATA` message
+    - macOS: Unix domain socket in data directory
+- If existing instance doesn't respond within 2 seconds: offer to force-quit and relaunch
+
+**In-Memory State:**
+
+- Search index built on launch, persists while process runs
+
+**Windows Uninstaller:**
+
+- Remove startup registry entry (`HKCU\...\Run`)
+- Remove application files
+- Prompt: "Delete all Keva data?" (config, database, blobs)
+    - Yes: Remove data directory
+    - No: Leave data directory intact
 
 ## 4. GUI
 
@@ -62,18 +91,46 @@ The UI is identical on macOS and Windows:
 
 **Window Controls:**
 
-- `Esc` → Hide window (process stays alive in background)
-- `Cmd+Q` / `Alt+F4` → Quit app entirely (process terminates)
+- `Cmd+Shift+K` / `Ctrl+Shift+K` → Show window (global shortcut, works when hidden)
+- `Esc` → Hide window (only when window is focused)
+- `Cmd+Q` / `Alt+F4` → Quit app entirely (only when window is focused)
+- Window does NOT close on focus loss (supports drag/drop and copy/paste workflows)
+- Tray icon left-click also toggles visibility
 
 **Resize and Move:**
 
-The window has a thin border area (approximately 4px total):
+The window has a thin border area (approximately 8px total):
 
-- **Outer 1px:** Resize handle (standard edge resize behavior)
-- **Inner 2-3px:** Drag to move window
+- **Outer 5px:** Resize handle (triggers OS-level resize)
+- **Inner 3px:** Drag to move window
 
 Additionally, the search icon (🔍) in the search bar acts as a drag handle. Clicking it does nothing; dragging it moves
 the window.
+
+**Window Positioning:**
+
+- First launch: Center of primary monitor
+- Subsequent launches: Remember last position and size per monitor
+    - Position stored keyed by monitor identifier
+    - If monitor configuration changes, center on current monitor
+- Multi-monitor: If remembered position is off-screen, center on monitor containing cursor
+
+### Tray Icon Behavior
+
+**Tooltip:** "Keva"
+
+**Left-click:** Toggle window visibility (show if hidden, hide if shown)
+
+**Right-click menu:**
+
+| Item            | Action                                    |
+|-----------------|-------------------------------------------|
+| Show Keva       | Show window (disabled if already visible) |
+| Settings...     | Open settings dialog                      |
+| ---             | Separator                                 |
+| Launch at Login | Checkbox toggle (synced with settings)    |
+| ---             | Separator                                 |
+| Quit Keva       | Terminate application                     |
 
 ### Layout
 
@@ -133,22 +190,56 @@ Each key displays on hover/selection:
 
 ### Keyboard Shortcuts
 
-| State                             | Key           | Action                                            |
-|-----------------------------------|---------------|---------------------------------------------------|
-| Any                               | `Esc`         | Hide window (process stays alive)                 |
-| Any                               | `Cmd+Q`       | Quit app entirely (macOS)                         |
-| Any                               | `Alt+F4`      | Quit app entirely (Windows)                       |
-| Key selected in left pane         | `Shift+Enter` | Copy value to clipboard, hide window              |
-| Key selected in left pane         | `Enter`       | Focus right pane for editing                      |
-| No selection, search bar has text | `Enter`       | Focus right pane for editing (creates key if new) |
-| Any                               | `Cmd+,`       | Close main window, open settings dialog           |
+| State                             | Key            | Action                                            |
+|-----------------------------------|----------------|---------------------------------------------------|
+| Global (even when hidden)         | `Cmd+Shift+K`  | Show window (macOS)                               |
+| Global (even when hidden)         | `Ctrl+Shift+K` | Show window (Windows)                             |
+| Window focused                    | `Esc`          | Hide window (process stays alive)                 |
+| Window focused                    | `Cmd+Q`        | Quit app entirely (macOS)                         |
+| Window focused                    | `Alt+F4`       | Quit app entirely (Windows)                       |
+| Key selected in left pane         | `Shift+Enter`  | Copy value to clipboard, hide window              |
+| Key selected in left pane         | `Enter`        | Focus right pane for editing                      |
+| No selection, search bar has text | `Enter`        | Focus right pane for editing (creates key if new) |
+| Window focused                    | `Cmd+,`        | Open settings dialog                              |
+
+### Keyboard Navigation
+
+| Key       | Action                     |
+|-----------|----------------------------|
+| `↑` / `↓` | Navigate key list          |
+| `Cmd+F`   | Focus search bar (macOS)   |
+| `Ctrl+F`  | Focus search bar (Windows) |
+
+### First-Run Experience
+
+On very first launch (no config.toml exists):
+
+1. Show welcome dialog with:
+    - Brief explanation: "Keva runs in the background. Use Cmd+Shift+K to show the window."
+    - Checkbox: "Launch Keva at login" (checked by default)
+    - Button: "Get Started"
+2. If checkbox is checked, register login item
+3. Create config.toml with user preferences
+4. Show main window
 
 ### Settings Dialog
 
-- Opened via `Cmd+,` (closes main window, opens settings popup)
-- Lists adjustable configuration options
+- Opened via `Cmd+,` or tray icon menu
 - Changes saved to config file on dialog close
 - Applied immediately to running application
+
+**Settings Categories:**
+
+| Category  | Setting              | Description                           |
+|-----------|----------------------|---------------------------------------|
+| General   | Theme                | Dark / Light / Follow System          |
+| General   | Launch at Login      | Toggle auto-start                     |
+| General   | Show Tray Icon       | Toggle tray icon visibility           |
+| Shortcuts | Global Shortcut      | Key combination to show window        |
+| Data      | Delete Style         | Soft (to trash) / Immediate           |
+| Data      | Large File Threshold | Size limit before confirmation prompt |
+| Lifecycle | Trash TTL            | Days before items auto-trash          |
+| Lifecycle | Purge TTL            | Days before trashed items are deleted |
 
 ### Drag & Drop
 
@@ -178,6 +269,22 @@ Directory structure:
 Location: `{data_dir}/config.toml`
 
 ```toml
+# Config version for migration support
+config_version = 1
+
+# Appearance: "dark", "light", or "system"
+theme = "system"
+
+# Global shortcut to show window
+# Format: "Modifier+Key" (e.g., "Cmd+Shift+K", "Ctrl+Shift+K")
+global_shortcut = "Cmd+Shift+K"  # or "Ctrl+Shift+K" on Windows
+
+# Start automatically at login
+launch_at_login = true
+
+# Show menu bar / system tray icon
+show_tray_icon = true
+
 # Delete behavior: "soft" (to trash) or "immediate" (permanent)
 delete_style = "soft"
 
@@ -189,6 +296,18 @@ trash_ttl = 2592000  # 30 days
 
 # Duration before trashed items are purged (seconds)
 purge_ttl = 604800  # 7 days
+
+# Window position and size per monitor (managed automatically)
+# Key format: "monitor_<identifier>" where identifier is OS-provided
+[window.default]
+width = 800
+height = 600
+
+[window.monitors."monitor_12345"]  # Example: specific monitor
+x = 100
+y = 100
+width = 800
+height = 600
 ```
 
 ### Config Validation
@@ -204,20 +323,17 @@ If config.toml is missing: created with defaults, no popup.
 
 ### Settings Reference
 
-| Setting                | Default  | Description                                                |
-|------------------------|----------|------------------------------------------------------------|
-| `delete_style`         | `"soft"` | `"soft"` = move to trash, `"immediate"` = permanent delete |
-| `large_file_threshold` | 256 MB   | Confirmation prompt for files exceeding this size          |
-| `trash_ttl`            | 30 days  | Time before inactive items move to trash                   |
-| `purge_ttl`            | 7 days   | Time before trashed items are permanently deleted          |
-
-### Future Settings (Not Yet Implemented)
-
-These settings will be added when corresponding features are implemented:
-
-- **Global Shortcut:** Key combination to show/hide window
-- **Launch at Login:** Toggle for auto-start
-- **Menu Bar Icon:** Toggle to show/hide menu bar icon
+| Setting                | Default             | Description                                                |
+|------------------------|---------------------|------------------------------------------------------------|
+| `config_version`       | `1`                 | Config format version for migrations                       |
+| `theme`                | `"system"`          | `"dark"`, `"light"`, or `"system"` (follow OS)             |
+| `global_shortcut`      | `"Cmd+Shift+K"`     | Key combination to show window (platform-specific default) |
+| `launch_at_login`      | `true`              | Start automatically at system login                        |
+| `show_tray_icon`       | `true`              | Show menu bar / system tray icon                           |
+| `delete_style`         | `"soft"`            | `"soft"` = move to trash, `"immediate"` = permanent delete |
+| `large_file_threshold` | `268435456` (256MB) | Confirmation prompt for files exceeding this size (bytes)  |
+| `trash_ttl`            | `2592000` (30 days) | Seconds before inactive items move to trash                |
+| `purge_ttl`            | `604800` (7 days)   | Seconds before trashed items are permanently deleted       |
 
 ## 6. Lifecycle Management
 
@@ -265,3 +381,38 @@ Triggers:
 - Periodically while running (configurable; default: 1 day)
 
 Note: Search results may be slightly outdated until maintenance runs.
+
+## 7. Error Handling
+
+### Global Shortcut Conflicts
+
+If the configured shortcut is already registered by another application:
+
+1. Show notification: "Shortcut Cmd+Shift+K is in use by another application"
+2. Open settings dialog with shortcut field focused
+3. User must choose a different shortcut or resolve the conflict externally
+
+### Database Errors
+
+| Error              | User Message                                       | Recovery Action                    |
+|--------------------|----------------------------------------------------|------------------------------------|
+| Database corrupted | "Database is corrupted. Create new database?"      | Backup old, create fresh           |
+| Disk full          | "Disk is full. Cannot save changes."               | Retry after user frees space       |
+| File locked        | "Database is locked by another process."           | Offer to force-quit other instance |
+| Permission denied  | "Cannot access data directory. Check permissions." | Show path, suggest fix             |
+
+### Auto-Save Failure
+
+If auto-save fails (disk full, permissions, etc.):
+
+1. Show non-blocking notification: "Failed to save changes"
+2. Keep unsaved changes in memory
+3. Retry on next edit or explicit save
+4. On window hide: warn user before hiding if unsaved changes exist
+
+### Large File Handling
+
+- Threshold applies **per file**, not total
+- Files exceeding threshold show confirmation: "File X is Y MB. Store anyway?"
+- **Hard maximum:** 1 GB per file (reject larger files with error message)
+- Multiple files: each checked individually against threshold
