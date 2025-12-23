@@ -92,38 +92,49 @@ void keva_free_key_list(KevaKeyList* list);
 
 ## Phase 1: Windows App (Pure Rust)
 
-### M1-win: Window Skeleton
+### M1-win: Window Skeleton ✅
 
 **Goal:** Basic borderless window with system tray.
+
+**Status:** Complete
 
 **Dependencies:**
 ```toml
 [dependencies]
 keva_core = { path = "../core" }
-windows = { version = "0.58", features = [...] }
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_System_LibraryLoader",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Controls",
+    "Win32_UI_Shell",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Dwm",
+] }
 ```
 
-**Tasks:**
+**Completed:**
 
-1. Create `app-windows` crate as `[[bin]]`
-2. Register window class, create borderless window
-3. Implement WM_NCHITTEST for resize edges
-4. System tray icon (Shell_NotifyIconW)
-5. Message loop with tray events
-6. Esc hides window, tray click shows
+1. ✅ Create `app-windows` crate as `[[bin]]`
+2. ✅ Register window class, create borderless window (WS_POPUP)
+3. ✅ Implement WM_NCHITTEST for resize edges
+4. ✅ System tray icon (Shell_NotifyIconW)
+5. ✅ Message loop with tray events
+6. ✅ Tray click toggles window visibility
+7. ⚠️ Taskbar icon visible (hiding from taskbar while keeping Alt+Tab is impossible on Windows)
+8. ✅ DwmExtendFrameIntoClientArea for smooth resize compositing
+9. ✅ WM_NCACTIVATE handling to prevent gray border on activation
+10. ✅ Window centered on screen
+11. ✅ Esc key hides window (WM_KEYDOWN)
 
-**Win32 APIs needed:**
+**Acceptance criteria:** ✅
 
-- Window: `CreateWindowExW`, `RegisterClassW`, `ShowWindow`
-- Borderless resize: `WM_NCHITTEST` → `HTLEFT`, `HTRIGHT`, etc.
-- Tray: `Shell_NotifyIconW`, `WM_USER` messages
-- Taskbar hide: `ITaskbarList3::DeleteTab`
-
-**Acceptance criteria:**
-
-- Window appears, can resize from edges
-- Tray icon visible, click toggles window
-- No taskbar icon, visible in Alt+Tab
+- ✅ Window appears, can resize from edges
+- ✅ Tray icon visible, click toggles window
+- ✅ Visible in Alt+Tab
+- ⚠️ Taskbar icon visible (Windows limitation - hiding breaks Alt+Tab)
+- ✅ Esc hides window and restores focus to previous app
 
 ### M2-win: Core Integration
 
@@ -132,10 +143,10 @@ windows = { version = "0.58", features = [...] }
 **Tasks:**
 
 1. Load keys on startup
-2. Render key list (custom draw or list control)
-3. Text preview (Rich Edit control)
-4. File preview (IPreviewHandler)
-5. Clipboard paste to create key
+3. Render key list (custom draw or list control)
+4. Text preview (Rich Edit control)
+5. File preview (IPreviewHandler)
+6. Clipboard paste to create key
 
 ### M3-win: Full Features
 
@@ -222,17 +233,20 @@ windows = { version = "0.58", features = [...] }
 
 ### Windows Crate Features
 
-Likely needed features for `windows` crate:
+Current features for `windows` crate (v0.62):
 ```toml
-[dependencies.windows]
-version = "0.58"
+[target.'cfg(windows)'.dependencies.windows]
+version = "0.62"
 features = [
     "Win32_Foundation",
+    "Win32_System_LibraryLoader",
     "Win32_UI_WindowsAndMessaging",
-    "Win32_Graphics_Gdi",
-    "Win32_UI_Shell",
-    "Win32_System_Com",
     "Win32_UI_Controls",
+    "Win32_UI_Shell",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Dwm",
+    # Future: "Win32_System_Com" for IPreviewHandler
 ]
 ```
 
