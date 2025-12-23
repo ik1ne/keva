@@ -2,7 +2,7 @@ mod app;
 mod theme;
 
 use app::KevaApp;
-use gpui::{px, size, App, AppContext, Application, Bounds, WindowBounds, WindowOptions};
+use gpui::{App, AppContext, Application, Bounds, WindowBounds, WindowOptions, px, size};
 use gpui_component::Root;
 use theme::window_options;
 

@@ -19,6 +19,9 @@ pub const WINDOW_MIN_SIZE: Size<Pixels> = Size {
 };
 
 /// Creates WindowOptions for Keva's borderless window.
+/// TODO(M7): Platform-specific window behavior:
+/// - Windows: ITaskbarList3::DeleteTab to hide from taskbar (keeps Alt+Tab)
+/// - macOS: LSUIElement or activation policy to hide from Cmd+Tab
 pub fn window_options() -> WindowOptions {
     WindowOptions {
         titlebar: None,

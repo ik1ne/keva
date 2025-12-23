@@ -7,4 +7,4 @@ edition = "2024"
 keva_core = { path = "../core" }
 nucleo = "0.5"
 gpui = "0.2"
-gpui-component = "0.4"
+gpui-component = "0.5"

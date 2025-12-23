@@ -200,11 +200,13 @@ Implemented with gpui 0.2 + gpui-component 0.4.
 
 ---
 
-### M7: System Tray Icon
+### M7: System Tray Icon + Window Behavior
 
-**Goal:** Tray icon with menu.
+**Goal:** Tray icon with menu, platform-specific window visibility behavior.
 
-**Dependencies:** `tray-icon` crate
+**Dependencies:**
+- `tray-icon` crate
+- Windows: `windows` crate (for ITaskbarList3)
 
 **Tasks:**
 
@@ -218,6 +220,9 @@ Implemented with gpui 0.2 + gpui-component 0.4.
     - ---
     - Quit Keva
 4. Sync checkbox state with config
+5. Platform-specific window behavior:
+    - **Windows:** Use `ITaskbarList3::DeleteTab` to hide from taskbar (keeps Alt+Tab)
+    - **macOS:** Set `LSUIElement=true` or activation policy to hide from Cmd+Tab
 
 **Acceptance criteria:**
 
@@ -225,6 +230,8 @@ Implemented with gpui 0.2 + gpui-component 0.4.
 - Left-click toggles window
 - Right-click shows menu
 - Quit from menu works
+- Windows: No taskbar icon, visible in Alt+Tab
+- macOS: No Dock icon, hidden from Cmd+Tab
 
 ---
 
