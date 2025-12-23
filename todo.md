@@ -29,6 +29,7 @@ keva/
 ## Dependencies
 
 **Current (M1):**
+
 ```toml
 [dependencies]
 keva_core = { path = "../core" }
@@ -38,6 +39,7 @@ gpui-component = "0.4"
 ```
 
 **Future milestones will add:**
+
 ```toml
 # Config (M2)
 toml = "0.8"
@@ -53,12 +55,12 @@ global-hotkey = "0.7"
 
 ## Milestone Overview
 
-| Phase | Milestones | Description |
-|-------|------------|-------------|
-| Foundation | M1-M2 | Window skeleton, config loading |
-| Core Features | M3-M6 | Key list, search, editing, controls |
-| System Integration | M7-M11 | Tray, hotkey, single instance, login, first-run |
-| Polish | M12-M15 | Settings, shortcuts, drag/drop, lifecycle |
+| Phase              | Milestones | Description                                     |
+|--------------------|------------|-------------------------------------------------|
+| Foundation         | M1-M2      | Window skeleton, config loading                 |
+| Core Features      | M3-M6      | Key list, search, editing, controls             |
+| System Integration | M7-M11     | Tray, hotkey, single instance, login, first-run |
+| Polish             | M12-M15    | Settings, shortcuts, drag/drop, lifecycle       |
 
 ---
 
@@ -205,6 +207,7 @@ Implemented with gpui 0.2 + gpui-component 0.4.
 **Goal:** Tray icon with menu, platform-specific window visibility behavior.
 
 **Dependencies:**
+
 - `tray-icon` crate
 - Windows: `windows` crate (for ITaskbarList3)
 
@@ -352,13 +355,13 @@ Implemented with gpui 0.2 + gpui-component 0.4.
 
 **Goal:** Implement in-app shortcuts.
 
-| Key           | Action               |
-|---------------|----------------------|
-| `↑` / `↓`     | Navigate key list    |
-| `Enter`       | Focus right pane     |
-| `Shift+Enter` | Copy + hide          |
-| `Cmd+F`       | Focus search bar     |
-| `Cmd+,`       | Open settings        |
+| Key           | Action            |
+|---------------|-------------------|
+| `↑` / `↓`     | Navigate key list |
+| `Enter`       | Focus right pane  |
+| `Shift+Enter` | Copy + hide       |
+| `Cmd+F`       | Focus search bar  |
+| `Cmd+,`       | Open settings     |
 
 **Acceptance criteria:**
 
