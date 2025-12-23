@@ -43,7 +43,8 @@ Single-process application containing GUI window and keva-core storage layer.
 **Process Behavior:**
 
 - Starts as background process (no window on launch)
-- No dock/taskbar icon
+- No Dock icon (macOS) / Taskbar icon visible (Windows)
+    - Windows limitation: hiding from taskbar also hides from Alt+Tab, so taskbar icon is kept
 - Menu bar icon (macOS) / System tray icon (Windows) visible by default
 - Window hidden keeps process alive in background
 
@@ -215,7 +216,8 @@ Each key displays on hover/selection:
 On very first launch (no config.toml exists):
 
 1. Show welcome dialog with:
-    - Brief explanation: "Keva runs in the background. Use Cmd+Shift+K (macOS) / Ctrl+Shift+K (Windows) to show the window."
+    - Brief explanation: "Keva runs in the background. Use Cmd+Shift+K (macOS) / Ctrl+Shift+K (Windows) to show the
+      window."
     - Checkbox: "Launch Keva at login" (checked by default)
     - Button: "Get Started"
 2. If checkbox is checked, register login item

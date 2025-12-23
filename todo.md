@@ -11,6 +11,7 @@ Keva is a local key-value store for clipboard-like data. The core library (`keva
 - **Shared:** `keva_core` (Rust)
 
 **Rationale:**
+
 - gpui/tao can't handle borderless+resize on macOS
 - Windows: `windows` crate is Microsoft-maintained, well-documented
 - macOS: Swift is first-class for Cocoa, QuickLook integration is trivial
@@ -37,59 +38,6 @@ keva/
 
 ---
 
-## Phase 0: Foundation
-
-### M0-ffi: Core FFI Layer (for macOS)
-
-**Goal:** Expose keva_core to Swift via C FFI.
-
-**Dependencies:**
-```toml
-[dependencies]
-keva_core = { path = "../core" }
-
-[build-dependencies]
-cbindgen = "0.27"
-```
-
-**Tasks:**
-
-1. Create `ffi` crate with `crate-type = ["cdylib"]`
-2. Define C-compatible API with `#[no_mangle]` and `extern "C"`
-3. Handle memory management (Box for heap, CString for strings)
-4. Generate `keva.h` via cbindgen
-5. Build as `libkeva.dylib`
-
-**API:**
-
-```c
-// Lifecycle
-KevaHandle* keva_open(const char* path);
-void keva_close(KevaHandle* handle);
-
-// CRUD
-int32_t keva_set_text(KevaHandle* h, const char* key, const char* text);
-int32_t keva_set_files(KevaHandle* h, const char* key, const char** paths, size_t count);
-KevaValue* keva_get(KevaHandle* h, const char* key);
-int32_t keva_delete(KevaHandle* h, const char* key);
-int32_t keva_rename(KevaHandle* h, const char* old_key, const char* new_key);
-
-// Listing
-KevaKeyList* keva_list_keys(KevaHandle* h);
-
-// Memory
-void keva_free_value(KevaValue* value);
-void keva_free_key_list(KevaKeyList* list);
-```
-
-**Acceptance criteria:**
-
-- `libkeva.dylib` builds
-- `keva.h` generated
-- Can call from Swift playground
-
----
-
 ## Phase 1: Windows App (Pure Rust)
 
 ### M1-win: Window Skeleton ✅
@@ -99,6 +47,7 @@ void keva_free_key_list(KevaKeyList* list);
 **Status:** Complete
 
 **Dependencies:**
+
 ```toml
 [dependencies]
 keva_core = { path = "../core" }
@@ -164,6 +113,56 @@ windows = { version = "0.62", features = [
 
 ## Phase 2: macOS App (Swift)
 
+### M0-mac: Core FFI Layer
+
+**Goal:** Expose keva_core to Swift via C FFI.
+
+**Dependencies:**
+
+```toml
+[dependencies]
+keva_core = { path = "../core" }
+
+[build-dependencies]
+cbindgen = "0.27"
+```
+
+**Tasks:**
+
+1. Create `ffi` crate with `crate-type = ["cdylib"]`
+2. Define C-compatible API with `#[no_mangle]` and `extern "C"`
+3. Handle memory management (Box for heap, CString for strings)
+4. Generate `keva.h` via cbindgen
+5. Build as `libkeva.dylib`
+
+**API:**
+
+```c
+// Lifecycle
+KevaHandle* keva_open(const char* path);
+void keva_close(KevaHandle* handle);
+
+// CRUD
+int32_t keva_set_text(KevaHandle* h, const char* key, const char* text);
+int32_t keva_set_files(KevaHandle* h, const char* key, const char** paths, size_t count);
+KevaValue* keva_get(KevaHandle* h, const char* key);
+int32_t keva_delete(KevaHandle* h, const char* key);
+int32_t keva_rename(KevaHandle* h, const char* old_key, const char* new_key);
+
+// Listing
+KevaKeyList* keva_list_keys(KevaHandle* h);
+
+// Memory
+void keva_free_value(KevaValue* value);
+void keva_free_key_list(KevaKeyList* list);
+```
+
+**Acceptance criteria:**
+
+- `libkeva.dylib` builds
+- `keva.h` generated
+- Can call from Swift playground
+
 ### M1-mac: Window Skeleton
 
 **Goal:** Basic borderless window with menu bar icon.
@@ -173,7 +172,7 @@ windows = { version = "0.62", features = [
 **Tasks:**
 
 1. Create Swift package or minimal Xcode project
-2. Link `libkeva.dylib`, import `keva.h` via bridging header
+2. Link `libkeva.dylib`, import `keva.h` via bridging header (from M0-mac)
 3. Borderless window (NSWindow, styleMask)
 4. Custom resize handling if needed
 5. Menu bar icon (NSStatusItem)
@@ -218,11 +217,13 @@ windows = { version = "0.62", features = [
 ### M4: Distribution
 
 **Windows:**
+
 - Installer (WiX or MSIX)
 - Launch at Login (Registry)
 - Code signing (optional)
 
 **macOS:**
+
 - App bundle structure
 - Launch at Login (LaunchAgent or SMLoginItemSetEnabled)
 - Code signing + notarization
@@ -234,6 +235,7 @@ windows = { version = "0.62", features = [
 ### Windows Crate Features
 
 Current features for `windows` crate (v0.62):
+
 ```toml
 [target.'cfg(windows)'.dependencies.windows]
 version = "0.62"
