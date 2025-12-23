@@ -1,3 +1,7 @@
+//! Keva Windows application.
+//!
+//! A borderless window with system tray integration for the Keva clipboard manager.
+
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::mem::size_of;

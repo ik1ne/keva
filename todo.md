@@ -143,10 +143,10 @@ windows = { version = "0.62", features = [
 **Tasks:**
 
 1. Load keys on startup
-3. Render key list (custom draw or list control)
-4. Text preview (Rich Edit control)
-5. File preview (IPreviewHandler)
-6. Clipboard paste to create key
+2. Render key list (custom draw or list control)
+3. Text preview (Rich Edit control)
+4. File preview (IPreviewHandler)
+5. Clipboard paste to create key
 
 ### M3-win: Full Features
 
