@@ -1,3 +1,7 @@
 [workspace]
-members = ["core", "gui"]
+members = ["core", "ffi", "app-windows"]
 resolver = "3"
+
+# ffi: C FFI for macOS Swift app (cdylib)
+# app-windows: Windows native app (windows crate)
+# app-macos: Swift project, not in Cargo workspace

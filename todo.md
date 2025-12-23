@@ -2,23 +2,34 @@
 
 ## Context
 
-Keva is a local key-value store for clipboard-like data. The core library (`keva_core`) is implemented. This document
-describes the GUI implementation using gpui (Zed's GPU-accelerated UI framework).
+Keva is a local key-value store for clipboard-like data. The core library (`keva_core`) is implemented in Rust.
+
+**Architecture Decision:** Hybrid native approach.
+
+- **Windows:** Pure Rust (`windows` crate for Win32 API)
+- **macOS:** Swift/AppKit with FFI to `keva_core`
+- **Shared:** `keva_core` (Rust)
+
+**Rationale:**
+- gpui/tao can't handle borderless+resize on macOS
+- Windows: `windows` crate is Microsoft-maintained, well-documented
+- macOS: Swift is first-class for Cocoa, QuickLook integration is trivial
+- FFI overhead for keva_core is minimal (not high-frequency calls)
 
 **Reference documents:**
 
 - `Spec.md` - Product specification (source of truth for behavior)
-- `implementation_detail.md` - keva_core and keva_gui API reference
+- `implementation_detail.md` - keva_core API reference
 - `Planned.md` - Future features (not in scope)
-
-**Note:** Search functionality lives in `keva_gui::search`, not `keva_core`.
 
 **Project structure:**
 
 ```
 keva/
-├── core/           # keva_core (implemented)
-├── gui/            # keva_gui (this implementation)
+├── core/           # keva_core (Rust library)
+├── ffi/            # C FFI bindings for macOS (Rust, builds dylib)
+├── app-windows/    # Windows app (Rust + windows crate)
+├── app-macos/      # macOS app (Swift/AppKit, links keva_ffi)
 ├── Spec.md
 ├── Planned.md
 └── implementation_detail.md
@@ -26,416 +37,220 @@ keva/
 
 ---
 
-## Dependencies
+## Phase 0: Foundation
 
-**Current (M1):**
+### M0-ffi: Core FFI Layer (for macOS)
 
+**Goal:** Expose keva_core to Swift via C FFI.
+
+**Dependencies:**
 ```toml
 [dependencies]
 keva_core = { path = "../core" }
-nucleo = "0.5"
-gpui = "0.2"
-gpui-component = "0.4"
+
+[build-dependencies]
+cbindgen = "0.27"
 ```
 
-**Future milestones will add:**
+**Tasks:**
 
-```toml
-# Config (M2)
-toml = "0.8"
-serde = { version = "1", features = ["derive"] }
-dirs = "5"
+1. Create `ffi` crate with `crate-type = ["cdylib"]`
+2. Define C-compatible API with `#[no_mangle]` and `extern "C"`
+3. Handle memory management (Box for heap, CString for strings)
+4. Generate `keva.h` via cbindgen
+5. Build as `libkeva.dylib`
 
-# System integration (M7-M10)
-tray-icon = "0.21"
-global-hotkey = "0.7"
+**API:**
+
+```c
+// Lifecycle
+KevaHandle* keva_open(const char* path);
+void keva_close(KevaHandle* handle);
+
+// CRUD
+int32_t keva_set_text(KevaHandle* h, const char* key, const char* text);
+int32_t keva_set_files(KevaHandle* h, const char* key, const char** paths, size_t count);
+KevaValue* keva_get(KevaHandle* h, const char* key);
+int32_t keva_delete(KevaHandle* h, const char* key);
+int32_t keva_rename(KevaHandle* h, const char* old_key, const char* new_key);
+
+// Listing
+KevaKeyList* keva_list_keys(KevaHandle* h);
+
+// Memory
+void keva_free_value(KevaValue* value);
+void keva_free_key_list(KevaKeyList* list);
 ```
 
----
-
-## Milestone Overview
-
-| Phase              | Milestones | Description                                     |
-|--------------------|------------|-------------------------------------------------|
-| Foundation         | M1-M2      | Window skeleton, config loading                 |
-| Core Features      | M3-M6      | Key list, search, editing, controls             |
-| System Integration | M7-M11     | Tray, hotkey, single instance, login, first-run |
-| Polish             | M12-M15    | Settings, shortcuts, drag/drop, lifecycle       |
-
----
-
-## Milestones
-
-### M1: Window Skeleton + Custom Chrome ✓ (DONE)
-
-Implemented with gpui 0.2 + gpui-component 0.4.
-
-**Completed:**
-
-- Borderless window (`titlebar: None`)
-- 3px drag border (via `WindowControlArea::Drag`)
-- Search icon drag handle
-- Esc minimizes globally (true hide to tray in M7)
-- Three-pane layout (search bar, key list, inspector)
-- Resizable left panel (150px min, 250px default)
-
-**Files:** `gui/src/main.rs`, `gui/src/app.rs`, `gui/src/theme.rs`
-
----
-
-### M2: Config + Core Integration
-
-**Goal:** Load full config, initialize keva_core, theme support.
-
-**Tasks:**
-
-1. Create `gui/src/config.rs` with config struct:
-    ```rust
-    pub struct GuiConfig {
-        pub config_version: u32,
-        pub theme: Theme,              // dark/light/system
-        pub global_shortcut: String,
-        pub launch_at_login: bool,
-        pub show_tray_icon: bool,
-        pub delete_style: DeleteStyle,
-        pub large_file_threshold: u64,
-        pub trash_ttl: u64,
-        pub purge_ttl: u64,
-        pub window: WindowConfig,      // per-monitor positions
-    }
-    ```
-2. Implement load/save/validate with config_version migration
-3. Apply theme on launch (Dark/Light/System)
-4. Initialize KevaCore with config
-5. Store/restore window position per monitor
-
 **Acceptance criteria:**
 
-- App launches with valid config
-- App shows error popup with invalid config
-- Theme applies correctly
-- Window position remembered per monitor
+- `libkeva.dylib` builds
+- `keva.h` generated
+- Can call from Swift playground
 
 ---
 
-### M3: Key List Display
+## Phase 1: Windows App (Pure Rust)
 
-**Goal:** Display actual keys in left pane.
+### M1-win: Window Skeleton
 
-**Tasks:**
-
-1. Fetch keys from `keva_core.active_keys()` and `keva_core.trashed_keys()`
-2. Render scrollable list (gpui's scroll container or List component)
-3. Each key as selectable label
-4. Track selected key: `selected_key: Option<Key>`
-5. Trashed keys shown at bottom with 🗑️ prefix
-
-**Acceptance criteria:**
-
-- All active keys displayed
-- Trashed keys displayed at bottom with icon
-- Clicking key highlights it
-
----
-
-### M4: Search Bar Integration
-
-**Goal:** Fuzzy search filters key list.
-
-**Tasks:**
-
-1. Add `search_query: String` to state
-2. Create `SearchEngine` instance (from `keva_gui::search`)
-3. When query changes: call `search_engine.set_query()`
-4. Each frame: call `search_engine.tick()` for non-blocking updates
-5. Display results from `search_engine.active_results()` and `trashed_results()`
-
-**Acceptance criteria:**
-
-- Typing filters key list
-- Results ranked by relevance
-- Empty query shows all keys
-
----
-
-### M5: Right Pane (Read + Edit)
-
-**Goal:** Display and edit values.
-
-**Tasks:**
-
-1. When key selected, call `keva_core.get(key)`
-2. Display based on value type:
-    - **Text:** Editable text area
-    - **Files:** File list with names/sizes
-    - **None:** Placeholder text
-3. Auto-save: after 3 seconds of inactivity
-4. Handle paste:
-    - Text clipboard → insert at cursor
-    - Files clipboard → store as files (or block if text exists)
-
-**Acceptance criteria:**
-
-- Selecting key shows its value
-- Text editing works with auto-save
-- File paste blocked when text exists (with hint)
-
----
-
-### M6: Left Pane Controls
-
-**Goal:** Rename and delete keys.
-
-**Tasks:**
-
-1. Show buttons on hover/selection:
-    - Rename button (✏️)
-    - Delete button (🗑️)
-2. Rename: inline editor, confirmation if overwriting
-3. Delete: respect `delete_style` (soft/immediate)
-
-**Acceptance criteria:**
-
-- Hover shows buttons
-- Rename works with overwrite confirmation
-- Delete respects configured style
-
----
-
-### M7: System Tray Icon + Window Behavior
-
-**Goal:** Tray icon with menu, platform-specific window visibility behavior.
+**Goal:** Basic borderless window with system tray.
 
 **Dependencies:**
-
-- `tray-icon` crate
-- Windows: `windows` crate (for ITaskbarList3)
-
-**Tasks:**
-
-1. Create tray icon on launch
-2. Left-click: toggle window visibility
-3. Right-click menu:
-    - Show Keva (disabled if visible)
-    - Settings...
-    - ---
-    - Launch at Login (checkbox)
-    - ---
-    - Quit Keva
-4. Sync checkbox state with config
-5. Platform-specific window behavior:
-    - **Windows:** Use `ITaskbarList3::DeleteTab` to hide from taskbar (keeps Alt+Tab)
-    - **macOS:** Set `LSUIElement=true` or activation policy to hide from Cmd+Tab
-6. Fix Esc key behavior:
-    - Replace `minimize_window()` with proper hide (borderless windows can't minimize on macOS)
-
-**Acceptance criteria:**
-
-- Tray icon visible
-- Left-click toggles window
-- Right-click shows menu
-- Quit from menu works
-- Windows: No taskbar icon, visible in Alt+Tab
-- macOS: No Dock icon, hidden from Cmd+Tab
-- Esc hides window on both platforms
-
----
-
-### M8: Global Shortcut
-
-**Goal:** Register system-wide hotkey.
-
-**Dependencies:** `global-hotkey` crate
-
-**Tasks:**
-
-1. Register `Cmd+Shift+K` / `Ctrl+Shift+K` on launch
-2. Handle shortcut press → show window
-3. Handle conflict:
-    - Show notification
-    - Open settings with shortcut focused
-4. Re-register when shortcut changes in settings
-
-**Acceptance criteria:**
-
-- Shortcut shows hidden window
-- Conflict detected and handled gracefully
-
----
-
-### M9: Single Instance
-
-**Goal:** Prevent multiple instances.
-
-**Tasks:**
-
-1. Windows: Named mutex
-    - If exists: send message to existing, exit
-2. macOS: Unix socket in data directory
-    - If bound: send message to existing, exit
-3. Existing instance receives message → show window
-4. Handle timeout (2s) → offer to force-quit
-
-**Acceptance criteria:**
-
-- Second launch activates first instance
-- No duplicate processes
-
----
-
-### M10: Launch at Login
-
-**Goal:** Register app to start at login.
-
-**Tasks:**
-
-1. macOS: `SMAppService` API
-2. Windows: Registry `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run`
-3. Check/set based on config
-4. Sync with tray menu checkbox
-5. Must appear in OS settings (Task Manager / Login Items)
-
-**Acceptance criteria:**
-
-- Toggle works from settings and tray
-- Appears correctly in OS startup settings
-
----
-
-### M11: First-Run Experience
-
-**Goal:** Welcome dialog on first launch.
-
-**Tasks:**
-
-1. Detect first launch (no config.toml)
-2. Show dialog:
-    - Explanation: "Keva runs in background. Use Cmd+Shift+K / Ctrl+Shift+K to show."
-    - Checkbox: "Launch Keva at login" (checked by default)
-    - Button: "Get Started"
-3. On confirm: create config, register login if checked, show window
-
-**Acceptance criteria:**
-
-- Dialog appears on first launch only
-- Preferences applied correctly
-
----
-
-### M12: Settings Dialog
-
-**Goal:** Full settings UI.
-
-**Settings:**
-
-| Category  | Setting              |
-|-----------|----------------------|
-| General   | Theme                |
-| General   | Launch at Login      |
-| General   | Show Tray Icon       |
-| Shortcuts | Global Shortcut      |
-| Data      | Delete Style         |
-| Data      | Large File Threshold |
-| Lifecycle | Trash TTL            |
-| Lifecycle | Purge TTL            |
-
-**Tasks:**
-
-1. Theme picker (Dark/Light/System)
-2. Launch at Login toggle (syncs with OS)
-3. Show Tray Icon toggle
-4. Global shortcut picker (with conflict detection)
-5. Data and lifecycle settings
-
-**Acceptance criteria:**
-
-- All settings editable
-- Changes persist and apply immediately
-
----
-
-### M13: Keyboard Shortcuts
-
-**Goal:** Implement in-app shortcuts.
-
-| Key           | Action            |
-|---------------|-------------------|
-| `↑` / `↓`     | Navigate key list |
-| `Enter`       | Focus right pane  |
-| `Shift+Enter` | Copy + hide       |
-| `Cmd+F`       | Focus search bar  |
-| `Cmd+,`       | Open settings     |
-
-**Acceptance criteria:**
-
-- All shortcuts work per Spec.md
-
----
-
-### M14: Drag & Drop
-
-**Goal:** Accept file drops.
-
-**Tasks:**
-
-1. Enable drag-drop in gpui window
-2. Handle drop on right pane → store to target key
-3. Handle drop on left pane key → store to that key
-4. Check size against threshold, confirm if large
-
-**Acceptance criteria:**
-
-- Files can be dropped on both panes
-- Large files trigger confirmation
-
----
-
-### M15: Window Lifecycle + GC
-
-**Goal:** Clean shutdown and garbage collection.
-
-**Tasks:**
-
-1. Auto-save pending edits on window hide
-2. Run `keva_core.maintenance()` on hide and quit
-3. Warn if unsaved changes exist before hiding
-
-**Acceptance criteria:**
-
-- Pending edits saved on hide
-- GC runs on hide/quit
-- No data loss
-
----
-
-## File Structure
-
+```toml
+[dependencies]
+keva_core = { path = "../core" }
+windows = { version = "0.58", features = [...] }
 ```
-gui/
-├── Cargo.toml
-└── src/
-    ├── main.rs           # Entry point, global key interceptor, Root wrapper
-    ├── app.rs            # KevaApp (all UI rendering in one file for now)
-    ├── theme.rs          # Colors, sizes, window options
-    │
-    │   # Future milestones will add:
-    ├── config.rs         # M2: GuiConfig, load/save/validate
-    ├── settings.rs       # M12: Settings dialog
-    ├── tray.rs           # M7: System tray integration
-    ├── hotkey.rs         # M8: Global shortcut registration
-    ├── instance.rs       # M9: Single instance handling
-    ├── startup.rs        # M10: Launch at login
-    └── search/           # M4: Fuzzy search (nucleo)
-        ├── mod.rs
-        └── tests.rs
-```
+
+**Tasks:**
+
+1. Create `app-windows` crate as `[[bin]]`
+2. Register window class, create borderless window
+3. Implement WM_NCHITTEST for resize edges
+4. System tray icon (Shell_NotifyIconW)
+5. Message loop with tray events
+6. Esc hides window, tray click shows
+
+**Win32 APIs needed:**
+
+- Window: `CreateWindowExW`, `RegisterClassW`, `ShowWindow`
+- Borderless resize: `WM_NCHITTEST` → `HTLEFT`, `HTRIGHT`, etc.
+- Tray: `Shell_NotifyIconW`, `WM_USER` messages
+- Taskbar hide: `ITaskbarList3::DeleteTab`
+
+**Acceptance criteria:**
+
+- Window appears, can resize from edges
+- Tray icon visible, click toggles window
+- No taskbar icon, visible in Alt+Tab
+
+### M2-win: Core Integration
+
+**Goal:** Connect UI to keva_core.
+
+**Tasks:**
+
+1. Load keys on startup
+2. Render key list (custom draw or list control)
+3. Text preview (Rich Edit control)
+4. File preview (IPreviewHandler)
+5. Clipboard paste to create key
+
+### M3-win: Full Features
+
+**Goal:** All Spec.md features.
+
+**Tasks:**
+
+1. Fuzzy search (nucleo)
+2. Edit/rename/delete keys
+3. Copy to clipboard
+4. Trash support
+5. Settings dialog
+
+---
+
+## Phase 2: macOS App (Swift)
+
+### M1-mac: Window Skeleton
+
+**Goal:** Basic borderless window with menu bar icon.
+
+**Build:** Swift Package Manager or xcodebuild (no Xcode IDE required)
+
+**Tasks:**
+
+1. Create Swift package or minimal Xcode project
+2. Link `libkeva.dylib`, import `keva.h` via bridging header
+3. Borderless window (NSWindow, styleMask)
+4. Custom resize handling if needed
+5. Menu bar icon (NSStatusItem)
+6. Cmd+Q quits, Esc hides window
+7. Set LSUIElement=true in Info.plist (hide from Dock/Cmd+Tab)
+
+**Acceptance criteria:**
+
+- App launches to menu bar
+- Window shows/hides on click
+- Window resizes properly
+- No Dock icon, hidden from Cmd+Tab
+
+### M2-mac: Core Integration
+
+**Goal:** Connect UI to keva_core via FFI.
+
+**Tasks:**
+
+1. Swift wrapper around C FFI
+2. Load/display keys
+3. Text preview (NSTextView)
+4. File preview (QLPreviewView)
+5. Clipboard paste to create key
+
+### M3-mac: Full Features
+
+**Goal:** All Spec.md features.
+
+**Tasks:**
+
+1. Fuzzy search (nucleo via FFI, or native NSPredicate)
+2. Edit/rename/delete keys
+3. Copy to clipboard (NSPasteboard)
+4. Trash support
+5. Settings window
+
+---
+
+## Phase 3: Polish
+
+### M4: Distribution
+
+**Windows:**
+- Installer (WiX or MSIX)
+- Launch at Login (Registry)
+- Code signing (optional)
+
+**macOS:**
+- App bundle structure
+- Launch at Login (LaunchAgent or SMLoginItemSetEnabled)
+- Code signing + notarization
 
 ---
 
 ## Notes
 
-- Use `std::time::SystemTime::now()` for timestamp parameters
-- `get(key)` does not require timestamp
-- `rename(old, new, overwrite)` does not require timestamp
-- Search is managed via `SearchEngine` from `keva_gui::search`
-- Test on both Windows and macOS
+### Windows Crate Features
+
+Likely needed features for `windows` crate:
+```toml
+[dependencies.windows]
+version = "0.58"
+features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Gdi",
+    "Win32_UI_Shell",
+    "Win32_System_Com",
+    "Win32_UI_Controls",
+]
+```
+
+### macOS Borderless + Resize
+
+```swift
+let styleMask: NSWindow.StyleMask = [
+    .borderless,
+    .resizable,  // This should work in native Swift
+]
+window = NSWindow(contentRect: rect, styleMask: styleMask, ...)
+```
+
+If `.borderless` + `.resizable` doesn't work, implement `mouseDown`/`mouseDragged` for edge resizing.
+
+### FFI Memory Rules
+
+- Caller allocates path strings, FFI copies internally
+- FFI allocates return values (KevaValue, KevaKeyList)
+- Caller must call `keva_free_*` to release
+- Error codes: 0 = success, negative = error
