@@ -12,9 +12,8 @@ pub struct KevaApp {
 
 impl KevaApp {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let search_input = cx.new(|inner_cx| {
-            InputState::new(window, inner_cx).placeholder("Search keys...")
-        });
+        let search_input =
+            cx.new(|inner_cx| InputState::new(window, inner_cx).placeholder("Search keys..."));
         Self { search_input }
     }
 }
@@ -122,20 +121,18 @@ impl KevaApp {
     }
 
     fn render_main_content(&self) -> impl IntoElement {
-        div()
-            .flex_1()
-            .child(
-                h_resizable("main-panels")
-                    // Left panel (key list)
-                    .child(
-                        resizable_panel()
-                            .size(px(LEFT_PANEL_DEFAULT_WIDTH))
-                            .size_range(px(LEFT_PANEL_MIN_WIDTH)..px(f32::MAX))
-                            .child(self.render_key_list()),
-                    )
-                    // Right panel (inspector)
-                    .child(resizable_panel().child(self.render_inspector())),
-            )
+        div().flex_1().child(
+            h_resizable("main-panels")
+                // Left panel (key list)
+                .child(
+                    resizable_panel()
+                        .size(px(LEFT_PANEL_DEFAULT_WIDTH))
+                        .size_range(px(LEFT_PANEL_MIN_WIDTH)..px(f32::MAX))
+                        .child(self.render_key_list()),
+                )
+                // Right panel (inspector)
+                .child(resizable_panel().child(self.render_inspector())),
+        )
     }
 
     fn render_key_list(&self) -> impl IntoElement {

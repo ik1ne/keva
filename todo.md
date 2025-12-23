@@ -226,6 +226,8 @@ Implemented with gpui 0.2 + gpui-component 0.4.
 5. Platform-specific window behavior:
     - **Windows:** Use `ITaskbarList3::DeleteTab` to hide from taskbar (keeps Alt+Tab)
     - **macOS:** Set `LSUIElement=true` or activation policy to hide from Cmd+Tab
+6. Fix Esc key behavior:
+    - Replace `minimize_window()` with proper hide (borderless windows can't minimize on macOS)
 
 **Acceptance criteria:**
 
@@ -235,6 +237,7 @@ Implemented with gpui 0.2 + gpui-component 0.4.
 - Quit from menu works
 - Windows: No taskbar icon, visible in Alt+Tab
 - macOS: No Dock icon, hidden from Cmd+Tab
+- Esc hides window on both platforms
 
 ---
 
