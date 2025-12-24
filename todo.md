@@ -341,6 +341,225 @@ The search bar and left pane selection are **mutually exclusive**. Only one can 
 | TC-M6-12 | Duplicate file (same hash) silently ignored on append         | ❌      |
 | TC-M6-13 | Paste files with search bar focused and key doesn't exist creates key | ❌ |
 
+### M7-win: Search Integration & Filtering
+
+**Goal:** Connect search bar to keva_search, filter key list, enable pen/plus button functionality.
+
+**Status:** Not Started
+
+**Requirements:**
+
+| Requirement          | Description                                                      | Status |
+|----------------------|------------------------------------------------------------------|--------|
+| Search engine init   | Initialize SearchEngine on app startup with keys from keva_core  | ❌      |
+| Query input          | Every keystroke calls set_query() and starts tick timer          | ❌      |
+| Tick timer           | Configurable interval (default 16ms) while search active         | ❌      |
+| Timer stop           | Stop timer when is_finished() returns true                       | ❌      |
+| Key list filtering   | Left pane shows only matching keys from search results           | ❌      |
+| Match highlighting   | Matched characters highlighted in key names (using match_indices)| ❌      |
+| Empty query          | Shows all keys (active first, then trashed)                      | ❌      |
+| Search bar preserved | Window hide preserves search text, window show restores with text selected | ❌ |
+
+**Button Functionality:**
+
+| Button                    | Click Action                    |
+|---------------------------|---------------------------------|
+| ✏️ Pen (key exists)       | Focus right pane editor         |
+| ➕ Plus (key doesn't exist) | Create key, focus right pane editor |
+
+**Enter Key (search bar focused):**
+
+| Condition         | Action                            |
+|-------------------|-----------------------------------|
+| Key exists        | Focus right pane editor for that key |
+| Key doesn't exist | Create key, focus right pane editor |
+
+**Index Maintenance:**
+
+| Event                   | SearchEngine Call              |
+|-------------------------|--------------------------------|
+| App startup             | rebuild(active_keys, trashed_keys) |
+| Key created             | add_key(key, false)            |
+| Key deleted (soft)      | mark_trashed(key)              |
+| Key deleted (permanent) | remove_key(key)                |
+| Key restored            | mark_restored(key)             |
+| Key renamed             | rename_key(old, new)           |
+
+**Test Cases:**
+
+| TC       | Description                                             | Status |
+|----------|---------------------------------------------------------|--------|
+| TC-M7-01 | Typing filters key list to matching keys                | ❌      |
+| TC-M7-02 | Matched characters highlighted in key names             | ❌      |
+| TC-M7-03 | Empty search bar shows all keys                         | ❌      |
+| TC-M7-04 | Clicking pen button focuses right pane editor           | ❌      |
+| TC-M7-05 | Clicking plus button creates key and focuses editor     | ❌      |
+| TC-M7-06 | Enter with existing key focuses editor                  | ❌      |
+| TC-M7-07 | Enter with new key creates and focuses editor           | ❌      |
+| TC-M7-08 | Timer starts on keystroke, stops when search finishes   | ❌      |
+| TC-M7-09 | Window hide preserves search text                       | ❌      |
+| TC-M7-10 | Window show restores search text, all selected          | ❌      |
+| TC-M7-11 | Created key appears in search results                   | ❌      |
+| TC-M7-12 | Smart case: lowercase query matches any case            | ❌      |
+| TC-M7-13 | Smart case: uppercase in query matches case-sensitively | ❌      |
+
+### M8-win: Keyboard Navigation
+
+**Goal:** Arrow keys, Enter, and Shift+Enter for efficient keyboard-driven workflow.
+
+**Status:** Not Started
+
+**Requirements:**
+
+| Requirement                | Description                                            | Status |
+|----------------------------|--------------------------------------------------------|--------|
+| Down arrow (search bar)    | Move focus to first key in list                        | ❌      |
+| Up arrow (search bar)      | No action (stay in search bar)                         | ❌      |
+| Down arrow (key selected)  | Move selection to next key                             | ❌      |
+| Up arrow (key selected)    | Move selection to previous key                         | ❌      |
+| Up arrow (first key)       | Return to search bar, restore cursor to last position  | ❌      |
+| Down arrow (last key)      | No action (stay on last key)                           | ❌      |
+| Enter (key selected)       | Focus right pane editor                                | ❌      |
+| Shift+Enter (key selected) | Copy value to clipboard, hide window                   | ❌      |
+| Escape                     | Hide window (regardless of focus)                      | ❌      |
+
+**Cursor Position Memory:**
+
+| Event                              | Behavior                            |
+|------------------------------------|-------------------------------------|
+| Leave search bar (down arrow)      | Remember cursor position            |
+| Return to search bar (up arrow from first key) | Restore cursor to remembered position |
+
+**Shift+Enter Behavior:**
+
+| Value Type | Clipboard Content                        |
+|------------|------------------------------------------|
+| Text       | Plain text copied                        |
+| Files      | Files copied (platform file clipboard format) |
+| Empty      | No action (nothing to copy)              |
+
+**Test Cases:**
+
+| TC       | Description                                              | Status |
+|----------|----------------------------------------------------------|--------|
+| TC-M8-01 | Down arrow from search bar selects first key             | ❌      |
+| TC-M8-02 | Up arrow from search bar does nothing                    | ❌      |
+| TC-M8-03 | Down arrow moves to next key                             | ❌      |
+| TC-M8-04 | Up arrow moves to previous key                           | ❌      |
+| TC-M8-05 | Up arrow from first key returns to search bar with cursor restored | ❌ |
+| TC-M8-06 | Down arrow from last key stays on last key               | ❌      |
+| TC-M8-07 | Enter on selected key focuses right pane                 | ❌      |
+| TC-M8-08 | Shift+Enter copies text value and hides window           | ❌      |
+| TC-M8-09 | Shift+Enter copies files value and hides window          | ❌      |
+| TC-M8-10 | Shift+Enter with empty value does nothing                | ❌      |
+| TC-M8-11 | Escape hides window from any focus state                 | ❌      |
+| TC-M8-12 | Copy updates last_accessed                               | ❌      |
+
+### M10-win: Inline Rename
+
+**Goal:** Rename keys via inline editor in left pane.
+
+**Status:** Not Started
+
+**Note:** M9-win (Key Creation) skipped - functionality already covered in M7-win.
+
+**Requirements:**
+
+| Requirement       | Description                                         | Status |
+|-------------------|-----------------------------------------------------|--------|
+| Rename button     | Pen icon on hover/selection in left pane key list   | ❌      |
+| Click to rename   | Clicking pen icon opens inline text editor          | ❌      |
+| Inline editor     | Replaces key name display with editable text field  | ❌      |
+| Initial selection | All text selected when editor opens                 | ❌      |
+| Confirm           | Enter confirms rename                               | ❌      |
+| Cancel            | Escape cancels rename, restores original name       | ❌      |
+| Click outside     | Confirms rename                                     | ❌      |
+| Validation        | 1-256 chars, valid UTF-8 (enforced by Key type)     | ❌      |
+
+**Rename Outcomes:**
+
+| Condition              | Behavior                               |
+|------------------------|----------------------------------------|
+| New name same as old   | No action, close editor                |
+| New name doesn't exist | Rename key, update search index        |
+| New name exists        | Show confirmation dialog               |
+
+**Overwrite Confirmation:**
+
+| Element        | Description                                  |
+|----------------|----------------------------------------------|
+| Dialog message | "Key '{new}' already exists. Overwrite?"     |
+| Yes            | Overwrite (old target permanently deleted)   |
+| No             | Cancel rename, close editor                  |
+
+**Search Index Update:**
+
+| Event            | Action                                |
+|------------------|---------------------------------------|
+| Rename confirmed | Call rename_key(old, new) on SearchEngine |
+
+**Test Cases:**
+
+| TC        | Description                                    | Status |
+|-----------|------------------------------------------------|--------|
+| TC-M10-01 | Pen icon visible on key hover                  | ❌      |
+| TC-M10-02 | Clicking pen opens inline editor               | ❌      |
+| TC-M10-03 | Text fully selected when editor opens          | ❌      |
+| TC-M10-04 | Enter confirms rename                          | ❌      |
+| TC-M10-05 | Escape cancels rename                          | ❌      |
+| TC-M10-06 | Click outside confirms rename                  | ❌      |
+| TC-M10-07 | Rename to same name closes editor, no action   | ❌      |
+| TC-M10-08 | Rename to new name updates key list            | ❌      |
+| TC-M10-09 | Rename to existing name shows confirmation     | ❌      |
+| TC-M10-10 | Overwrite confirmation Yes overwrites          | ❌      |
+| TC-M10-11 | Overwrite confirmation No cancels              | ❌      |
+| TC-M10-12 | Invalid name (empty, >256 chars) shows error   | ❌      |
+| TC-M10-13 | Renamed key searchable under new name          | ❌      |
+
+### M11-win: Delete Key
+
+**Goal:** Delete keys via trash icon in left pane.
+
+**Status:** Not Started
+
+**Requirements:**
+
+| Requirement      | Description                                           | Status |
+|------------------|-------------------------------------------------------|--------|
+| Delete button    | Trash icon on hover/selection in left pane key list   | ❌      |
+| Click to delete  | Clicking trash icon deletes key                       | ❌      |
+| Delete style     | Follows delete_style setting (soft or immediate)      | ❌      |
+| Soft delete      | Calls trash() on keva_core, key moves to trash        | ❌      |
+| Immediate delete | Calls purge() on keva_core, key permanently deleted   | ❌      |
+| No confirmation  | Delete executes immediately (trash provides recovery) | ❌      |
+
+**Search Index Update:**
+
+| Delete Style | Action                               |
+|--------------|--------------------------------------|
+| Soft         | Call mark_trashed(key) on SearchEngine |
+| Immediate    | Call remove_key(key) on SearchEngine |
+
+**Post-Delete State:**
+
+| Condition                  | Behavior                                          |
+|----------------------------|---------------------------------------------------|
+| Deleted key was selected   | Selection clears, right pane updates based on search bar |
+| Deleted key not selected   | No change to selection                            |
+
+**Test Cases:**
+
+| TC        | Description                                    | Status |
+|-----------|------------------------------------------------|--------|
+| TC-M11-01 | Trash icon visible on key hover                | ❌      |
+| TC-M11-02 | Clicking trash with soft delete moves key to trash | ❌  |
+| TC-M11-03 | Clicking trash with immediate delete removes key | ❌    |
+| TC-M11-04 | Deleted key disappears from active list        | ❌      |
+| TC-M11-05 | Soft-deleted key appears in trash results      | ❌      |
+| TC-M11-06 | Immediate-deleted key not in any results       | ❌      |
+| TC-M11-07 | Selection clears when selected key deleted     | ❌      |
+| TC-M11-08 | Right pane updates after selected key deleted  | ❌      |
+
 ---
 
 ## Phase 2: macOS App (Swift)
