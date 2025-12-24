@@ -28,10 +28,9 @@ Keva is a local key-value store for clipboard-like data. The core library (`keva
 
 ## To Decide
 
-| Question                         | Context                                                                                                                                                               | Decision |
-|----------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
-| Keep 3px inner border drag zone? | M1-win requires 3px inner border for dragging, M2-win adds search icon as drag handle. Should we keep both drag methods or remove the border drag zone?               | Pending  |
-| Data directory location?         | Currently uses ~/.keva (%USERPROFILE%\.keva on Windows). Should we use %APPDATA%\Keva instead for Windows convention? Or keep ~/.keva for cross-platform consistency? | Pending  |
+| Question                         | Context                                                                                                                                                 | Decision |
+|----------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
+| Keep 3px inner border drag zone? | M1-win requires 3px inner border for dragging, M2-win adds search icon as drag handle. Should we keep both drag methods or remove the border drag zone? | Pending  |
 
 ---
 
@@ -70,7 +69,7 @@ keva/
 | Smooth resize    | DwmExtendFrameIntoClientArea enabled                       | ✅                     |
 | Tray icon        | Visible with tooltip "Keva"                                | ✅                     |
 | Tray left-click  | Toggle window visibility                                   | ✅                     |
-| Tray right-click | Context menu (Show, Settings, Launch at Login, Quit)       | ❌                     | 
+| Tray right-click | Context menu (Show, Settings, Launch at Login, Quit)       | ❌                     |
 | Esc key          | Hides window                                               | ✅                     |
 | Alt+Tab          | Window visible (taskbar icon remains - Windows limitation) | ✅                     |
 
@@ -79,8 +78,8 @@ keva/
 | Item            | Action                | Notes                        |
 |-----------------|-----------------------|------------------------------|
 | Show Keva       | Show window           | Disabled if already visible  |
-| Settings...     | Open settings dialog  | Non-functional until M13-win |
-| Launch at Login | Toggle checkbox       | Non-functional until M18-win |
+| Settings...     | Open settings dialog  | Non-functional until M15-win |
+| Launch at Login | Toggle checkbox       | Non-functional until M20-win |
 | Quit Keva       | Terminate application |                              |
 
 **Test Cases:**
@@ -143,15 +142,15 @@ keva/
 
 **Requirements:**
 
-| Requirement    | Description                                                | Status |
-|----------------|------------------------------------------------------------|--------|
-| keva_core init | Initialize KevaCore on app startup                         | ✅      |
-| Data directory | Use default ~/.keva/ or KEVA_DATA_DIR environment variable | ✅      |
-| Config         | Load config.toml if exists, use defaults otherwise         | ❌      |
-| Key list       | Display all active keys from active_keys()                 | ✅      |
-| Scrolling      | Key list scrolls when content exceeds viewport             | ❌      |
-| Empty state    | Empty database shows empty list (or "No keys" placeholder) | ❌      |
-| Refresh        | Key list reflects current database state on window show    | ❌      |
+| Requirement    | Description                                                        | Status |
+|----------------|--------------------------------------------------------------------|--------|
+| keva_core init | Initialize KevaCore on app startup                                 | ✅      |
+| Data directory | Use default `%APPDATA%\Keva` or KEVA_DATA_DIR environment variable | ⚠️     |
+| Config         | Load config.toml if exists, use defaults otherwise                 | ❌      |
+| Key list       | Display all active keys from active_keys()                         | ✅      |
+| Scrolling      | Key list scrolls when content exceeds viewport                     | ❌      |
+| Empty state    | Empty database shows empty list (or "No keys" placeholder)         | ❌      |
+| Refresh        | Key list reflects current database state on window show            | ❌      |
 
 **Test Cases:**
 
@@ -171,25 +170,25 @@ keva/
 
 ### M4-win: Key Selection & Value Display
 
-**Goal:** Click key to select, display value in right pane.
+**Goal:** Click key to select, display value in right pane, implement three-state focus model.
 
 **Status:** Not Started
 
 **Requirements:**
 
-| Requirement            | Description                                       | Status |
-|------------------------|---------------------------------------------------|--------|
-| Click to select        | Clicking key in list selects it                   | ❌      |
-| Selection highlight    | Selected key visually highlighted                 | ❌      |
-| Right pane display     | Shows selected key's value                        | ❌      |
-| Text value             | Display text content (read-only for now)          | ❌      |
-| Files value            | Display placeholder "N file(s)" (detailed in M11) | ❌      |
-| Empty value            | Display placeholder "No value"                    | ❌      |
-| Touch on select        | Call touch() when key selected                    | ❌      |
-| Focus exclusivity      | Search bar focused OR key selected, never both    | ❌      |
-| Search bar focus       | Clicking search bar clears key selection          | ❌      |
-| Search bar highlight   | Visual focus indicator when search bar active     | ❌      |
-| Right pane on deselect | Shows placeholder for search bar text             | ❌      |
+| Requirement          | Description                                                   | Status |
+|----------------------|---------------------------------------------------------------|--------|
+| Click to select      | Clicking key in list selects it                               | ❌      |
+| Selection highlight  | Selected key visually highlighted                             | ❌      |
+| Right pane display   | Shows selected key's value                                    | ❌      |
+| Text value           | Display text content (read-only for now)                      | ❌      |
+| Files value          | Display placeholder "N file(s)" (detailed in M13)             | ❌      |
+| Empty value          | Display placeholder                                           | ❌      |
+| Touch on select      | Call touch() when key selected                                | ❌      |
+| Three-state focus    | Search bar, left pane, right pane mutually exclusive          | ❌      |
+| Search bar focus     | Clicking search bar clears key selection                      | ❌      |
+| Search bar highlight | Visual focus indicator when search bar active                 | ❌      |
+| Left pane dimmed     | When right pane focused, left pane key shows dimmed highlight | ❌      |
 
 **Test Cases:**
 
@@ -207,11 +206,34 @@ keva/
 | TC-M4-10 | Selecting key updates last_accessed                                                   | ❌      |
 | TC-M4-11 | Typing clears selection and updates right pane live                                   | ❌      |
 | TC-M4-12 | Files value shows placeholder text                                                    | ❌      |
+| TC-M4-13 | Clicking right pane transfers focus to right pane                                     | ❌      |
+| TC-M4-14 | Right pane focused shows dimmed highlight on left pane key                            | ❌      |
 
-**UX Model (Search Bar & Selection):**
+**Three-State Focus Model:**
 
-The search bar and left pane selection are **mutually exclusive**. Only one can be "active" at a time, indicated by
-visual focus.
+The search bar, left pane, and right pane are mutually exclusive focus states.
+
+| State              | Search Bar                 | Left Pane        | Right Pane                            |
+|--------------------|----------------------------|------------------|---------------------------------------|
+| Search bar focused | Focus highlight            | No selection     | Shows target based on search text     |
+| Left pane focused  | Dimmed text, button hidden | Key highlighted  | Shows selected key's value            |
+| Right pane focused | Dimmed text, button hidden | Dimmed highlight | Text cursor active / Files list shown |
+
+**Focus Transitions:**
+
+| From       | Action                    | To                                    |
+|------------|---------------------------|---------------------------------------|
+| Search bar | Down arrow                | Left pane (first key selected)        |
+| Search bar | Click key in list         | Left pane                             |
+| Search bar | Enter                     | Right pane (editing)                  |
+| Search bar | Click right pane          | Right pane                            |
+| Left pane  | Up arrow (from first key) | Search bar (cursor position restored) |
+| Left pane  | Enter                     | Right pane (editing)                  |
+| Left pane  | Click search bar          | Search bar                            |
+| Left pane  | Click right pane          | Right pane                            |
+| Right pane | Esc                       | Hide window                           |
+| Right pane | Click search bar          | Search bar                            |
+| Right pane | Click key in list         | Left pane                             |
 
 **Search Bar States:**
 
@@ -220,22 +242,8 @@ visual focus.
 | Empty                         | Gray placeholder | Hidden        | Empty                         |
 | Text, key EXISTS              | Normal           | ✏️ Pen (edit) | Existing key's value          |
 | Text, key DOESN'T EXIST       | Normal           | ➕ Plus (add)  | "Press Enter to add {key}..." |
-| Inactive (left pane selected) | Dimmed gray      | Hidden        | Selected key's value          |
-
-**Selection Transitions:**
-
-| Action             | Search Bar            | Left Pane        | Right Pane                   |
-|--------------------|-----------------------|------------------|------------------------------|
-| Click search bar   | Focused, normal text  | Selection clears | Updates based on search text |
-| Click key in list  | Dimmed gray           | Key highlighted  | Selected key's value         |
-| Type in search bar | Focused (was already) | Selection clears | Updates live                 |
-
-**Visual Focus (mutual exclusivity):**
-
-| State              | Search Bar             | Left Pane                                  |
-|--------------------|------------------------|--------------------------------------------|
-| Search bar focused | Focus border/highlight | No selection                               |
-| Key selected       | No focus, dimmed text  | Selected row highlighted (Spotlight-style) |
+| Inactive (left pane focused)  | Dimmed gray      | Hidden        | Selected key's value          |
+| Inactive (right pane focused) | Dimmed gray      | Hidden        | Editing selected key          |
 
 **Button Display (M4 scope - visual only):**
 
@@ -259,7 +267,7 @@ visual focus.
 |-----------------|-------------------------------------------------------------|--------|
 | Text editing    | Right pane text content is editable                         | ❌      |
 | Edit trigger    | Clicking in right pane text area enables editing            | ❌      |
-| Auto-save       | Save changes after 3 seconds of inactivity                  | ❌      |
+| Auto-save       | Save changes after 3 seconds of inactivity (last keystroke) | ❌      |
 | Save method     | Call upsert_text() on keva_core                             | ❌      |
 | Key list update | New key appears in left pane after first save               | ❌      |
 | Save on hide    | Save pending changes when window hides (Esc)                | ❌      |
@@ -296,16 +304,16 @@ visual focus.
 
 **Paste Behavior by Context:**
 
-| Focus                      | Clipboard | Action                                            |
-|----------------------------|-----------|---------------------------------------------------|
-| Search bar                 | Text      | Insert text into search bar (as query)            |
-| Search bar                 | Files     | Create/update key value for search bar text       |
-| Right pane (text editor)   | Text      | Insert at cursor                                  |
-| Right pane (text editor)   | Files     | Show warning, Ctrl+V again to overwrite           |
-| Right pane (Files display) | Text      | Show warning, Ctrl+V again to overwrite           |
-| Right pane (Files display) | Files     | Silent append                                     |
-| Key selected in left pane  | Files     | Silent append to selected key's Files value       |
-| Key selected in left pane  | Text      | Show warning if Files value, insert if Text value |
+| Focus                      | Clipboard | Action                                              |
+|----------------------------|-----------|-----------------------------------------------------|
+| Search bar                 | Text      | Insert text into search bar (as query)              |
+| Search bar                 | Files     | Create/update key value for search bar text         |
+| Right pane (text editor)   | Text      | Insert at cursor                                    |
+| Right pane (text editor)   | Files     | Show warning, Ctrl+V again to overwrite             |
+| Right pane (Files display) | Text      | Show warning, Ctrl+V again to overwrite             |
+| Right pane (Files display) | Files     | Silent append                                       |
+| Left pane (key selected)   | Files     | Silent append if Files value; replace if Text/empty |
+| Left pane (key selected)   | Text      | Show warning if Files value; replace if Text value  |
 
 **Overwrite Confirmation:**
 
@@ -406,23 +414,24 @@ visual focus.
 
 ### M8-win: Keyboard Navigation
 
-**Goal:** Arrow keys, Enter, and Ctrl+Alt+C for efficient keyboard-driven workflow.
+**Goal:** Arrow keys, Enter, Delete, Escape, and Ctrl+Alt+C for efficient keyboard-driven workflow.
 
 **Status:** Not Started
 
 **Requirements:**
 
-| Requirement                | Description                                           | Status |
-|----------------------------|-------------------------------------------------------|--------|
-| Down arrow (search bar)    | Move focus to first key in list                       | ❌      |
-| Up arrow (search bar)      | No action (stay in search bar)                        | ❌      |
-| Down arrow (key selected)  | Move selection to next key                            | ❌      |
-| Up arrow (key selected)    | Move selection to previous key                        | ❌      |
-| Up arrow (first key)       | Return to search bar, restore cursor to last position | ❌      |
-| Down arrow (last key)      | No action (stay on last key)                          | ❌      |
-| Enter (key selected)       | Focus right pane editor                               | ❌      |
-| Ctrl+Alt+C (window focused)| Copy value to clipboard, hide window                  | ❌      |
-| Escape                     | Hide window (regardless of focus)                     | ❌      |
+| Requirement                   | Description                                           | Status |
+|-------------------------------|-------------------------------------------------------|--------|
+| Down arrow (search bar)       | Move focus to first key in list                       | ❌      |
+| Up arrow (search bar)         | No action (stay in search bar)                        | ❌      |
+| Down arrow (key selected)     | Move selection to next key                            | ❌      |
+| Up arrow (key selected)       | Move selection to previous key                        | ❌      |
+| Up arrow (first key)          | Return to search bar, restore cursor to last position | ❌      |
+| Down arrow (last key)         | No action (stay on last key)                          | ❌      |
+| Enter (key selected)          | Focus right pane editor                               | ❌      |
+| Delete (left pane focused)    | Delete selected key (follows delete_style)            | ❌      |
+| Ctrl+Alt+C (right pane shown) | Copy value to clipboard, hide window                  | ❌      |
+| Escape                        | Hide window (regardless of focus)                     | ❌      |
 
 **Cursor Position Memory:**
 
@@ -437,7 +446,7 @@ visual focus.
 |------------|-----------------------------------------------|
 | Text       | Plain text copied                             |
 | Files      | Files copied (platform file clipboard format) |
-| Empty      | No action (nothing to copy)                   |
+| Empty      | Empty string copied                           |
 
 **Test Cases:**
 
@@ -452,9 +461,10 @@ visual focus.
 | TC-M8-07 | Enter on selected key focuses right pane                           | ❌      |
 | TC-M8-08 | Ctrl+Alt+C copies text value and hides window                      | ❌      |
 | TC-M8-09 | Ctrl+Alt+C copies files value and hides window                     | ❌      |
-| TC-M8-10 | Ctrl+Alt+C with empty value does nothing                           | ❌      |
+| TC-M8-10 | Ctrl+Alt+C with empty value copies empty string and hides window   | ❌      |
 | TC-M8-11 | Escape hides window from any focus state                           | ❌      |
 | TC-M8-12 | Copy updates last_accessed                                         | ❌      |
+| TC-M8-13 | Delete key deletes selected key (follows delete_style)             | ❌      |
 
 ### M10-win: Inline Rename
 
@@ -477,6 +487,9 @@ visual focus.
 | Click outside     | Confirms rename                                    | ❌      |
 | Validation        | 1-256 chars, valid UTF-8 (enforced by Key type)    | ❌      |
 
+**Note on Escape:** During inline rename, Escape cancels the rename (local behavior) rather than hiding the window (
+global behavior). This is an exception to the normal Escape behavior.
+
 **Rename Outcomes:**
 
 | Condition              | Behavior                        |
@@ -495,9 +508,9 @@ visual focus.
 
 **Search Index Update:**
 
-| Event            | Action                                    |
-|------------------|-------------------------------------------|
-| Rename confirmed | Call rename_key(old, new) on SearchEngine |
+| Event            | Action                                |
+|------------------|---------------------------------------|
+| Rename confirmed | Call rename(old, new) on SearchEngine |
 
 **Test Cases:**
 
@@ -507,7 +520,7 @@ visual focus.
 | TC-M10-02 | Clicking pen opens inline editor             | ❌      |
 | TC-M10-03 | Text fully selected when editor opens        | ❌      |
 | TC-M10-04 | Enter confirms rename                        | ❌      |
-| TC-M10-05 | Escape cancels rename                        | ❌      |
+| TC-M10-05 | Escape cancels rename (does not hide window) | ❌      |
 | TC-M10-06 | Click outside confirms rename                | ❌      |
 | TC-M10-07 | Rename to same name closes editor, no action | ❌      |
 | TC-M10-08 | Rename to new name updates key list          | ❌      |
@@ -519,7 +532,7 @@ visual focus.
 
 ### M11-win: Delete Key
 
-**Goal:** Delete keys via trash icon in left pane.
+**Goal:** Delete keys via trash icon in left pane or Delete key.
 
 **Status:** Not Started
 
@@ -529,6 +542,7 @@ visual focus.
 |------------------|-------------------------------------------------------|--------|
 | Delete button    | Trash icon on hover/selection in left pane key list   | ❌      |
 | Click to delete  | Clicking trash icon deletes key                       | ❌      |
+| Delete key       | Pressing Delete key deletes selected key              | ❌      |
 | Delete style     | Follows delete_style setting (soft or immediate)      | ❌      |
 | Soft delete      | Calls trash() on keva_core, key moves to trash        | ❌      |
 | Immediate delete | Calls purge() on keva_core, key permanently deleted   | ❌      |
@@ -550,16 +564,17 @@ visual focus.
 
 **Test Cases:**
 
-| TC        | Description                                        | Status |
-|-----------|----------------------------------------------------|--------|
-| TC-M11-01 | Trash icon visible on key hover                    | ❌      |
-| TC-M11-02 | Clicking trash with soft delete moves key to trash | ❌      |
-| TC-M11-03 | Clicking trash with immediate delete removes key   | ❌      |
-| TC-M11-04 | Deleted key disappears from active list            | ❌      |
-| TC-M11-05 | Soft-deleted key appears in trash results          | ❌      |
-| TC-M11-06 | Immediate-deleted key not in any results           | ❌      |
-| TC-M11-07 | Selection clears when selected key deleted         | ❌      |
-| TC-M11-08 | Right pane updates after selected key deleted      | ❌      |
+| TC        | Description                                            | Status |
+|-----------|--------------------------------------------------------|--------|
+| TC-M11-01 | Trash icon visible on key hover                        | ❌      |
+| TC-M11-02 | Clicking trash with soft delete moves key to trash     | ❌      |
+| TC-M11-03 | Clicking trash with immediate delete removes key       | ❌      |
+| TC-M11-04 | Deleted key disappears from active list                | ❌      |
+| TC-M11-05 | Soft-deleted key appears in trash results              | ❌      |
+| TC-M11-06 | Immediate-deleted key not in any results               | ❌      |
+| TC-M11-07 | Selection clears when selected key deleted             | ❌      |
+| TC-M11-08 | Right pane updates after selected key deleted          | ❌      |
+| TC-M11-09 | Delete key deletes selected key (follows delete_style) | ❌      |
 
 ### M12-win: Trash UI
 
@@ -578,23 +593,24 @@ visual focus.
 ├─────────────────┤
 │ Trash (N)       │
 │ (trashed keys)  │
-│ (scrollable)    │
 └─────────────────┘
 ```
 
 **Requirements:**
 
-| Requirement             | Description                                          | Status |
-|-------------------------|------------------------------------------------------|--------|
-| Trash section           | Fixed section at bottom of left pane                 | ❌      |
-| Trash header            | "Trash (N)" label showing count                      | ❌      |
-| Visibility              | Trash section hidden when no trash matches           | ❌      |
-| Separate scroll         | Trash section scrolls independently from active list | ❌      |
-| Trash indicator         | 🗑️ icon prefix on trashed keys                      | ❌      |
-| Selection               | Clicking trashed key selects it                      | ❌      |
-| Right pane              | Shows trashed key's value (read-only)                | ❌      |
-| Restore button          | Visible when trashed key selected                    | ❌      |
-| Permanent delete button | Visible when trashed key selected                    | ❌      |
+| Requirement             | Description                                                       | Status |
+|-------------------------|-------------------------------------------------------------------|--------|
+| Trash section           | Fixed height section at bottom (2-2.5x key row height)            | ❌      |
+| Trash header            | "Trash (N)" label showing count                                   | ❌      |
+| Visibility              | Trash section hidden when no trash matches                        | ❌      |
+| Separate navigation     | Click required to enter trash from active keys                    | ❌      |
+| Trash indicator         | 🗑️ icon prefix on trashed keys                                   | ❌      |
+| Selection               | Clicking trashed key selects it                                   | ❌      |
+| Right pane              | Shows trashed key's value (read-only)                             | ❌      |
+| Restore button          | Visible when trashed key selected                                 | ❌      |
+| Permanent delete button | Visible when trashed key selected                                 | ❌      |
+| Arrow nav within trash  | Up/Down arrows navigate within trash section                      | ❌      |
+| Arrow nav boundaries    | Up from first trash stays in trash; down from last stays in trash | ❌      |
 
 **Trashed Key Actions:**
 
@@ -623,7 +639,7 @@ visual focus.
 | TC-M12-01 | Trash section appears at bottom when trash matches exist | ❌      |
 | TC-M12-02 | Trash section hidden when no trash matches               | ❌      |
 | TC-M12-03 | Trash header shows correct count                         | ❌      |
-| TC-M12-04 | Trash section scrolls independently                      | ❌      |
+| TC-M12-04 | Trash section has fixed height                           | ❌      |
 | TC-M12-05 | Trashed keys show 🗑️ icon prefix                        | ❌      |
 | TC-M12-06 | Clicking trashed key selects it                          | ❌      |
 | TC-M12-07 | Right pane shows trashed key's value                     | ❌      |
@@ -633,23 +649,28 @@ visual focus.
 | TC-M12-11 | Restore moves key to active list                         | ❌      |
 | TC-M12-12 | Permanent delete removes key entirely                    | ❌      |
 | TC-M12-13 | Restored key appears in active key list                  | ❌      |
+| TC-M12-14 | Click required to enter trash section from active keys   | ❌      |
+| TC-M12-15 | Up arrow from first trash key stays in trash             | ❌      |
+| TC-M12-16 | Down arrow from last trash key stays in trash            | ❌      |
+| TC-M12-17 | Arrow keys navigate within trash section                 | ❌      |
 
 ### M13-win: File Value Display
 
-**Goal:** Display Files value as list with names, sizes, and individual delete.
+**Goal:** Display Files value as list with names, sizes, individual delete, and copy support.
 
 **Status:** Not Started
 
 **Requirements:**
 
-| Requirement        | Description                                    | Status |
-|--------------------|------------------------------------------------|--------|
-| File list          | Display each file as row with name and size    | ❌      |
-| Size format        | Human-readable (e.g., "1.2 MB", "340 KB")      | ❌      |
-| Scrollable         | File list scrolls if many files                | ❌      |
-| Delete individual  | X button on each file row                      | ❌      |
-| Delete all         | Clear button to remove all files               | ❌      |
-| Empty after delete | Deleting last file results in empty Text value | ❌      |
+| Requirement        | Description                                        | Status |
+|--------------------|----------------------------------------------------|--------|
+| File list          | Display each file as row with name and size        | ❌      |
+| Size format        | Human-readable (e.g., "1.2 MB", "340 KB")          | ❌      |
+| Scrollable         | File list scrolls if many files                    | ❌      |
+| Delete individual  | X button on each file row                          | ❌      |
+| Delete all         | Clear All button to remove all files               | ❌      |
+| Empty after delete | Deleting last file results in empty Text value     | ❌      |
+| Copy shortcut      | Ctrl+Alt+C copies files to clipboard, hides window | ❌      |
 
 **File Row Layout:**
 
@@ -684,28 +705,34 @@ visual focus.
 | TC-M13-07 | Clear All removes all files                                   | ❌      |
 | TC-M13-08 | Duplicate names display correctly (same name, different size) | ❌      |
 | TC-M13-09 | File deletion updates keva_core                               | ❌      |
+| TC-M13-10 | Ctrl+Alt+C copies files to clipboard and hides window         | ❌      |
 
 ### M14-win: Drag & Drop Files
 
-**Goal:** Drop files onto left or right pane to store as Files value.
+**Goal:** Drop files or text onto left or right pane to store.
 
 **Status:** Not Started
 
 **Requirements:**
 
-| Requirement              | Description                                                  | Status |
-|--------------------------|--------------------------------------------------------------|--------|
-| Drop target: right pane  | Drop files onto right pane stores to current target key      | ❌      |
-| Drop target: key in list | Drop files onto specific key in left pane stores to that key | ❌      |
-| Visual feedback          | Highlight drop target while dragging over                    | ❌      |
+| Requirement              | Description                                            | Status |
+|--------------------------|--------------------------------------------------------|--------|
+| Drop target: right pane  | Drop onto right pane stores to current target key      | ❌      |
+| Drop target: key in list | Drop onto specific key in left pane stores to that key | ❌      |
+| Drop target: search bar  | Not a drop target                                      | ❌      |
+| Drop on trashed key      | Rejected                                               | ❌      |
+| Visual feedback          | Highlight drop target while dragging over              | ❌      |
 
 **Drop Behavior Matrix:**
 
 | Existing Value | Drop Content | Behavior                                |
 |----------------|--------------|-----------------------------------------|
-| Empty          | Files        | Store as Files value                    |
+| Empty          | Files        | Accept, store as Files value            |
+| Empty          | Text         | Accept, store as Text value             |
 | Text           | Files        | Confirm: "Replace text with N file(s)?" |
+| Text           | Text         | Confirm: "Replace existing text?"       |
 | Files          | Files        | Silent append                           |
+| Files          | Text         | Confirm: "Replace N file(s) with text?" |
 
 **File Size Handling:**
 
@@ -727,15 +754,19 @@ visual focus.
 | TC-M14-01 | Drop files on right pane stores to target key     | ❌      |
 | TC-M14-02 | Drop files on key in left pane stores to that key | ❌      |
 | TC-M14-03 | Drop on empty value creates Files value           | ❌      |
-| TC-M14-04 | Drop on Text value shows confirmation             | ❌      |
+| TC-M14-04 | Drop files on Text value shows confirmation       | ❌      |
 | TC-M14-05 | Confirmation Yes replaces text with files         | ❌      |
 | TC-M14-06 | Confirmation No cancels drop                      | ❌      |
-| TC-M14-07 | Drop on Files value appends silently              | ❌      |
+| TC-M14-07 | Drop files on Files value appends silently        | ❌      |
 | TC-M14-08 | Drop target highlights during drag                | ❌      |
 | TC-M14-09 | File over 1GB rejected with error                 | ❌      |
 | TC-M14-10 | File over threshold shows confirmation            | ❌      |
 | TC-M14-11 | Duplicate file silently ignored                   | ❌      |
 | TC-M14-12 | Drop on trashed key rejected                      | ❌      |
+| TC-M14-13 | Drop text on empty value stores as Text           | ❌      |
+| TC-M14-14 | Drop text on Text value shows confirmation        | ❌      |
+| TC-M14-15 | Drop text on Files value shows confirmation       | ❌      |
+| TC-M14-16 | Search bar is not a drop target                   | ❌      |
 
 ### M15-win: Settings Dialog
 
@@ -751,6 +782,7 @@ visual focus.
 | Modal dialog      | Separate window, blocks main window interaction | ❌      |
 | Save on close     | Changes saved to config.toml when dialog closes | ❌      |
 | Apply immediately | Changes take effect without app restart         | ❌      |
+| Close methods     | X button or Esc key closes dialog               | ❌      |
 
 **Settings Fields:**
 
@@ -789,6 +821,7 @@ visual focus.
 | TC-M15-09 | TTL fields accept valid numbers            | ❌      |
 | TC-M15-10 | Launch at Login updates system setting     | ❌      |
 | TC-M15-11 | Show Tray Icon toggles tray visibility     | ❌      |
+| TC-M15-12 | Esc key closes settings dialog             | ❌      |
 
 ### M16-win: Global Hotkey
 
@@ -809,11 +842,11 @@ visual focus.
 
 **Conflict Detection:**
 
-| Condition          | Behavior                                                                    |
-|--------------------|-----------------------------------------------------------------------------|
-| Registration fails | Another app has the shortcut                                                |
-| On conflict        | Show notification: "Shortcut Ctrl+Alt+K is in use by another application"   |
-| After notification | Open settings dialog with shortcut field focused                            |
+| Condition          | Behavior                                                                  |
+|--------------------|---------------------------------------------------------------------------|
+| Registration fails | Another app has the shortcut                                              |
+| On conflict        | Show notification: "Shortcut Ctrl+Alt+K is in use by another application" |
+| After notification | Open settings dialog with shortcut field focused                          |
 
 **Shortcut Change Flow:**
 
@@ -938,12 +971,12 @@ visual focus.
 
 **Dialog Content:**
 
-| Element  | Description                                 |
-|----------|---------------------------------------------|
-| Title    | "Welcome to Keva"                           |
-| Message  | Brief explanation of Keva's purpose         |
-| Checkbox | "Launch Keva at login" (checked by default) |
-| Button   | "Get Started"                               |
+| Element  | Description                                                                                            |
+|----------|--------------------------------------------------------------------------------------------------------|
+| Title    | "Welcome to Keva"                                                                                      |
+| Message  | "Keva stores your clipboard snippets and files locally. Press Ctrl+Alt+K anytime to open this window." |
+| Checkbox | "Launch Keva at login" (checked by default)                                                            |
+| Button   | "Get Started"                                                                                          |
 
 **Flow:**
 
@@ -1014,7 +1047,7 @@ visual focus.
 | 3    | Remove Start Menu shortcut                      |
 | 4    | Remove registry entries (including Run key)     |
 | 5    | Prompt: "Delete all Keva data?"                 |
-| 6    | Yes: Delete data directory (~/.keva)            |
+| 6    | Yes: Delete data directory (%APPDATA%\Keva)     |
 | 7    | No: Leave data directory intact                 |
 
 **Launch at Login:**
@@ -1037,8 +1070,8 @@ visual focus.
 | TC-M20-04 | Uninstaller removes application files                      | ❌      |
 | TC-M20-05 | Uninstaller removes Start Menu shortcut                    | ❌      |
 | TC-M20-06 | Uninstaller prompts for data deletion                      | ❌      |
-| TC-M20-07 | Data deletion Yes removes ~/.keva                          | ❌      |
-| TC-M20-08 | Data deletion No preserves ~/.keva                         | ❌      |
+| TC-M20-07 | Data deletion Yes removes %APPDATA%\Keva                   | ❌      |
+| TC-M20-08 | Data deletion No preserves %APPDATA%\Keva                  | ❌      |
 | TC-M20-09 | Launch at login enabled appears in Task Manager Startup    | ❌      |
 | TC-M20-10 | Launch at login disabled removes from Task Manager Startup | ❌      |
 | TC-M20-11 | App auto-starts after system reboot (when enabled)         | ❌      |
