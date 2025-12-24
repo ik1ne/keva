@@ -195,14 +195,18 @@ keva/
 
 | TC       | Description                                              | Status |
 |----------|----------------------------------------------------------|--------|
-| TC-M4-01 | Clicking key highlights it                               | ❌      |
+| TC-M4-01 | Clicking key highlights it, dims search bar              | ❌      |
 | TC-M4-02 | Selected key's text value displays in right pane         | ❌      |
 | TC-M4-03 | Clicking different key updates selection and right pane  | ❌      |
-| TC-M4-04 | Clicking search bar clears selection highlight           | ❌      |
-| TC-M4-05 | Search bar shows focus highlight when clicked            | ❌      |
-| TC-M4-06 | Only one focus indicator visible at a time               | ❌      |
-| TC-M4-07 | Selecting key updates last_accessed                      | ❌      |
-| TC-M4-08 | Files value shows placeholder text                       | ❌      |
+| TC-M4-04 | Clicking search bar clears selection, restores normal text | ❌    |
+| TC-M4-05 | Search bar shows pen icon when exact key exists          | ❌      |
+| TC-M4-06 | Search bar shows plus icon when key doesn't exist        | ❌      |
+| TC-M4-07 | Button hidden when search bar empty                      | ❌      |
+| TC-M4-08 | Button hidden when key selected in list                  | ❌      |
+| TC-M4-09 | Hovering button shows tooltip                            | ❌      |
+| TC-M4-10 | Selecting key updates last_accessed                      | ❌      |
+| TC-M4-11 | Typing clears selection and updates right pane live      | ❌      |
+| TC-M4-12 | Files value shows placeholder text                       | ❌      |
 
 **UX Model (Search Bar & Selection):**
 
@@ -232,12 +236,54 @@ The search bar and left pane selection are **mutually exclusive**. Only one can 
 | Search bar focused | Focus border/highlight | No selection |
 | Key selected | No focus, dimmed text | Selected row highlighted (Spotlight-style) |
 
-**Button Behavior (M7-win scope):**
+**Button Display (M4 scope - visual only):**
 
-| State | Icon | Tooltip | Enter Action |
-|-------|------|---------|--------------|
-| Key EXISTS | ✏️ Pen | "Edit {key} (Enter)" | Focus editor |
-| Key DOESN'T EXIST | ➕ Plus | "Create {key} (Enter)" | Create key, focus editor |
+| State | Icon | Tooltip |
+|-------|------|---------|
+| Key EXISTS | ✏️ Pen | "Edit {key} (Enter)" |
+| Key DOESN'T EXIST | ➕ Plus | "Create {key} (Enter)" |
+| Empty / Key selected | Hidden | - |
+
+**Note:** Button click/Enter action deferred to M7-win.
+
+### M5-win: Text Editor & Auto-Save
+
+**Goal:** Editable text area in right pane with automatic saving.
+
+**Status:** Not Started
+
+**Requirements:**
+
+| Requirement       | Description                                          | Status |
+|-------------------|------------------------------------------------------|--------|
+| Text editing      | Right pane text content is editable (not read-only)  | ❌      |
+| Edit trigger      | Clicking in right pane text area enables editing     | ❌      |
+| Auto-save         | Save changes after 3 seconds of inactivity           | ❌      |
+| Save method       | Call upsert_text() on keva_core                      | ❌      |
+| Key list update   | New key appears in left pane after first save        | ❌      |
+| Unsaved indicator | Optional: visual indicator for unsaved changes       | ❌      |
+| Save on hide      | Save pending changes when window hides (Esc)         | ❌      |
+| Empty text        | Saving empty string stores empty Text value (key preserved) | ❌ |
+
+**Scope:**
+
+| In Scope                          | Out of Scope             |
+|-----------------------------------|--------------------------|
+| Edit existing Text value          | Creating new key (M9)    |
+| Edit empty value for existing key | Clipboard paste (M6)     |
+| Auto-save timing                  | Files value editing      |
+
+**Test Cases:**
+
+| TC       | Description                                              | Status |
+|----------|----------------------------------------------------------|--------|
+| TC-M5-01 | Clicking text area allows typing                         | ❌      |
+| TC-M5-02 | Changes auto-save after 3 seconds idle                   | ❌      |
+| TC-M5-03 | Saved changes persist after app restart                  | ❌      |
+| TC-M5-04 | Pressing Esc saves pending changes before hiding         | ❌      |
+| TC-M5-05 | Deleting all text saves empty string (key not deleted)   | ❌      |
+| TC-M5-06 | Rapid typing delays save until 3 seconds after last keystroke | ❌ |
+| TC-M5-07 | Switching selection saves pending changes to previous key | ❌     |
 
 ---
 
