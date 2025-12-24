@@ -193,20 +193,20 @@ keva/
 
 **Test Cases:**
 
-| TC       | Description                                                | Status |
-|----------|------------------------------------------------------------|--------|
-| TC-M4-01 | Clicking key highlights it, dims search bar                | ❌      |
-| TC-M4-02 | Selected key's text value displays in right pane           | ❌      |
-| TC-M4-03 | Clicking different key updates selection and right pane    | ❌      |
-| TC-M4-04 | Clicking search bar clears selection, restores normal text | ❌      |
-| TC-M4-05 | Search bar shows pen icon when exact key exists            | ❌      |
-| TC-M4-06 | Search bar shows plus icon when key doesn't exist          | ❌      |
-| TC-M4-07 | Button hidden when search bar empty                        | ❌      |
-| TC-M4-08 | Button hidden when key selected in list                    | ❌      |
-| TC-M4-09 | Hovering button shows tooltip                              | ❌      |
-| TC-M4-10 | Selecting key updates last_accessed                        | ❌      |
-| TC-M4-11 | Typing clears selection and updates right pane live        | ❌      |
-| TC-M4-12 | Files value shows placeholder text                         | ❌      |
+| TC       | Description                                                                           | Status |
+|----------|---------------------------------------------------------------------------------------|--------|
+| TC-M4-01 | Clicking key highlights it, dims search bar                                           | ❌      |
+| TC-M4-02 | Selected key's text value displays in right pane                                      | ❌      |
+| TC-M4-03 | Clicking different key updates selection and right pane                               | ❌      |
+| TC-M4-04 | Clicking search bar clears selection, restores normal text                            | ❌      |
+| TC-M4-05 | Search bar shows pen icon when exact key exists (visual only, click deferred to M7)   | ❌      |
+| TC-M4-06 | Search bar shows plus icon when key doesn't exist (visual only, click deferred to M7) | ❌      |
+| TC-M4-07 | Button hidden when search bar empty                                                   | ❌      |
+| TC-M4-08 | Button hidden when key selected in list                                               | ❌      |
+| TC-M4-09 | Hovering button shows tooltip                                                         | ❌      |
+| TC-M4-10 | Selecting key updates last_accessed                                                   | ❌      |
+| TC-M4-11 | Typing clears selection and updates right pane live                                   | ❌      |
+| TC-M4-12 | Files value shows placeholder text                                                    | ❌      |
 
 **UX Model (Search Bar & Selection):**
 
@@ -326,21 +326,21 @@ visual focus.
 
 **Test Cases:**
 
-| TC       | Description                                                           | Status |
-|----------|-----------------------------------------------------------------------|--------|
-| TC-M6-01 | Paste text with search bar focused inserts into search bar            | ❌      |
-| TC-M6-02 | Paste files with search bar focused creates/updates key value         | ❌      |
-| TC-M6-03 | Paste text into text editor inserts at cursor                         | ❌      |
-| TC-M6-04 | Paste files into text editor shows warning                            | ❌      |
-| TC-M6-05 | Paste text into Files display shows warning                           | ❌      |
-| TC-M6-06 | Paste files into Files display appends silently                       | ❌      |
-| TC-M6-07 | Second Ctrl+V within 2 seconds overwrites                             | ❌      |
-| TC-M6-08 | Warning clears after timeout                                          | ❌      |
-| TC-M6-09 | Clipboard with both text and files treated as files                   | ❌      |
-| TC-M6-10 | File over 1GB rejected with error                                     | ❌      |
-| TC-M6-11 | File over threshold shows confirmation dialog                         | ❌      |
-| TC-M6-12 | Duplicate file (same hash) silently ignored on append                 | ❌      |
-| TC-M6-13 | Paste files with search bar focused and key doesn't exist creates key | ❌      |
+| TC       | Description                                                                            | Status |
+|----------|----------------------------------------------------------------------------------------|--------|
+| TC-M6-01 | Paste text with search bar focused inserts into search bar                             | ❌      |
+| TC-M6-02 | Paste files with search bar focused creates/updates key value                          | ❌      |
+| TC-M6-03 | Paste text into text editor inserts at cursor                                          | ❌      |
+| TC-M6-04 | Paste files into text editor shows warning                                             | ❌      |
+| TC-M6-05 | Paste text into Files display shows warning                                            | ❌      |
+| TC-M6-06 | Paste files into Files display appends silently                                        | ❌      |
+| TC-M6-07 | Second Ctrl+V within 2 seconds overwrites                                              | ❌      |
+| TC-M6-08 | Warning clears after timeout                                                           | ❌      |
+| TC-M6-09 | Clipboard with both text and files treated as files                                    | ❌      |
+| TC-M6-10 | File over 1GB rejected with error                                                      | ❌      |
+| TC-M6-11 | File over threshold shows confirmation dialog                                          | ❌      |
+| TC-M6-12 | Duplicate file (same hash) silently ignored on append                                  | ❌      |
+| TC-M6-13 | Paste files with search bar focused and key doesn't exist creates key with Files value | ❌      |
 
 ### M7-win: Search Integration & Filtering
 
@@ -377,14 +377,14 @@ visual focus.
 
 **Index Maintenance:**
 
-| Event                   | SearchEngine Call                  |
-|-------------------------|------------------------------------|
-| App startup             | rebuild(active_keys, trashed_keys) |
-| Key created             | add_key(key, false)                |
-| Key deleted (soft)      | mark_trashed(key)                  |
-| Key deleted (permanent) | remove_key(key)                    |
-| Key restored            | mark_restored(key)                 |
-| Key renamed             | rename_key(old, new)               |
+| Event                   | SearchEngine Call                              |
+|-------------------------|------------------------------------------------|
+| App startup             | new(active_keys, trashed_keys, config, notify) |
+| Key created             | add_active(key)                                |
+| Key deleted (soft)      | trash(key)                                     |
+| Key deleted (permanent) | remove(key)                                    |
+| Key restored            | restore(key)                                   |
+| Key renamed             | rename(old, new)                               |
 
 **Test Cases:**
 
@@ -536,10 +536,10 @@ visual focus.
 
 **Search Index Update:**
 
-| Delete Style | Action                                 |
-|--------------|----------------------------------------|
-| Soft         | Call mark_trashed(key) on SearchEngine |
-| Immediate    | Call remove_key(key) on SearchEngine   |
+| Delete Style | Action                           |
+|--------------|----------------------------------|
+| Soft         | Call trash(key) on SearchEngine  |
+| Immediate    | Call remove(key) on SearchEngine |
 
 **Post-Delete State:**
 

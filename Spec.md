@@ -164,7 +164,7 @@ Split pane with three components:
 
 **Behavior:**
 
-- Throttle-based search update (~250ms delay after first keystroke)
+- On-demand search: each keystroke triggers search, results update as available
 - Empty search bar shows all keys
 - Plus button hidden when exact match exists
 - Enter with exact match → focus that key's editor
@@ -548,41 +548,3 @@ If auto-save fails (disk full, permissions, etc.):
 3. Retry on next edit or explicit save
 4. On window hide: warn user before hiding if unsaved changes exist
 
-## 9. Development Milestones
-
-### Phase 0: Core Infrastructure (Complete)
-
-| Milestone | Summary                                            | Status |
-|-----------|----------------------------------------------------|--------|
-| M0-core   | Storage library with CRUD, TTL, GC, blob storage   | ✅      |
-| M0-search | Fuzzy search library with nucleo, non-blocking API | ✅      |
-
-### Phase 1: Windows Application
-
-| Milestone | Summary                                                    |
-|-----------|------------------------------------------------------------|
-| M1-win    | Borderless window with tray icon, resize, drag, Esc        |
-| M2-win    | Three-pane layout, key list display, keva_core integration |
-| M3-win    | Text editor in right pane, auto-save                       |
-| M4-win    | Clipboard paste handling (text and files)                  |
-| M5-win    | Search bar integration with keva_search, filtering         |
-| M6-win    | Keyboard navigation (arrows, Enter, Shift+Enter)           |
-| M7-win    | Key creation (plus button, Enter to create)                |
-| M8-win    | Inline rename                                              |
-| M9-win    | Delete key                                                 |
-| M10-win   | Trash UI (icons, restore, permanent delete)                |
-| M11-win   | File value display (list with names, sizes, delete)        |
-| M12-win   | Drag & drop files                                          |
-| M13-win   | Settings dialog, config persistence                        |
-| M14-win   | Global hotkey, conflict detection                          |
-| M15-win   | Single instance enforcement                                |
-| M16-win   | Window position memory                                     |
-| M17-win   | First-run dialog                                           |
-| M18-win   | Installer, uninstaller, launch at login                    |
-
-### Deferred to Post-v1
-
-- macOS application (see Planned.md)
-- Native file preview (IPreviewHandler)
-- Rich format support (MIME types, specialized viewers)
-- Regex search mode
