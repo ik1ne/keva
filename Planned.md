@@ -2,14 +2,80 @@
 
 Features planned but not in v1 scope:
 
-1. **Rich format support**: HTML, images, RTF, application-specific clipboard data. Includes binary output for
+1. **macOS Application**: Native macOS app via Swift + FFI to keva_core/keva_search.
+
+2. **Rich format support**: HTML, images, RTF, application-specific clipboard data. Includes binary output for
    programmatic access.
 
-2. **Value content search**: Search within value contents, not just keys.
+3. **Value content search**: Search within value contents, not just keys.
 
-3. **Regex search mode**: Regular expression matching as alternative to fuzzy search.
+4. **Regex search mode**: Regular expression matching as alternative to fuzzy search.
 
-4. **CLI interface**: Command-line interface for scripting and automation.
+5. **CLI interface**: Command-line interface for scripting and automation.
+
+6. **Native file preview**: IPreviewHandler on Windows, Quick Look on macOS.
+
+---
+
+## macOS Application (Reference)
+
+Preserved from v1 planning for future implementation.
+
+### Architecture
+
+- `keva_ffi` crate: C FFI bindings exposing keva_core and keva_search
+- Swift app using FFI via bridging header
+- Build: Swift Package Manager or xcodebuild (no Xcode IDE required)
+
+### FFI Crate
+
+```toml
+[package]
+name = "keva_ffi"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+keva_core = { path = "../core" }
+keva_search = { path = "../search" }
+
+[build-dependencies]
+cbindgen = "0.27"
+```
+
+### C API
+
+```c
+// Lifecycle
+KevaHandle* keva_open(const char* path);
+void keva_close(KevaHandle* handle);
+
+// CRUD
+int32_t keva_set_text(KevaHandle* h, const char* key, const char* text);
+int32_t keva_set_files(KevaHandle* h, const char* key, const char** paths, size_t count);
+KevaValue* keva_get(KevaHandle* h, const char* key);
+int32_t keva_delete(KevaHandle* h, const char* key);
+int32_t keva_rename(KevaHandle* h, const char* old_key, const char* new_key);
+
+// Listing
+KevaKeyList* keva_list_keys(KevaHandle* h);
+
+// Memory
+void keva_free_value(KevaValue* value);
+void keva_free_key_list(KevaKeyList* list);
+```
+
+### macOS-Specific UI
+
+- Borderless window (NSWindow, styleMask)
+- Menu bar icon (NSStatusItem)
+- LSUIElement=true in Info.plist (hide from Dock/Cmd+Tab)
+- Cmd+Shift+K global shortcut
+- Text preview: NSTextView
+- File preview: QLPreviewView
+- Clipboard: NSPasteboard
+- Launch at Login: SMAppService
 
 ---
 

@@ -6,7 +6,7 @@ Keva is a local key-value store designed for clipboard-like data management. It 
 fuzzy search capabilities.
 
 - **Name:** Keva
-- **Platforms:** macOS (.app bundle), Windows (installer with uninstaller)
+- **Platform:** Windows (installer with uninstaller)
 
 ## 2. Core Concepts
 
@@ -37,7 +37,7 @@ Values are stored as one of two types:
 | Copy Source               | Stored As                |
 |---------------------------|--------------------------|
 | Text from any application | Text                     |
-| File from Finder/Explorer | Files (hard copy)        |
+| File from Explorer        | Files (hard copy)        |
 | Multiple files            | Files (multiple entries) |
 
 When clipboard contains both files and text, **files take priority** (text is discarded).
@@ -54,26 +54,22 @@ Single-process application containing GUI window and keva-core storage layer.
 ### Process Behavior
 
 - Starts as background process (no window on launch)
-- No Dock icon (macOS) / Taskbar icon visible (Windows)
-    - Windows limitation: hiding from taskbar also hides from Alt+Tab, so taskbar icon is kept
-- Menu bar icon (macOS) / System tray icon (Windows) visible by default
+- Taskbar icon visible (hiding from taskbar also hides from Alt+Tab)
+- System tray icon visible by default
 - Window hidden keeps process alive in background
 
 ### Launch and Activation
 
-- Global shortcut `Cmd+Shift+K` (macOS) / `Ctrl+Shift+K` (Windows) shows window
+- Global shortcut `Ctrl+Shift+K` shows window
 - Launch at login: user opts in via first-run dialog (see Section 4)
-    - macOS: Login Items via `SMAppService`
-    - Windows: Registry `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run`
-- Must appear correctly in OS startup settings (Task Manager on Windows, Login Items on macOS)
+    - Registry `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run`
+- Must appear correctly in Task Manager Startup tab
 
 ### Single Instance
 
 - Only one instance runs at a time
-- Relaunch app (Spotlight, double-click) → activates existing instance's window
-- Implementation:
-    - Windows: Named mutex + `WM_COPYDATA` message
-    - macOS: Unix domain socket in data directory
+- Relaunch app (double-click) → activates existing instance's window
+- Implementation: Named mutex + `WM_COPYDATA` message
 - If existing instance doesn't respond within 2 seconds: offer to force-quit and relaunch
 
 ### In-Memory State
@@ -92,20 +88,16 @@ Single-process application containing GUI window and keva-core storage layer.
 
 ### Cross-Platform Consistency
 
-The UI is identical on macOS and Windows:
-
 - Custom-drawn window (no native decorations)
 - No title bar, close/minimize/maximize buttons
-- Same fonts, colors, and layout on all platforms
-- Only keyboard shortcuts differ (`Cmd` on macOS, `Ctrl` on Windows)
 
 ### Window Behavior
 
 **Window Controls:**
 
-- `Cmd+Shift+K` / `Ctrl+Shift+K` → Show window (global shortcut, works when hidden)
+- `Ctrl+Shift+K` → Show window (global shortcut, works when hidden)
 - `Esc` → Hide window (only when window is focused)
-- `Cmd+Q` / `Alt+F4` → Quit app entirely (only when window is focused)
+- `Alt+F4` → Quit app entirely (only when window is focused)
 - Window does NOT close on focus loss (supports drag/drop and copy/paste workflows)
 - Tray icon left-click also toggles visibility
 
@@ -130,7 +122,7 @@ the window.
 **Window Show State:**
 
 - Search text preserved from previous session
-- Text is selected (as if Ctrl+A/Cmd+A pressed)
+- Text is selected (as if Ctrl+A pressed)
 - User can type to replace or use arrow keys to preserve existing text
 
 ### Tray Icon Behavior
@@ -193,14 +185,14 @@ Search bar and left pane selection are independent:
 - Shows text input with placeholder: `Write or paste value for "<key>"`
 - Accepts:
     - Text input → stored as plain text
-    - Paste (`Cmd+V` / `Ctrl+V`) with files → stored as files, shows preview
-    - Paste (`Cmd+V` / `Ctrl+V`) with plain text → inserted at cursor
+    - Paste (`Ctrl+V`) with files → stored as files, shows preview
+    - Paste (`Ctrl+V`) with plain text → inserted at cursor
     - Drag & drop file → stored as file contents, shows preview
 
 **Text Editing State (plain text value exists):**
 
 - Standard text editor behavior
-- Paste (`Cmd+V` / `Ctrl+V`):
+- Paste (`Ctrl+V`):
     - If clipboard contains plain text → insert at cursor
     - If clipboard contains only files → show hint: "Press Ctrl+V again to overwrite" (2-second timeout)
 - Auto-save after 3 seconds of inactivity or on window hide
@@ -251,15 +243,13 @@ Each key displays on hover/selection:
 
 | State                             | Key            | Action                                            |
 |-----------------------------------|----------------|---------------------------------------------------|
-| Global (even when hidden)         | `Cmd+Shift+K`  | Show window (macOS)                               |
-| Global (even when hidden)         | `Ctrl+Shift+K` | Show window (Windows)                             |
+| Global (even when hidden)         | `Ctrl+Shift+K` | Show window                                       |
 | Window focused                    | `Esc`          | Hide window (process stays alive)                 |
-| Window focused                    | `Cmd+Q`        | Quit app entirely (macOS)                         |
-| Window focused                    | `Alt+F4`       | Quit app entirely (Windows)                       |
+| Window focused                    | `Alt+F4`       | Quit app entirely                                 |
 | Key selected in left pane         | `Shift+Enter`  | Copy value to clipboard, hide window              |
 | Key selected in left pane         | `Enter`        | Focus right pane for editing                      |
 | No selection, search bar has text | `Enter`        | Focus right pane for editing (creates key if new) |
-| Window focused                    | `Cmd+,`        | Open settings dialog                              |
+| Window focused                    | `Ctrl+,`       | Open settings dialog                              |
 
 ### First-Run Experience
 
@@ -267,8 +257,7 @@ On first launch (no config.toml exists):
 
 1. Show welcome dialog:
     - Title: "Welcome to Keva"
-    - Message: "Keva stores your clipboard snippets and files locally. Press Cmd+Shift+K (or Ctrl+Shift+K on Windows)
-      anytime to open this window."
+    - Message: "Keva stores your clipboard snippets and files locally. Press Ctrl+Shift+K anytime to open this window."
     - Checkbox: "Launch Keva at login" (checked by default)
     - Button: "Get Started"
 2. If checkbox is checked, register login item
@@ -277,7 +266,7 @@ On first launch (no config.toml exists):
 
 ### Settings Dialog
 
-- Opened via `Cmd+,` or tray icon menu
+- Opened via `Ctrl+,` or tray icon menu
 - Changes saved to config file on dialog close
 - Applied immediately to running application
 - Global shortcut configuration uses key capture dialog
@@ -296,7 +285,7 @@ On first launch (no config.toml exists):
 | Lifecycle | Purge TTL            | Days before trashed items are deleted |
 
 **Note:** If tray icon is hidden and window is also hidden, user can still access settings by relaunching the app (which
-shows the existing instance's window) and pressing `Cmd+,` / `Ctrl+,`.
+shows the existing instance's window) and pressing `Ctrl+,`.
 
 ### Drag & Drop
 
@@ -352,13 +341,13 @@ config_version = 1
 theme = "system"
 
 # Global shortcut to show window
-# Format: "Modifier+Key" (e.g., "Cmd+Shift+K", "Ctrl+Shift+K")
-global_shortcut = "Cmd+Shift+K"  # or "Ctrl+Shift+K" on Windows
+# Format: "Modifier+Key" (e.g., "Ctrl+Shift+K")
+global_shortcut = "Ctrl+Shift+K"
 
 # Start automatically at login
 launch_at_login = true
 
-# Show menu bar / system tray icon
+# Show system tray icon
 show_tray_icon = true
 
 # Delete behavior: "soft" (to trash) or "immediate" (permanent)
@@ -403,9 +392,9 @@ If config.toml is missing: created with defaults, no popup.
 |------------------------|---------------------|------------------------------------------------------------|
 | `config_version`       | `1`                 | Config format version for migrations                       |
 | `theme`                | `"system"`          | `"dark"`, `"light"`, or `"system"` (follow OS)             |
-| `global_shortcut`      | `"Cmd+Shift+K"`     | Key combination to show window (platform-specific default) |
+| `global_shortcut`      | `"Ctrl+Shift+K"`    | Key combination to show window                             |
 | `launch_at_login`      | `true`              | Start automatically at system login                        |
-| `show_tray_icon`       | `true`              | Show menu bar / system tray icon                           |
+| `show_tray_icon`       | `true`              | Show system tray icon                                      |
 | `delete_style`         | `"soft"`            | `"soft"` = move to trash, `"immediate"` = permanent delete |
 | `large_file_threshold` | `268435456` (256MB) | Confirmation prompt for files exceeding this size (bytes)  |
 | `trash_ttl`            | `2592000` (30 days) | Seconds before inactive items move to trash                |
@@ -536,7 +525,7 @@ pub struct SearchConfig {
 
 If the configured shortcut is already registered by another application:
 
-1. Show notification: "Shortcut Cmd+Shift+K is in use by another application"
+1. Show notification: "Shortcut Ctrl+Shift+K is in use by another application"
 2. Open settings dialog with shortcut field focused
 3. User must choose a different shortcut or resolve the conflict externally
 4. Alternative: User can launch app executable to show window if hotkey unavailable
@@ -591,15 +580,9 @@ If auto-save fails (disk full, permissions, etc.):
 | M17-win   | First-run dialog                                           |
 | M18-win   | Installer, uninstaller, launch at login                    |
 
-### Phase 2: macOS Application
-
-| Milestone | Summary                                         |
-|-----------|-------------------------------------------------|
-| M0-mac    | FFI layer (keva_ffi crate)                      |
-| M1-mac    | macOS app (deferred, details TBD after Windows) |
-
 ### Deferred to Post-v1
 
-- Native file preview (IPreviewHandler on Windows, Quick Look on macOS)
+- macOS application (see Planned.md)
+- Native file preview (IPreviewHandler)
 - Rich format support (MIME types, specialized viewers)
 - Regex search mode

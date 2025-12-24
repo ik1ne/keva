@@ -28,10 +28,10 @@ Keva is a local key-value store for clipboard-like data. The core library (`keva
 
 ## To Decide
 
-| Question | Context | Decision |
-|----------|---------|----------|
-| Keep 3px inner border drag zone? | M1-win requires 3px inner border for dragging, M2-win adds search icon as drag handle. Should we keep both drag methods or remove the border drag zone? | Pending |
-| Data directory location? | Currently uses ~/.keva (%USERPROFILE%\.keva on Windows). Should we use %APPDATA%\Keva instead for Windows convention? Or keep ~/.keva for cross-platform consistency? | Pending |
+| Question                         | Context                                                                                                                                                               | Decision |
+|----------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
+| Keep 3px inner border drag zone? | M1-win requires 3px inner border for dragging, M2-win adds search icon as drag handle. Should we keep both drag methods or remove the border drag zone?               | Pending  |
+| Data directory location?         | Currently uses ~/.keva (%USERPROFILE%\.keva on Windows). Should we use %APPDATA%\Keva instead for Windows convention? Or keep ~/.keva for cross-platform consistency? | Pending  |
 
 ---
 
@@ -143,15 +143,15 @@ keva/
 
 **Requirements:**
 
-| Requirement      | Description                                                 | Status |
-|------------------|-------------------------------------------------------------|--------|
-| keva_core init   | Initialize KevaCore on app startup                          | ✅      |
-| Data directory   | Use default ~/.keva/ or KEVA_DATA_DIR environment variable  | ✅      |
-| Config           | Load config.toml if exists, use defaults otherwise          | ❌      |
-| Key list         | Display all active keys from active_keys()                  | ✅      |
-| Scrolling        | Key list scrolls when content exceeds viewport              | ❌      |
-| Empty state      | Empty database shows empty list (or "No keys" placeholder)  | ❌      |
-| Refresh          | Key list reflects current database state on window show     | ❌      |
+| Requirement    | Description                                                | Status |
+|----------------|------------------------------------------------------------|--------|
+| keva_core init | Initialize KevaCore on app startup                         | ✅      |
+| Data directory | Use default ~/.keva/ or KEVA_DATA_DIR environment variable | ✅      |
+| Config         | Load config.toml if exists, use defaults otherwise         | ❌      |
+| Key list       | Display all active keys from active_keys()                 | ✅      |
+| Scrolling      | Key list scrolls when content exceeds viewport             | ❌      |
+| Empty state    | Empty database shows empty list (or "No keys" placeholder) | ❌      |
+| Refresh        | Key list reflects current database state on window show    | ❌      |
 
 **Test Cases:**
 
@@ -177,72 +177,73 @@ keva/
 
 **Requirements:**
 
-| Requirement           | Description                                                  | Status |
-|-----------------------|--------------------------------------------------------------|--------|
-| Click to select       | Clicking key in list selects it                              | ❌      |
-| Selection highlight   | Selected key visually highlighted                            | ❌      |
-| Right pane display    | Shows selected key's value                                   | ❌      |
-| Text value            | Display text content (read-only for now)                     | ❌      |
-| Files value           | Display placeholder "N file(s)" (detailed in M11)            | ❌      |
-| Empty value           | Display placeholder "No value"                               | ❌      |
-| Touch on select       | Call touch() when key selected                               | ❌      |
-| Focus exclusivity     | Search bar focused OR key selected, never both               | ❌      |
-| Search bar focus      | Clicking search bar clears key selection                     | ❌      |
-| Search bar highlight  | Visual focus indicator when search bar active                | ❌      |
-| Right pane on deselect| Shows placeholder for search bar text                        | ❌      |
+| Requirement            | Description                                       | Status |
+|------------------------|---------------------------------------------------|--------|
+| Click to select        | Clicking key in list selects it                   | ❌      |
+| Selection highlight    | Selected key visually highlighted                 | ❌      |
+| Right pane display     | Shows selected key's value                        | ❌      |
+| Text value             | Display text content (read-only for now)          | ❌      |
+| Files value            | Display placeholder "N file(s)" (detailed in M11) | ❌      |
+| Empty value            | Display placeholder "No value"                    | ❌      |
+| Touch on select        | Call touch() when key selected                    | ❌      |
+| Focus exclusivity      | Search bar focused OR key selected, never both    | ❌      |
+| Search bar focus       | Clicking search bar clears key selection          | ❌      |
+| Search bar highlight   | Visual focus indicator when search bar active     | ❌      |
+| Right pane on deselect | Shows placeholder for search bar text             | ❌      |
 
 **Test Cases:**
 
-| TC       | Description                                              | Status |
-|----------|----------------------------------------------------------|--------|
-| TC-M4-01 | Clicking key highlights it, dims search bar              | ❌      |
-| TC-M4-02 | Selected key's text value displays in right pane         | ❌      |
-| TC-M4-03 | Clicking different key updates selection and right pane  | ❌      |
-| TC-M4-04 | Clicking search bar clears selection, restores normal text | ❌    |
-| TC-M4-05 | Search bar shows pen icon when exact key exists          | ❌      |
-| TC-M4-06 | Search bar shows plus icon when key doesn't exist        | ❌      |
-| TC-M4-07 | Button hidden when search bar empty                      | ❌      |
-| TC-M4-08 | Button hidden when key selected in list                  | ❌      |
-| TC-M4-09 | Hovering button shows tooltip                            | ❌      |
-| TC-M4-10 | Selecting key updates last_accessed                      | ❌      |
-| TC-M4-11 | Typing clears selection and updates right pane live      | ❌      |
-| TC-M4-12 | Files value shows placeholder text                       | ❌      |
+| TC       | Description                                                | Status |
+|----------|------------------------------------------------------------|--------|
+| TC-M4-01 | Clicking key highlights it, dims search bar                | ❌      |
+| TC-M4-02 | Selected key's text value displays in right pane           | ❌      |
+| TC-M4-03 | Clicking different key updates selection and right pane    | ❌      |
+| TC-M4-04 | Clicking search bar clears selection, restores normal text | ❌      |
+| TC-M4-05 | Search bar shows pen icon when exact key exists            | ❌      |
+| TC-M4-06 | Search bar shows plus icon when key doesn't exist          | ❌      |
+| TC-M4-07 | Button hidden when search bar empty                        | ❌      |
+| TC-M4-08 | Button hidden when key selected in list                    | ❌      |
+| TC-M4-09 | Hovering button shows tooltip                              | ❌      |
+| TC-M4-10 | Selecting key updates last_accessed                        | ❌      |
+| TC-M4-11 | Typing clears selection and updates right pane live        | ❌      |
+| TC-M4-12 | Files value shows placeholder text                         | ❌      |
 
 **UX Model (Search Bar & Selection):**
 
-The search bar and left pane selection are **mutually exclusive**. Only one can be "active" at a time, indicated by visual focus.
+The search bar and left pane selection are **mutually exclusive**. Only one can be "active" at a time, indicated by
+visual focus.
 
 **Search Bar States:**
 
-| State | Text Style | Button | Right Pane |
-|-------|------------|--------|------------|
-| Empty | Gray placeholder | Hidden | Empty |
-| Text, key EXISTS | Normal | ✏️ Pen (edit) | Existing key's value |
-| Text, key DOESN'T EXIST | Normal | ➕ Plus (add) | "Press Enter to add {key}..." |
-| Inactive (left pane selected) | Dimmed gray | Hidden | Selected key's value |
+| State                         | Text Style       | Button        | Right Pane                    |
+|-------------------------------|------------------|---------------|-------------------------------|
+| Empty                         | Gray placeholder | Hidden        | Empty                         |
+| Text, key EXISTS              | Normal           | ✏️ Pen (edit) | Existing key's value          |
+| Text, key DOESN'T EXIST       | Normal           | ➕ Plus (add)  | "Press Enter to add {key}..." |
+| Inactive (left pane selected) | Dimmed gray      | Hidden        | Selected key's value          |
 
 **Selection Transitions:**
 
-| Action | Search Bar | Left Pane | Right Pane |
-|--------|------------|-----------|------------|
-| Click search bar | Focused, normal text | Selection clears | Updates based on search text |
-| Click key in list | Dimmed gray | Key highlighted | Selected key's value |
-| Type in search bar | Focused (was already) | Selection clears | Updates live |
+| Action             | Search Bar            | Left Pane        | Right Pane                   |
+|--------------------|-----------------------|------------------|------------------------------|
+| Click search bar   | Focused, normal text  | Selection clears | Updates based on search text |
+| Click key in list  | Dimmed gray           | Key highlighted  | Selected key's value         |
+| Type in search bar | Focused (was already) | Selection clears | Updates live                 |
 
 **Visual Focus (mutual exclusivity):**
 
-| State | Search Bar | Left Pane |
-|-------|------------|-----------|
-| Search bar focused | Focus border/highlight | No selection |
-| Key selected | No focus, dimmed text | Selected row highlighted (Spotlight-style) |
+| State              | Search Bar             | Left Pane                                  |
+|--------------------|------------------------|--------------------------------------------|
+| Search bar focused | Focus border/highlight | No selection                               |
+| Key selected       | No focus, dimmed text  | Selected row highlighted (Spotlight-style) |
 
 **Button Display (M4 scope - visual only):**
 
-| State | Icon | Tooltip |
-|-------|------|---------|
-| Key EXISTS | ✏️ Pen | "Edit {key} (Enter)" |
-| Key DOESN'T EXIST | ➕ Plus | "Create {key} (Enter)" |
-| Empty / Key selected | Hidden | - |
+| State                | Icon   | Tooltip                |
+|----------------------|--------|------------------------|
+| Key EXISTS           | ✏️ Pen | "Edit {key} (Enter)"   |
+| Key DOESN'T EXIST    | ➕ Plus | "Create {key} (Enter)" |
+| Empty / Key selected | Hidden | -                      |
 
 **Note:** Button click/Enter action deferred to M7-win.
 
@@ -254,30 +255,30 @@ The search bar and left pane selection are **mutually exclusive**. Only one can 
 
 **Requirements:**
 
-| Requirement     | Description                                                  | Status |
-|-----------------|--------------------------------------------------------------|--------|
-| Text editing    | Right pane text content is editable                          | ❌      |
-| Edit trigger    | Clicking in right pane text area enables editing             | ❌      |
-| Auto-save       | Save changes after 3 seconds of inactivity                   | ❌      |
-| Save method     | Call upsert_text() on keva_core                              | ❌      |
-| Key list update | New key appears in left pane after first save                | ❌      |
-| Save on hide    | Save pending changes when window hides (Esc)                 | ❌      |
-| Save on quit    | Save pending changes when app exits (Alt+F4, tray Quit)      | ❌      |
-| Save on switch  | Save pending changes when selecting different key            | ❌      |
-| Empty text      | Saving empty string stores empty Text value (key preserved)  | ❌      |
+| Requirement     | Description                                                 | Status |
+|-----------------|-------------------------------------------------------------|--------|
+| Text editing    | Right pane text content is editable                         | ❌      |
+| Edit trigger    | Clicking in right pane text area enables editing            | ❌      |
+| Auto-save       | Save changes after 3 seconds of inactivity                  | ❌      |
+| Save method     | Call upsert_text() on keva_core                             | ❌      |
+| Key list update | New key appears in left pane after first save               | ❌      |
+| Save on hide    | Save pending changes when window hides (Esc)                | ❌      |
+| Save on quit    | Save pending changes when app exits (Alt+F4, tray Quit)     | ❌      |
+| Save on switch  | Save pending changes when selecting different key           | ❌      |
+| Empty text      | Saving empty string stores empty Text value (key preserved) | ❌      |
 
 **Test Cases:**
 
-| TC       | Description                                                  | Status |
-|----------|--------------------------------------------------------------|--------|
-| TC-M5-01 | Clicking text area allows typing                             | ❌      |
-| TC-M5-02 | Changes auto-save after 3 seconds idle                       | ❌      |
-| TC-M5-03 | Saved changes persist after app restart                      | ❌      |
-| TC-M5-04 | Pressing Esc saves pending changes before hiding             | ❌      |
-| TC-M5-05 | Quitting app saves pending changes                           | ❌      |
-| TC-M5-06 | Switching selection saves pending changes to previous key    | ❌      |
-| TC-M5-07 | Deleting all text saves empty string (key not deleted)       | ❌      |
-| TC-M5-08 | Rapid typing delays save until 3 seconds after last keystroke | ❌     |
+| TC       | Description                                                   | Status |
+|----------|---------------------------------------------------------------|--------|
+| TC-M5-01 | Clicking text area allows typing                              | ❌      |
+| TC-M5-02 | Changes auto-save after 3 seconds idle                        | ❌      |
+| TC-M5-03 | Saved changes persist after app restart                       | ❌      |
+| TC-M5-04 | Pressing Esc saves pending changes before hiding              | ❌      |
+| TC-M5-05 | Quitting app saves pending changes                            | ❌      |
+| TC-M5-06 | Switching selection saves pending changes to previous key     | ❌      |
+| TC-M5-07 | Deleting all text saves empty string (key not deleted)        | ❌      |
+| TC-M5-08 | Rapid typing delays save until 3 seconds after last keystroke | ❌      |
 
 ### M6-win: Clipboard Paste Handling
 
@@ -287,24 +288,24 @@ The search bar and left pane selection are **mutually exclusive**. Only one can 
 
 **Requirements:**
 
-| Requirement     | Description                                          | Status |
-|-----------------|------------------------------------------------------|--------|
-| Paste scope     | App-wide Ctrl+V interception                         | ❌      |
-| Clipboard read  | Detect clipboard content type (text, files, both)    | ❌      |
-| Files priority  | If clipboard has both text and files, treat as files | ❌      |
+| Requirement    | Description                                          | Status |
+|----------------|------------------------------------------------------|--------|
+| Paste scope    | App-wide Ctrl+V interception                         | ❌      |
+| Clipboard read | Detect clipboard content type (text, files, both)    | ❌      |
+| Files priority | If clipboard has both text and files, treat as files | ❌      |
 
 **Paste Behavior by Context:**
 
-| Focus                         | Clipboard | Action                                         |
-|-------------------------------|-----------|------------------------------------------------|
-| Search bar                    | Text      | Insert text into search bar (as query)         |
-| Search bar                    | Files     | Create/update key value for search bar text    |
-| Right pane (text editor)      | Text      | Insert at cursor                               |
-| Right pane (text editor)      | Files     | Show warning, Ctrl+V again to overwrite        |
-| Right pane (Files display)    | Text      | Show warning, Ctrl+V again to overwrite        |
-| Right pane (Files display)    | Files     | Silent append                                  |
-| Key selected in left pane     | Files     | Silent append to selected key's Files value    |
-| Key selected in left pane     | Text      | Show warning if Files value, insert if Text value |
+| Focus                      | Clipboard | Action                                            |
+|----------------------------|-----------|---------------------------------------------------|
+| Search bar                 | Text      | Insert text into search bar (as query)            |
+| Search bar                 | Files     | Create/update key value for search bar text       |
+| Right pane (text editor)   | Text      | Insert at cursor                                  |
+| Right pane (text editor)   | Files     | Show warning, Ctrl+V again to overwrite           |
+| Right pane (Files display) | Text      | Show warning, Ctrl+V again to overwrite           |
+| Right pane (Files display) | Files     | Silent append                                     |
+| Key selected in left pane  | Files     | Silent append to selected key's Files value       |
+| Key selected in left pane  | Text      | Show warning if Files value, insert if Text value |
 
 **Overwrite Confirmation:**
 
@@ -325,21 +326,21 @@ The search bar and left pane selection are **mutually exclusive**. Only one can 
 
 **Test Cases:**
 
-| TC       | Description                                                   | Status |
-|----------|---------------------------------------------------------------|--------|
-| TC-M6-01 | Paste text with search bar focused inserts into search bar    | ❌      |
-| TC-M6-02 | Paste files with search bar focused creates/updates key value | ❌      |
-| TC-M6-03 | Paste text into text editor inserts at cursor                 | ❌      |
-| TC-M6-04 | Paste files into text editor shows warning                    | ❌      |
-| TC-M6-05 | Paste text into Files display shows warning                   | ❌      |
-| TC-M6-06 | Paste files into Files display appends silently               | ❌      |
-| TC-M6-07 | Second Ctrl+V within 2 seconds overwrites                     | ❌      |
-| TC-M6-08 | Warning clears after timeout                                  | ❌      |
-| TC-M6-09 | Clipboard with both text and files treated as files           | ❌      |
-| TC-M6-10 | File over 1GB rejected with error                             | ❌      |
-| TC-M6-11 | File over threshold shows confirmation dialog                 | ❌      |
-| TC-M6-12 | Duplicate file (same hash) silently ignored on append         | ❌      |
-| TC-M6-13 | Paste files with search bar focused and key doesn't exist creates key | ❌ |
+| TC       | Description                                                           | Status |
+|----------|-----------------------------------------------------------------------|--------|
+| TC-M6-01 | Paste text with search bar focused inserts into search bar            | ❌      |
+| TC-M6-02 | Paste files with search bar focused creates/updates key value         | ❌      |
+| TC-M6-03 | Paste text into text editor inserts at cursor                         | ❌      |
+| TC-M6-04 | Paste files into text editor shows warning                            | ❌      |
+| TC-M6-05 | Paste text into Files display shows warning                           | ❌      |
+| TC-M6-06 | Paste files into Files display appends silently                       | ❌      |
+| TC-M6-07 | Second Ctrl+V within 2 seconds overwrites                             | ❌      |
+| TC-M6-08 | Warning clears after timeout                                          | ❌      |
+| TC-M6-09 | Clipboard with both text and files treated as files                   | ❌      |
+| TC-M6-10 | File over 1GB rejected with error                                     | ❌      |
+| TC-M6-11 | File over threshold shows confirmation dialog                         | ❌      |
+| TC-M6-12 | Duplicate file (same hash) silently ignored on append                 | ❌      |
+| TC-M6-13 | Paste files with search bar focused and key doesn't exist creates key | ❌      |
 
 ### M7-win: Search Integration & Filtering
 
@@ -349,41 +350,41 @@ The search bar and left pane selection are **mutually exclusive**. Only one can 
 
 **Requirements:**
 
-| Requirement          | Description                                                      | Status |
-|----------------------|------------------------------------------------------------------|--------|
-| Search engine init   | Initialize SearchEngine on app startup with keys from keva_core  | ❌      |
-| Query input          | Every keystroke calls set_query() and starts tick timer          | ❌      |
-| Tick timer           | Configurable interval (default 16ms) while search active         | ❌      |
-| Timer stop           | Stop timer when is_finished() returns true                       | ❌      |
-| Key list filtering   | Left pane shows only matching keys from search results           | ❌      |
-| Match highlighting   | Matched characters highlighted in key names (using match_indices)| ❌      |
-| Empty query          | Shows all keys (active first, then trashed)                      | ❌      |
-| Search bar preserved | Window hide preserves search text, window show restores with text selected | ❌ |
+| Requirement          | Description                                                                | Status |
+|----------------------|----------------------------------------------------------------------------|--------|
+| Search engine init   | Initialize SearchEngine on app startup with keys from keva_core            | ❌      |
+| Query input          | Every keystroke calls set_query() and starts tick timer                    | ❌      |
+| Tick timer           | Configurable interval (default 16ms) while search active                   | ❌      |
+| Timer stop           | Stop timer when is_finished() returns true                                 | ❌      |
+| Key list filtering   | Left pane shows only matching keys from search results                     | ❌      |
+| Match highlighting   | Matched characters highlighted in key names (using match_indices)          | ❌      |
+| Empty query          | Shows all keys (active first, then trashed)                                | ❌      |
+| Search bar preserved | Window hide preserves search text, window show restores with text selected | ❌      |
 
 **Button Functionality:**
 
-| Button                    | Click Action                    |
-|---------------------------|---------------------------------|
-| ✏️ Pen (key exists)       | Focus right pane editor         |
+| Button                     | Click Action                        |
+|----------------------------|-------------------------------------|
+| ✏️ Pen (key exists)        | Focus right pane editor             |
 | ➕ Plus (key doesn't exist) | Create key, focus right pane editor |
 
 **Enter Key (search bar focused):**
 
-| Condition         | Action                            |
-|-------------------|-----------------------------------|
+| Condition         | Action                               |
+|-------------------|--------------------------------------|
 | Key exists        | Focus right pane editor for that key |
-| Key doesn't exist | Create key, focus right pane editor |
+| Key doesn't exist | Create key, focus right pane editor  |
 
 **Index Maintenance:**
 
-| Event                   | SearchEngine Call              |
-|-------------------------|--------------------------------|
+| Event                   | SearchEngine Call                  |
+|-------------------------|------------------------------------|
 | App startup             | rebuild(active_keys, trashed_keys) |
-| Key created             | add_key(key, false)            |
-| Key deleted (soft)      | mark_trashed(key)              |
-| Key deleted (permanent) | remove_key(key)                |
-| Key restored            | mark_restored(key)             |
-| Key renamed             | rename_key(old, new)           |
+| Key created             | add_key(key, false)                |
+| Key deleted (soft)      | mark_trashed(key)                  |
+| Key deleted (permanent) | remove_key(key)                    |
+| Key restored            | mark_restored(key)                 |
+| Key renamed             | rename_key(old, new)               |
 
 **Test Cases:**
 
@@ -411,49 +412,49 @@ The search bar and left pane selection are **mutually exclusive**. Only one can 
 
 **Requirements:**
 
-| Requirement                | Description                                            | Status |
-|----------------------------|--------------------------------------------------------|--------|
-| Down arrow (search bar)    | Move focus to first key in list                        | ❌      |
-| Up arrow (search bar)      | No action (stay in search bar)                         | ❌      |
-| Down arrow (key selected)  | Move selection to next key                             | ❌      |
-| Up arrow (key selected)    | Move selection to previous key                         | ❌      |
-| Up arrow (first key)       | Return to search bar, restore cursor to last position  | ❌      |
-| Down arrow (last key)      | No action (stay on last key)                           | ❌      |
-| Enter (key selected)       | Focus right pane editor                                | ❌      |
-| Shift+Enter (key selected) | Copy value to clipboard, hide window                   | ❌      |
-| Escape                     | Hide window (regardless of focus)                      | ❌      |
+| Requirement                | Description                                           | Status |
+|----------------------------|-------------------------------------------------------|--------|
+| Down arrow (search bar)    | Move focus to first key in list                       | ❌      |
+| Up arrow (search bar)      | No action (stay in search bar)                        | ❌      |
+| Down arrow (key selected)  | Move selection to next key                            | ❌      |
+| Up arrow (key selected)    | Move selection to previous key                        | ❌      |
+| Up arrow (first key)       | Return to search bar, restore cursor to last position | ❌      |
+| Down arrow (last key)      | No action (stay on last key)                          | ❌      |
+| Enter (key selected)       | Focus right pane editor                               | ❌      |
+| Shift+Enter (key selected) | Copy value to clipboard, hide window                  | ❌      |
+| Escape                     | Hide window (regardless of focus)                     | ❌      |
 
 **Cursor Position Memory:**
 
-| Event                              | Behavior                            |
-|------------------------------------|-------------------------------------|
-| Leave search bar (down arrow)      | Remember cursor position            |
+| Event                                          | Behavior                              |
+|------------------------------------------------|---------------------------------------|
+| Leave search bar (down arrow)                  | Remember cursor position              |
 | Return to search bar (up arrow from first key) | Restore cursor to remembered position |
 
 **Shift+Enter Behavior:**
 
-| Value Type | Clipboard Content                        |
-|------------|------------------------------------------|
-| Text       | Plain text copied                        |
+| Value Type | Clipboard Content                             |
+|------------|-----------------------------------------------|
+| Text       | Plain text copied                             |
 | Files      | Files copied (platform file clipboard format) |
-| Empty      | No action (nothing to copy)              |
+| Empty      | No action (nothing to copy)                   |
 
 **Test Cases:**
 
-| TC       | Description                                              | Status |
-|----------|----------------------------------------------------------|--------|
-| TC-M8-01 | Down arrow from search bar selects first key             | ❌      |
-| TC-M8-02 | Up arrow from search bar does nothing                    | ❌      |
-| TC-M8-03 | Down arrow moves to next key                             | ❌      |
-| TC-M8-04 | Up arrow moves to previous key                           | ❌      |
-| TC-M8-05 | Up arrow from first key returns to search bar with cursor restored | ❌ |
-| TC-M8-06 | Down arrow from last key stays on last key               | ❌      |
-| TC-M8-07 | Enter on selected key focuses right pane                 | ❌      |
-| TC-M8-08 | Shift+Enter copies text value and hides window           | ❌      |
-| TC-M8-09 | Shift+Enter copies files value and hides window          | ❌      |
-| TC-M8-10 | Shift+Enter with empty value does nothing                | ❌      |
-| TC-M8-11 | Escape hides window from any focus state                 | ❌      |
-| TC-M8-12 | Copy updates last_accessed                               | ❌      |
+| TC       | Description                                                        | Status |
+|----------|--------------------------------------------------------------------|--------|
+| TC-M8-01 | Down arrow from search bar selects first key                       | ❌      |
+| TC-M8-02 | Up arrow from search bar does nothing                              | ❌      |
+| TC-M8-03 | Down arrow moves to next key                                       | ❌      |
+| TC-M8-04 | Up arrow moves to previous key                                     | ❌      |
+| TC-M8-05 | Up arrow from first key returns to search bar with cursor restored | ❌      |
+| TC-M8-06 | Down arrow from last key stays on last key                         | ❌      |
+| TC-M8-07 | Enter on selected key focuses right pane                           | ❌      |
+| TC-M8-08 | Shift+Enter copies text value and hides window                     | ❌      |
+| TC-M8-09 | Shift+Enter copies files value and hides window                    | ❌      |
+| TC-M8-10 | Shift+Enter with empty value does nothing                          | ❌      |
+| TC-M8-11 | Escape hides window from any focus state                           | ❌      |
+| TC-M8-12 | Copy updates last_accessed                                         | ❌      |
 
 ### M10-win: Inline Rename
 
@@ -465,56 +466,56 @@ The search bar and left pane selection are **mutually exclusive**. Only one can 
 
 **Requirements:**
 
-| Requirement       | Description                                         | Status |
-|-------------------|-----------------------------------------------------|--------|
-| Rename button     | Pen icon on hover/selection in left pane key list   | ❌      |
-| Click to rename   | Clicking pen icon opens inline text editor          | ❌      |
-| Inline editor     | Replaces key name display with editable text field  | ❌      |
-| Initial selection | All text selected when editor opens                 | ❌      |
-| Confirm           | Enter confirms rename                               | ❌      |
-| Cancel            | Escape cancels rename, restores original name       | ❌      |
-| Click outside     | Confirms rename                                     | ❌      |
-| Validation        | 1-256 chars, valid UTF-8 (enforced by Key type)     | ❌      |
+| Requirement       | Description                                        | Status |
+|-------------------|----------------------------------------------------|--------|
+| Rename button     | Pen icon on hover/selection in left pane key list  | ❌      |
+| Click to rename   | Clicking pen icon opens inline text editor         | ❌      |
+| Inline editor     | Replaces key name display with editable text field | ❌      |
+| Initial selection | All text selected when editor opens                | ❌      |
+| Confirm           | Enter confirms rename                              | ❌      |
+| Cancel            | Escape cancels rename, restores original name      | ❌      |
+| Click outside     | Confirms rename                                    | ❌      |
+| Validation        | 1-256 chars, valid UTF-8 (enforced by Key type)    | ❌      |
 
 **Rename Outcomes:**
 
-| Condition              | Behavior                               |
-|------------------------|----------------------------------------|
-| New name same as old   | No action, close editor                |
-| New name doesn't exist | Rename key, update search index        |
-| New name exists        | Show confirmation dialog               |
+| Condition              | Behavior                        |
+|------------------------|---------------------------------|
+| New name same as old   | No action, close editor         |
+| New name doesn't exist | Rename key, update search index |
+| New name exists        | Show confirmation dialog        |
 
 **Overwrite Confirmation:**
 
-| Element        | Description                                  |
-|----------------|----------------------------------------------|
-| Dialog message | "Key '{new}' already exists. Overwrite?"     |
-| Yes            | Overwrite (old target permanently deleted)   |
-| No             | Cancel rename, close editor                  |
+| Element        | Description                                |
+|----------------|--------------------------------------------|
+| Dialog message | "Key '{new}' already exists. Overwrite?"   |
+| Yes            | Overwrite (old target permanently deleted) |
+| No             | Cancel rename, close editor                |
 
 **Search Index Update:**
 
-| Event            | Action                                |
-|------------------|---------------------------------------|
+| Event            | Action                                    |
+|------------------|-------------------------------------------|
 | Rename confirmed | Call rename_key(old, new) on SearchEngine |
 
 **Test Cases:**
 
-| TC        | Description                                    | Status |
-|-----------|------------------------------------------------|--------|
-| TC-M10-01 | Pen icon visible on key hover                  | ❌      |
-| TC-M10-02 | Clicking pen opens inline editor               | ❌      |
-| TC-M10-03 | Text fully selected when editor opens          | ❌      |
-| TC-M10-04 | Enter confirms rename                          | ❌      |
-| TC-M10-05 | Escape cancels rename                          | ❌      |
-| TC-M10-06 | Click outside confirms rename                  | ❌      |
-| TC-M10-07 | Rename to same name closes editor, no action   | ❌      |
-| TC-M10-08 | Rename to new name updates key list            | ❌      |
-| TC-M10-09 | Rename to existing name shows confirmation     | ❌      |
-| TC-M10-10 | Overwrite confirmation Yes overwrites          | ❌      |
-| TC-M10-11 | Overwrite confirmation No cancels              | ❌      |
-| TC-M10-12 | Invalid name (empty, >256 chars) shows error   | ❌      |
-| TC-M10-13 | Renamed key searchable under new name          | ❌      |
+| TC        | Description                                  | Status |
+|-----------|----------------------------------------------|--------|
+| TC-M10-01 | Pen icon visible on key hover                | ❌      |
+| TC-M10-02 | Clicking pen opens inline editor             | ❌      |
+| TC-M10-03 | Text fully selected when editor opens        | ❌      |
+| TC-M10-04 | Enter confirms rename                        | ❌      |
+| TC-M10-05 | Escape cancels rename                        | ❌      |
+| TC-M10-06 | Click outside confirms rename                | ❌      |
+| TC-M10-07 | Rename to same name closes editor, no action | ❌      |
+| TC-M10-08 | Rename to new name updates key list          | ❌      |
+| TC-M10-09 | Rename to existing name shows confirmation   | ❌      |
+| TC-M10-10 | Overwrite confirmation Yes overwrites        | ❌      |
+| TC-M10-11 | Overwrite confirmation No cancels            | ❌      |
+| TC-M10-12 | Invalid name (empty, >256 chars) shows error | ❌      |
+| TC-M10-13 | Renamed key searchable under new name        | ❌      |
 
 ### M11-win: Delete Key
 
@@ -535,151 +536,513 @@ The search bar and left pane selection are **mutually exclusive**. Only one can 
 
 **Search Index Update:**
 
-| Delete Style | Action                               |
-|--------------|--------------------------------------|
+| Delete Style | Action                                 |
+|--------------|----------------------------------------|
 | Soft         | Call mark_trashed(key) on SearchEngine |
-| Immediate    | Call remove_key(key) on SearchEngine |
+| Immediate    | Call remove_key(key) on SearchEngine   |
 
 **Post-Delete State:**
 
-| Condition                  | Behavior                                          |
-|----------------------------|---------------------------------------------------|
-| Deleted key was selected   | Selection clears, right pane updates based on search bar |
-| Deleted key not selected   | No change to selection                            |
+| Condition                | Behavior                                                 |
+|--------------------------|----------------------------------------------------------|
+| Deleted key was selected | Selection clears, right pane updates based on search bar |
+| Deleted key not selected | No change to selection                                   |
 
 **Test Cases:**
 
-| TC        | Description                                    | Status |
-|-----------|------------------------------------------------|--------|
-| TC-M11-01 | Trash icon visible on key hover                | ❌      |
-| TC-M11-02 | Clicking trash with soft delete moves key to trash | ❌  |
-| TC-M11-03 | Clicking trash with immediate delete removes key | ❌    |
-| TC-M11-04 | Deleted key disappears from active list        | ❌      |
-| TC-M11-05 | Soft-deleted key appears in trash results      | ❌      |
-| TC-M11-06 | Immediate-deleted key not in any results       | ❌      |
-| TC-M11-07 | Selection clears when selected key deleted     | ❌      |
-| TC-M11-08 | Right pane updates after selected key deleted  | ❌      |
+| TC        | Description                                        | Status |
+|-----------|----------------------------------------------------|--------|
+| TC-M11-01 | Trash icon visible on key hover                    | ❌      |
+| TC-M11-02 | Clicking trash with soft delete moves key to trash | ❌      |
+| TC-M11-03 | Clicking trash with immediate delete removes key   | ❌      |
+| TC-M11-04 | Deleted key disappears from active list            | ❌      |
+| TC-M11-05 | Soft-deleted key appears in trash results          | ❌      |
+| TC-M11-06 | Immediate-deleted key not in any results           | ❌      |
+| TC-M11-07 | Selection clears when selected key deleted         | ❌      |
+| TC-M11-08 | Right pane updates after selected key deleted      | ❌      |
 
----
+### M12-win: Trash UI
 
-## Phase 2: macOS App (Swift)
+**Goal:** Display trashed keys in dedicated bottom section, enable restore and permanent delete.
 
-### M0-mac: Core FFI Layer
+**Status:** Not Started
 
-**Goal:** Expose keva_core and keva_search to Swift via C FFI.
+**Left Pane Layout:**
 
-**Dependencies:**
-
-```toml
-[dependencies]
-keva_core = { path = "../core" }
-keva_search = { path = "../search" }
-
-[build-dependencies]
-cbindgen = "0.27"
+```
+┌─────────────────┐
+│ Key list        │
+│ (active keys)   │
+│ (scrollable)    │
+│                 │
+├─────────────────┤
+│ Trash (N)       │
+│ (trashed keys)  │
+│ (scrollable)    │
+└─────────────────┘
 ```
 
-**Tasks:**
+**Requirements:**
 
-1. Create `ffi` crate with `crate-type = ["cdylib"]`
-2. Define C-compatible API with `#[no_mangle]` and `extern "C"`
-3. Handle memory management (Box for heap, CString for strings)
-4. Generate `keva.h` via cbindgen
-5. Build as `libkeva.dylib`
-6. Expose keva_search API for fuzzy search
+| Requirement             | Description                                          | Status |
+|-------------------------|------------------------------------------------------|--------|
+| Trash section           | Fixed section at bottom of left pane                 | ❌      |
+| Trash header            | "Trash (N)" label showing count                      | ❌      |
+| Visibility              | Trash section hidden when no trash matches           | ❌      |
+| Separate scroll         | Trash section scrolls independently from active list | ❌      |
+| Trash indicator         | 🗑️ icon prefix on trashed keys                      | ❌      |
+| Selection               | Clicking trashed key selects it                      | ❌      |
+| Right pane              | Shows trashed key's value (read-only)                | ❌      |
+| Restore button          | Visible when trashed key selected                    | ❌      |
+| Permanent delete button | Visible when trashed key selected                    | ❌      |
 
-**API:**
+**Trashed Key Actions:**
 
-```c
-// Lifecycle
-KevaHandle* keva_open(const char* path);
-void keva_close(KevaHandle* handle);
+| Button           | Action                                              |
+|------------------|-----------------------------------------------------|
+| Restore          | Calls restore() on keva_core, key becomes active    |
+| Permanent delete | Calls purge() on keva_core, key permanently removed |
 
-// CRUD
-int32_t keva_set_text(KevaHandle* h, const char* key, const char* text);
-int32_t keva_set_files(KevaHandle* h, const char* key, const char** paths, size_t count);
-KevaValue* keva_get(KevaHandle* h, const char* key);
-int32_t keva_delete(KevaHandle* h, const char* key);
-int32_t keva_rename(KevaHandle* h, const char* old_key, const char* new_key);
+**Search Index Update:**
 
-// Listing
-KevaKeyList* keva_list_keys(KevaHandle* h);
+| Action           | SearchEngine Call  |
+|------------------|--------------------|
+| Restore          | mark_restored(key) |
+| Permanent delete | remove_key(key)    |
 
-// Memory
-void keva_free_value(KevaValue* value);
-void keva_free_key_list(KevaKeyList* list);
+**Button Placement:**
+
+| Location      | Description                                                     |
+|---------------|-----------------------------------------------------------------|
+| Trash key row | Restore and permanent delete buttons (replaces pen/trash icons) |
+
+**Test Cases:**
+
+| TC        | Description                                              | Status |
+|-----------|----------------------------------------------------------|--------|
+| TC-M12-01 | Trash section appears at bottom when trash matches exist | ❌      |
+| TC-M12-02 | Trash section hidden when no trash matches               | ❌      |
+| TC-M12-03 | Trash header shows correct count                         | ❌      |
+| TC-M12-04 | Trash section scrolls independently                      | ❌      |
+| TC-M12-05 | Trashed keys show 🗑️ icon prefix                        | ❌      |
+| TC-M12-06 | Clicking trashed key selects it                          | ❌      |
+| TC-M12-07 | Right pane shows trashed key's value                     | ❌      |
+| TC-M12-08 | Right pane is read-only for trashed keys                 | ❌      |
+| TC-M12-09 | Restore button visible for trashed key                   | ❌      |
+| TC-M12-10 | Permanent delete button visible for trashed key          | ❌      |
+| TC-M12-11 | Restore moves key to active list                         | ❌      |
+| TC-M12-12 | Permanent delete removes key entirely                    | ❌      |
+| TC-M12-13 | Restored key appears in active key list                  | ❌      |
+
+### M13-win: File Value Display
+
+**Goal:** Display Files value as list with names, sizes, and individual delete.
+
+**Status:** Not Started
+
+**Requirements:**
+
+| Requirement        | Description                                    | Status |
+|--------------------|------------------------------------------------|--------|
+| File list          | Display each file as row with name and size    | ❌      |
+| Size format        | Human-readable (e.g., "1.2 MB", "340 KB")      | ❌      |
+| Scrollable         | File list scrolls if many files                | ❌      |
+| Delete individual  | X button on each file row                      | ❌      |
+| Delete all         | Clear button to remove all files               | ❌      |
+| Empty after delete | Deleting last file results in empty Text value | ❌      |
+
+**File Row Layout:**
+
+```
+┌─────────────────────────────────┐
+│ 📄 document.pdf    1.2 MB   [X] │
+│ 📄 image.png       340 KB   [X] │
+│ 📄 data.csv        12 KB    [X] │
+│                                 │
+│            [Clear All]          │
+└─────────────────────────────────┘
 ```
 
-**Acceptance criteria:**
+**Delete Behavior:**
 
-- `libkeva.dylib` builds
-- `keva.h` generated
-- Can call from Swift playground
+| Action                 | Result                                  |
+|------------------------|-----------------------------------------|
+| Delete individual file | Remove file from list, update keva_core |
+| Delete last file       | Value becomes empty Text                |
+| Clear all              | Value becomes empty Text                |
 
-### M1-mac: Window Skeleton
+**Test Cases:**
 
-**Goal:** Basic borderless window with menu bar icon.
+| TC        | Description                                                   | Status |
+|-----------|---------------------------------------------------------------|--------|
+| TC-M13-01 | Files value displays file list                                | ❌      |
+| TC-M13-02 | Each file shows name and size                                 | ❌      |
+| TC-M13-03 | Size formatted human-readable                                 | ❌      |
+| TC-M13-04 | File list scrolls when many files                             | ❌      |
+| TC-M13-05 | X button removes individual file                              | ❌      |
+| TC-M13-06 | Deleting last file results in empty value                     | ❌      |
+| TC-M13-07 | Clear All removes all files                                   | ❌      |
+| TC-M13-08 | Duplicate names display correctly (same name, different size) | ❌      |
+| TC-M13-09 | File deletion updates keva_core                               | ❌      |
 
-**Build:** Swift Package Manager or xcodebuild (no Xcode IDE required)
+### M14-win: Drag & Drop Files
 
-**Tasks:**
+**Goal:** Drop files onto left or right pane to store as Files value.
 
-1. Create Swift package or minimal Xcode project
-2. Link `libkeva.dylib`, import `keva.h` via bridging header (from M0-mac)
-3. Borderless window (NSWindow, styleMask)
-4. Custom resize handling if needed
-5. Menu bar icon (NSStatusItem)
-6. Cmd+Q quits, Esc hides window
-7. Set LSUIElement=true in Info.plist (hide from Dock/Cmd+Tab)
+**Status:** Not Started
 
-**Acceptance criteria:**
+**Requirements:**
 
-- App launches to menu bar
-- Window shows/hides on click
-- Window resizes properly
-- No Dock icon, hidden from Cmd+Tab
+| Requirement              | Description                                                  | Status |
+|--------------------------|--------------------------------------------------------------|--------|
+| Drop target: right pane  | Drop files onto right pane stores to current target key      | ❌      |
+| Drop target: key in list | Drop files onto specific key in left pane stores to that key | ❌      |
+| Visual feedback          | Highlight drop target while dragging over                    | ❌      |
 
-### M2-mac: Core Integration
+**Drop Behavior Matrix:**
 
-**Goal:** Connect UI to keva_core via FFI.
+| Existing Value | Drop Content | Behavior                                |
+|----------------|--------------|-----------------------------------------|
+| Empty          | Files        | Store as Files value                    |
+| Text           | Files        | Confirm: "Replace text with N file(s)?" |
+| Files          | Files        | Silent append                           |
 
-**Tasks:**
+**File Size Handling:**
 
-1. Swift wrapper around C FFI
-2. Load/display keys
-3. Text preview (NSTextView)
-4. File preview (QLPreviewView)
-5. Clipboard paste to create key
+| Condition                       | Behavior                                    |
+|---------------------------------|---------------------------------------------|
+| Any file > 1GB                  | Reject entire drop with error message       |
+| Any file > large_file_threshold | Reject entire drop with confirmation dialog |
 
-### M3-mac: Full Features
+**Duplicate Handling:**
 
-**Goal:** All Spec.md features.
+| Condition                  | Behavior                  |
+|----------------------------|---------------------------|
+| Same hash as existing file | Silently ignore duplicate |
 
-**Tasks:**
+**Test Cases:**
 
-1. Fuzzy search (keva_search via FFI)
-2. Edit/rename/delete keys
-3. Copy to clipboard (NSPasteboard)
-4. Trash support
-5. Settings window
+| TC        | Description                                       | Status |
+|-----------|---------------------------------------------------|--------|
+| TC-M14-01 | Drop files on right pane stores to target key     | ❌      |
+| TC-M14-02 | Drop files on key in left pane stores to that key | ❌      |
+| TC-M14-03 | Drop on empty value creates Files value           | ❌      |
+| TC-M14-04 | Drop on Text value shows confirmation             | ❌      |
+| TC-M14-05 | Confirmation Yes replaces text with files         | ❌      |
+| TC-M14-06 | Confirmation No cancels drop                      | ❌      |
+| TC-M14-07 | Drop on Files value appends silently              | ❌      |
+| TC-M14-08 | Drop target highlights during drag                | ❌      |
+| TC-M14-09 | File over 1GB rejected with error                 | ❌      |
+| TC-M14-10 | File over threshold shows confirmation            | ❌      |
+| TC-M14-11 | Duplicate file silently ignored                   | ❌      |
+| TC-M14-12 | Drop on trashed key rejected                      | ❌      |
 
----
+### M15-win: Settings Dialog
 
-## Phase 3: Polish
+**Goal:** Settings UI with config persistence.
 
-### M4: Distribution
+**Status:** Not Started
 
-**Windows:**
+**Requirements:**
 
-- Installer (WiX or MSIX)
-- Launch at Login (Registry)
-- Code signing (optional)
+| Requirement       | Description                                     | Status |
+|-------------------|-------------------------------------------------|--------|
+| Open settings     | Ctrl+, or tray menu "Settings..."               | ❌      |
+| Modal dialog      | Separate window, blocks main window interaction | ❌      |
+| Save on close     | Changes saved to config.toml when dialog closes | ❌      |
+| Apply immediately | Changes take effect without app restart         | ❌      |
 
-**macOS:**
+**Settings Fields:**
 
-- App bundle structure
-- Launch at Login (LaunchAgent or SMLoginItemSetEnabled)
-- Code signing + notarization
+| Category  | Setting              | Control      | Values                       |
+|-----------|----------------------|--------------|------------------------------|
+| General   | Theme                | Dropdown     | Dark / Light / Follow System |
+| General   | Launch at Login      | Checkbox     | On / Off                     |
+| General   | Show Tray Icon       | Checkbox     | On / Off                     |
+| Shortcuts | Global Shortcut      | Key capture  | Modifier+Key combination     |
+| Data      | Delete Style         | Dropdown     | Soft / Immediate             |
+| Data      | Large File Threshold | Number input | Bytes (default 256MB)        |
+| Lifecycle | Trash TTL            | Number input | Days (default 30)            |
+| Lifecycle | Purge TTL            | Number input | Days (default 7)             |
+
+**Config File:**
+
+| Requirement    | Description                                 |
+|----------------|---------------------------------------------|
+| Location       | `{data_dir}/config.toml`                    |
+| Format         | TOML as specified in Spec.md                |
+| Missing file   | Create with defaults                        |
+| Invalid values | Show error popup on launch (handled in M19) |
+
+**Test Cases:**
+
+| TC        | Description                                | Status |
+|-----------|--------------------------------------------|--------|
+| TC-M15-01 | Ctrl+, opens settings dialog               | ❌      |
+| TC-M15-02 | Tray menu "Settings..." opens dialog       | ❌      |
+| TC-M15-03 | Theme change applies immediately           | ❌      |
+| TC-M15-04 | Delete style change affects next delete    | ❌      |
+| TC-M15-05 | Settings persist after app restart         | ❌      |
+| TC-M15-06 | Closing dialog saves to config.toml        | ❌      |
+| TC-M15-07 | All fields display current values on open  | ❌      |
+| TC-M15-08 | Large file threshold accepts valid numbers | ❌      |
+| TC-M15-09 | TTL fields accept valid numbers            | ❌      |
+| TC-M15-10 | Launch at Login updates system setting     | ❌      |
+| TC-M15-11 | Show Tray Icon toggles tray visibility     | ❌      |
+
+### M16-win: Global Hotkey
+
+**Goal:** System-wide keyboard shortcut to show window, with conflict detection.
+
+**Status:** Not Started
+
+**Requirements:**
+
+| Requirement      | Description                                  | Status |
+|------------------|----------------------------------------------|--------|
+| Default shortcut | Ctrl+Shift+K                                 | ❌      |
+| Global scope     | Works when window hidden, other apps focused | ❌      |
+| Show window      | Hotkey shows and focuses Keva window         | ❌      |
+| Registration     | Register hotkey on app startup               | ❌      |
+| Unregistration   | Unregister hotkey on app quit                | ❌      |
+| Config sync      | Hotkey updates when changed in settings      | ❌      |
+
+**Conflict Detection:**
+
+| Condition          | Behavior                                                                    |
+|--------------------|-----------------------------------------------------------------------------|
+| Registration fails | Another app has the shortcut                                                |
+| On conflict        | Show notification: "Shortcut Ctrl+Shift+K is in use by another application" |
+| After notification | Open settings dialog with shortcut field focused                            |
+
+**Shortcut Change Flow:**
+
+| Step | Action                                 |
+|------|----------------------------------------|
+| 1    | User opens settings, changes shortcut  |
+| 2    | Unregister old shortcut                |
+| 3    | Attempt register new shortcut          |
+| 4    | If conflict, show error, revert to old |
+| 5    | If success, save to config             |
+
+**Test Cases:**
+
+| TC        | Description                                  | Status |
+|-----------|----------------------------------------------|--------|
+| TC-M16-01 | Hotkey shows window when hidden              | ❌      |
+| TC-M16-02 | Hotkey shows window when other app focused   | ❌      |
+| TC-M16-03 | Hotkey registered on app startup             | ❌      |
+| TC-M16-04 | Hotkey unregistered on app quit              | ❌      |
+| TC-M16-05 | Conflict shows notification                  | ❌      |
+| TC-M16-06 | Conflict opens settings dialog               | ❌      |
+| TC-M16-07 | Changing shortcut in settings updates hotkey | ❌      |
+| TC-M16-08 | Invalid new shortcut reverts to old          | ❌      |
+| TC-M16-09 | New shortcut persists after restart          | ❌      |
+
+### M17-win: Single Instance Enforcement
+
+**Goal:** Prevent multiple app instances, activate existing instance on relaunch.
+
+**Status:** Not Started
+
+**Requirements:**
+
+| Requirement        | Description                                                       | Status |
+|--------------------|-------------------------------------------------------------------|--------|
+| Detection          | Check for existing instance on startup                            | ❌      |
+| Mechanism          | Named mutex (e.g., "Keva_SingleInstance")                         | ❌      |
+| Existing found     | Activate existing instance's window, exit new process             | ❌      |
+| Activation message | Send message to existing instance to show window                  | ❌      |
+| Timeout            | If existing instance unresponsive for 2 seconds, offer force-quit | ❌      |
+
+**Force-Quit Dialog:**
+
+| Element | Description                                        |
+|---------|----------------------------------------------------|
+| Message | "Keva is not responding. Force quit and relaunch?" |
+| Yes     | Terminate existing process, continue startup       |
+| No      | Exit new process                                   |
+
+**Test Cases:**
+
+| TC        | Description                                        | Status |
+|-----------|----------------------------------------------------|--------|
+| TC-M17-01 | First instance starts normally                     | ❌      |
+| TC-M17-02 | Second instance activates first instance's window  | ❌      |
+| TC-M17-03 | Second instance exits after activating first       | ❌      |
+| TC-M17-04 | First instance window shows when activated         | ❌      |
+| TC-M17-05 | Unresponsive instance triggers force-quit dialog   | ❌      |
+| TC-M17-06 | Force-quit Yes terminates old, starts new          | ❌      |
+| TC-M17-07 | Force-quit No exits new process                    | ❌      |
+| TC-M17-08 | Mutex released on app quit                         | ❌      |
+| TC-M17-09 | Crash leaves no stale mutex (Windows handles this) | ❌      |
+
+### M18-win: Window Position Memory
+
+**Goal:** Remember window position and size per monitor.
+
+**Status:** Not Started
+
+**Requirements:**
+
+| Requirement      | Description                                                             | Status |
+|------------------|-------------------------------------------------------------------------|--------|
+| Save position    | Store window position and size on hide/quit                             | ❌      |
+| Restore position | Restore on next window show                                             | ❌      |
+| Per-monitor      | Position stored keyed by monitor identifier                             | ❌      |
+| Monitor change   | If saved monitor not found, center on current monitor                   | ❌      |
+| Off-screen check | If restored position is off-screen, center on monitor containing cursor | ❌      |
+
+**Storage:**
+
+| Location    | Description                        |
+|-------------|------------------------------------|
+| Config file | Window positions in config.toml    |
+| Key format  | `[window.monitors."monitor_{id}"]` |
+| Fields      | x, y, width, height                |
+
+**Triggers:**
+
+| Event              | Action                    |
+|--------------------|---------------------------|
+| Window hide (Esc)  | Save position             |
+| App quit           | Save position             |
+| Window move/resize | Save position (debounced) |
+
+**Test Cases:**
+
+| TC        | Description                                          | Status |
+|-----------|------------------------------------------------------|--------|
+| TC-M18-01 | Window position persists after hide and show         | ❌      |
+| TC-M18-02 | Window position persists after app restart           | ❌      |
+| TC-M18-03 | Window size persists after app restart               | ❌      |
+| TC-M18-04 | Different monitors remember different positions      | ❌      |
+| TC-M18-05 | Disconnected monitor falls back to center on current | ❌      |
+| TC-M18-06 | Off-screen position corrected to visible area        | ❌      |
+| TC-M18-07 | First launch centers on primary monitor              | ❌      |
+| TC-M18-08 | Rapid move/resize doesn't spam config writes         | ❌      |
+
+### M19-win: First-Run Dialog
+
+**Goal:** Welcome dialog on first launch with launch-at-login option.
+
+**Status:** Not Started
+
+**Requirements:**
+
+| Requirement | Description                              | Status |
+|-------------|------------------------------------------|--------|
+| Trigger     | Shown when no config.toml exists         | ❌      |
+| Modal       | Blocks main window until dismissed       | ❌      |
+| One-time    | Never shown again after first completion | ❌      |
+
+**Dialog Content:**
+
+| Element  | Description                                 |
+|----------|---------------------------------------------|
+| Title    | "Welcome to Keva"                           |
+| Message  | Brief explanation of Keva's purpose         |
+| Checkbox | "Launch Keva at login" (checked by default) |
+| Button   | "Get Started"                               |
+
+**Flow:**
+
+| Step | Action                                   |
+|------|------------------------------------------|
+| 1    | App starts, no config.toml found         |
+| 2    | Show first-run dialog                    |
+| 3    | User clicks "Get Started"                |
+| 4    | Create config.toml with defaults         |
+| 5    | If checkbox checked, register login item |
+| 6    | Show main window                         |
+
+**Config Validation (on subsequent launches):**
+
+| Condition                           | Behavior                              |
+|-------------------------------------|---------------------------------------|
+| config.toml missing                 | Show first-run dialog                 |
+| config.toml invalid                 | Show error popup with specific errors |
+| Error popup: "Launch with defaults" | Overwrite invalid fields, continue    |
+| Error popup: "Quit"                 | Exit without modifying config         |
+
+**Test Cases:**
+
+| TC        | Description                                 | Status |
+|-----------|---------------------------------------------|--------|
+| TC-M19-01 | First-run dialog shown on fresh install     | ❌      |
+| TC-M19-02 | Checkbox checked by default                 | ❌      |
+| TC-M19-03 | "Get Started" creates config.toml           | ❌      |
+| TC-M19-04 | Checked checkbox registers login item       | ❌      |
+| TC-M19-05 | Unchecked checkbox skips login registration | ❌      |
+| TC-M19-06 | Dialog not shown on subsequent launches     | ❌      |
+| TC-M19-07 | Invalid config shows error popup            | ❌      |
+| TC-M19-08 | "Launch with defaults" fixes invalid config | ❌      |
+| TC-M19-09 | "Quit" exits without changes                | ❌      |
+
+### M20-win: Installer & Distribution
+
+**Goal:** Installable package with uninstaller and launch-at-login support.
+
+**Status:** Not Started
+
+**Requirements:**
+
+| Requirement      | Description                                                          | Status |
+|------------------|----------------------------------------------------------------------|--------|
+| Installer format | Windows installer (WiX, MSIX, or similar)                            | ❌      |
+| Install location | Program Files                                                        | ❌      |
+| Start Menu       | Create shortcut                                                      | ❌      |
+| Registry         | Register in Add/Remove Programs                                      | ❌      |
+| Launch at login  | Registry entry in HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run | ❌      |
+
+**Installer Flow:**
+
+| Step | Action                              |
+|------|-------------------------------------|
+| 1    | User runs installer                 |
+| 2    | Install to Program Files\Keva       |
+| 3    | Create Start Menu shortcut          |
+| 4    | Register in Add/Remove Programs     |
+| 5    | Optionally launch app after install |
+
+**Uninstaller Flow:**
+
+| Step | Action                                          |
+|------|-------------------------------------------------|
+| 1    | User runs uninstaller (via Add/Remove Programs) |
+| 2    | Remove application files                        |
+| 3    | Remove Start Menu shortcut                      |
+| 4    | Remove registry entries (including Run key)     |
+| 5    | Prompt: "Delete all Keva data?"                 |
+| 6    | Yes: Delete data directory (~/.keva)            |
+| 7    | No: Leave data directory intact                 |
+
+**Launch at Login:**
+
+| Requirement  | Description                                        |
+|--------------|----------------------------------------------------|
+| Registry key | HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run |
+| Value name   | "Keva"                                             |
+| Value data   | Path to keva.exe                                   |
+| Visibility   | Appears in Task Manager → Startup tab              |
+| Toggle       | Settings checkbox adds/removes registry entry      |
+
+**Test Cases:**
+
+| TC        | Description                                                | Status |
+|-----------|------------------------------------------------------------|--------|
+| TC-M20-01 | Installer completes on clean system                        | ❌      |
+| TC-M20-02 | App launches from Start Menu                               | ❌      |
+| TC-M20-03 | App appears in Add/Remove Programs                         | ❌      |
+| TC-M20-04 | Uninstaller removes application files                      | ❌      |
+| TC-M20-05 | Uninstaller removes Start Menu shortcut                    | ❌      |
+| TC-M20-06 | Uninstaller prompts for data deletion                      | ❌      |
+| TC-M20-07 | Data deletion Yes removes ~/.keva                          | ❌      |
+| TC-M20-08 | Data deletion No preserves ~/.keva                         | ❌      |
+| TC-M20-09 | Launch at login enabled appears in Task Manager Startup    | ❌      |
+| TC-M20-10 | Launch at login disabled removes from Task Manager Startup | ❌      |
+| TC-M20-11 | App auto-starts after system reboot (when enabled)         | ❌      |
+| TC-M20-12 | Reinstall over existing installation works                 | ❌      |
 
 ---
 
