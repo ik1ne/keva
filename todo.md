@@ -406,7 +406,7 @@ visual focus.
 
 ### M8-win: Keyboard Navigation
 
-**Goal:** Arrow keys, Enter, and Shift+Enter for efficient keyboard-driven workflow.
+**Goal:** Arrow keys, Enter, and Ctrl+Alt+C for efficient keyboard-driven workflow.
 
 **Status:** Not Started
 
@@ -421,7 +421,7 @@ visual focus.
 | Up arrow (first key)       | Return to search bar, restore cursor to last position | ❌      |
 | Down arrow (last key)      | No action (stay on last key)                          | ❌      |
 | Enter (key selected)       | Focus right pane editor                               | ❌      |
-| Shift+Enter (key selected) | Copy value to clipboard, hide window                  | ❌      |
+| Ctrl+Alt+C (window focused)| Copy value to clipboard, hide window                  | ❌      |
 | Escape                     | Hide window (regardless of focus)                     | ❌      |
 
 **Cursor Position Memory:**
@@ -431,7 +431,7 @@ visual focus.
 | Leave search bar (down arrow)                  | Remember cursor position              |
 | Return to search bar (up arrow from first key) | Restore cursor to remembered position |
 
-**Shift+Enter Behavior:**
+**Ctrl+Alt+C Behavior:**
 
 | Value Type | Clipboard Content                             |
 |------------|-----------------------------------------------|
@@ -450,9 +450,9 @@ visual focus.
 | TC-M8-05 | Up arrow from first key returns to search bar with cursor restored | ❌      |
 | TC-M8-06 | Down arrow from last key stays on last key                         | ❌      |
 | TC-M8-07 | Enter on selected key focuses right pane                           | ❌      |
-| TC-M8-08 | Shift+Enter copies text value and hides window                     | ❌      |
-| TC-M8-09 | Shift+Enter copies files value and hides window                    | ❌      |
-| TC-M8-10 | Shift+Enter with empty value does nothing                          | ❌      |
+| TC-M8-08 | Ctrl+Alt+C copies text value and hides window                      | ❌      |
+| TC-M8-09 | Ctrl+Alt+C copies files value and hides window                     | ❌      |
+| TC-M8-10 | Ctrl+Alt+C with empty value does nothing                           | ❌      |
 | TC-M8-11 | Escape hides window from any focus state                           | ❌      |
 | TC-M8-12 | Copy updates last_accessed                                         | ❌      |
 
@@ -605,10 +605,10 @@ visual focus.
 
 **Search Index Update:**
 
-| Action           | SearchEngine Call  |
-|------------------|--------------------|
-| Restore          | mark_restored(key) |
-| Permanent delete | remove_key(key)    |
+| Action           | SearchEngine Call |
+|------------------|-------------------|
+| Restore          | restore(key)      |
+| Permanent delete | remove(key)       |
 
 **Button Placement:**
 
@@ -800,7 +800,7 @@ visual focus.
 
 | Requirement      | Description                                  | Status |
 |------------------|----------------------------------------------|--------|
-| Default shortcut | Ctrl+Shift+K                                 | ❌      |
+| Default shortcut | Ctrl+Alt+K                                   | ❌      |
 | Global scope     | Works when window hidden, other apps focused | ❌      |
 | Show window      | Hotkey shows and focuses Keva window         | ❌      |
 | Registration     | Register hotkey on app startup               | ❌      |
@@ -812,7 +812,7 @@ visual focus.
 | Condition          | Behavior                                                                    |
 |--------------------|-----------------------------------------------------------------------------|
 | Registration fails | Another app has the shortcut                                                |
-| On conflict        | Show notification: "Shortcut Ctrl+Shift+K is in use by another application" |
+| On conflict        | Show notification: "Shortcut Ctrl+Alt+K is in use by another application"   |
 | After notification | Open settings dialog with shortcut field focused                            |
 
 **Shortcut Change Flow:**

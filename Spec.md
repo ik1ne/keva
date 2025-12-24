@@ -60,7 +60,7 @@ Single-process application containing GUI window and keva-core storage layer.
 
 ### Launch and Activation
 
-- Global shortcut `Ctrl+Shift+K` shows window
+- Global shortcut `Ctrl+Alt+K` shows window
 - Launch at login: user opts in via first-run dialog (see Section 4)
     - Registry `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run`
 - Must appear correctly in Task Manager Startup tab
@@ -86,7 +86,7 @@ Single-process application containing GUI window and keva-core storage layer.
 
 ## 4. GUI
 
-### Cross-Platform Consistency
+### Custom Window
 
 - Custom-drawn window (no native decorations)
 - No title bar, close/minimize/maximize buttons
@@ -95,7 +95,7 @@ Single-process application containing GUI window and keva-core storage layer.
 
 **Window Controls:**
 
-- `Ctrl+Shift+K` → Show window (global shortcut, works when hidden)
+- `Ctrl+Alt+K` → Show window (global shortcut, works when hidden)
 - `Esc` → Hide window (only when window is focused)
 - `Alt+F4` → Quit app entirely (only when window is focused)
 - Window does NOT close on focus loss (supports drag/drop and copy/paste workflows)
@@ -147,20 +147,72 @@ the window.
 Split pane with three components:
 
 - **Top:** Search bar (key filter, fuzzy matching, plus button for key creation)
-- **Left:** Key list (filtered by search bar)
+- **Left:** Key list (filtered by search bar), trash section at bottom
 - **Right:** Inspector/Preview pane (view or edit value)
+
+### Three-State Focus Model
+
+The search bar, left pane, and right pane are mutually exclusive focus states. Only one can be active at a time.
+
+**Focus States:**
+
+| State              | Search Bar                 | Left Pane        | Right Pane                            |
+|--------------------|----------------------------|------------------|---------------------------------------|
+| Search bar focused | Focus highlight            | No selection     | Shows target based on search text     |
+| Left pane focused  | Dimmed text, button hidden | Key highlighted  | Shows selected key's value            |
+| Right pane focused | Dimmed text, button hidden | Dimmed highlight | Text cursor active / Files list shown |
+
+**Focus Transitions:**
+
+| From       | Action                    | To                                         |
+|------------|---------------------------|--------------------------------------------|
+| Search bar | Down arrow                | Left pane (first key selected)             |
+| Search bar | Click key in list         | Left pane                                  |
+| Search bar | Enter                     | Right pane (editing)                       |
+| Search bar | Click right pane          | Right pane                                 |
+| Left pane  | Up arrow (from first key) | Search bar (cursor position restored)      |
+| Left pane  | Down/Up arrow             | Navigate within list                       |
+| Left pane  | Enter                     | Right pane (editing)                       |
+| Left pane  | Delete key                | Delete selected key (follows delete_style) |
+| Left pane  | Click search bar          | Search bar                                 |
+| Left pane  | Click right pane          | Right pane                                 |
+| Right pane | Esc                       | Hide window                                |
+| Right pane | Click search bar          | Search bar                                 |
+| Right pane | Click key in list         | Left pane                                  |
+
+**Cursor Position Memory:**
+
+When user navigates away from search bar (down arrow) and returns (up arrow from first key), cursor position is restored
+to where it was before leaving.
 
 ### Search Bar
 
 **Components:**
 
 ```
-[🔍] [__search text__] [+]
+[🔍] [__search text__] [✏️/➕]
 ```
 
 - **Search icon (🔍):** Also acts as drag handle for moving window
 - **Search text:** Input field with placeholder text
-- **Plus button (+):** Visible when search text has no exact match; creates new key
+- **Action button:** Shows ✏️ (pen) when key exists, ➕ (plus) when key doesn't exist
+
+**Search Bar States:**
+
+| State                         | Text Style       | Button | Right Pane                    |
+|-------------------------------|------------------|--------|-------------------------------|
+| Empty                         | Gray placeholder | Hidden | Empty                         |
+| Text, key exists              | Normal           | ✏️ Pen | Existing key's value          |
+| Text, key doesn't exist       | Normal           | ➕ Plus | "Press Enter to add {key}..." |
+| Inactive (left pane focused)  | Dimmed gray      | Hidden | Selected key's value          |
+| Inactive (right pane focused) | Dimmed gray      | Hidden | Editing selected key          |
+
+**Button Tooltips:**
+
+| Icon   | Tooltip                |
+|--------|------------------------|
+| ✏️ Pen | "Edit {key} (Enter)"   |
+| ➕ Plus | "Create {key} (Enter)" |
 
 **Behavior:**
 
@@ -169,6 +221,7 @@ Split pane with three components:
 - Plus button hidden when exact match exists
 - Enter with exact match → focus that key's editor
 - Enter without exact match → create key, focus editor (same as clicking plus button)
+- Clicking button performs same action as Enter
 
 ### Search Bar and Left Pane Relationship
 
@@ -176,7 +229,7 @@ Search bar and left pane selection are independent:
 
 - Search bar filters the left pane results AND serves as target key for right pane when nothing is selected.
 - Clicking a key in left pane does NOT update search bar.
-- Right pane shows: selected key's value (if selection exists) OR empty editor for search bar's key (if no selection).
+- Right pane shows: selected key's value (if selection exists) OR editor for search bar's key (if no selection).
 
 ### Right Pane Behavior
 
@@ -185,24 +238,27 @@ Search bar and left pane selection are independent:
 - Shows text input with placeholder: `Write or paste value for "<key>"`
 - Accepts:
     - Text input → stored as plain text
-    - Paste (`Ctrl+V`) with files → stored as files, shows preview
+    - Paste (`Ctrl+V`) with files → stored as files, shows file list
     - Paste (`Ctrl+V`) with plain text → inserted at cursor
-    - Drag & drop file → stored as file contents, shows preview
+    - Drag & drop file → stored as file contents, shows file list
 
 **Text Editing State (plain text value exists):**
 
 - Standard text editor behavior
+- Arrow keys move cursor within text (do not navigate key list)
 - Paste (`Ctrl+V`):
     - If clipboard contains plain text → insert at cursor
     - If clipboard contains only files → show hint: "Press Ctrl+V again to overwrite" (2-second timeout)
-- Auto-save after 3 seconds of inactivity or on window hide
+- Auto-save after 3 seconds of inactivity (since last keystroke)
+- Auto-save on window hide or app quit
 
 **Files Value State:**
 
 - Shows file list with filename and size for each file
 - Duplicate filenames allowed if content differs (size helps distinguish)
-- Delete button (X or trash icon) on each file to remove individual files
-- Copy to clipboard action available
+- Delete button (X) on each file to remove individual files
+- Clear All button to remove all files
+- `Ctrl+Alt+C` copies files to clipboard and hides window
 - No inline preview (v1 limitation; user can copy and open externally)
 
 **Trashed Key State:**
@@ -212,7 +268,7 @@ Search bar and left pane selection are independent:
 
 ### Left Pane Controls
 
-Each key displays on hover/selection:
+Each active key displays on hover/selection:
 
 - **Rename button (pen icon):** Opens inline editor to modify key.
     - If rename target exists: confirmation prompt, target key is permanently overwritten (no restoration)
@@ -223,33 +279,47 @@ Each key displays on hover/selection:
 - **Restore button:** Restores key to active state
 - **Permanent delete button:** Permanently removes key and value
 
+### Trash Section
+
+The left pane has a separate trash section at the bottom:
+
+- **Fixed height:** Approximately 2-2.5x the height of a single key row
+- **Visibility:** Hidden when no trashed keys match the current search
+- **Header:** "Trash (N)" showing count of matching trashed keys
+- **Separate navigation:** Click required to enter trash section from active keys
+- **Arrow navigation:** Up/Down arrows navigate within trash section
+- **Boundaries:** Up arrow from first trash key stays in trash; down arrow from last trash key stays in trash
+- **Exit:** Click on active key or search bar to exit trash section
+
 ### Search Behavior
 
 - **Mode:** Fuzzy matching only (via `keva_search` crate using nucleo)
-- **Ranking:** Exact match > Prefix > Substring > Subsequence
+- **Ranking:** Determined by nucleo algorithm; active keys always before trashed
 - **Case Sensitivity:** Smart case (case-insensitive unless query contains uppercase)
-- **Trash Handling:** Trash items included but ranked at bottom with 🗑️ icon
+- **Trash Handling:** Trash items shown in separate section at bottom with 🗑️ icon
 - **Stale Items:** Items past TTL remain visible until GC runs (GC is the single source of truth for state transitions)
 
 ### Keyboard Navigation
 
-**Global (when window is focused):**
+**Arrow Key Behavior:**
 
-- Down arrow from search bar → moves to first key in list
+- Down arrow from search bar → selects first key in active list
 - Up arrow from search bar → no action (stays in search bar)
-- Arrow keys work globally when window is focused (no need to focus left pane first)
+- When left pane focused: arrows navigate key list
+- When right pane focused (text editing): arrows move cursor within text
 
 ### Keyboard Shortcuts
 
-| State                             | Key            | Action                                            |
-|-----------------------------------|----------------|---------------------------------------------------|
-| Global (even when hidden)         | `Ctrl+Shift+K` | Show window                                       |
-| Window focused                    | `Esc`          | Hide window (process stays alive)                 |
-| Window focused                    | `Alt+F4`       | Quit app entirely                                 |
-| Key selected in left pane         | `Shift+Enter`  | Copy value to clipboard, hide window              |
-| Key selected in left pane         | `Enter`        | Focus right pane for editing                      |
-| No selection, search bar has text | `Enter`        | Focus right pane for editing (creates key if new) |
-| Window focused                    | `Ctrl+,`       | Open settings dialog                              |
+| State                        | Key          | Action                                     |
+|------------------------------|--------------|--------------------------------------------|
+| Global (even when hidden)    | `Ctrl+Alt+K` | Show window                                |
+| Window focused               | `Esc`        | Hide window (process stays alive)          |
+| Window focused               | `Alt+F4`     | Quit app entirely                          |
+| Window focused               | `Ctrl+,`     | Open settings dialog                       |
+| Left pane focused            | `Enter`      | Focus right pane for editing               |
+| Left pane focused            | `Delete`     | Delete selected key (follows delete_style) |
+| Search bar focused, has text | `Enter`      | Focus right pane (creates key if new)      |
+| Right pane shown             | `Ctrl+Alt+C` | Copy value to clipboard, hide window       |
 
 ### First-Run Experience
 
@@ -257,7 +327,7 @@ On first launch (no config.toml exists):
 
 1. Show welcome dialog:
     - Title: "Welcome to Keva"
-    - Message: "Keva stores your clipboard snippets and files locally. Press Ctrl+Shift+K anytime to open this window."
+    - Message: "Keva stores your clipboard snippets and files locally. Press Ctrl+Alt+K anytime to open this window."
     - Checkbox: "Launch Keva at login" (checked by default)
     - Button: "Get Started"
 2. If checkbox is checked, register login item
@@ -270,6 +340,7 @@ On first launch (no config.toml exists):
 - Changes saved to config file on dialog close
 - Applied immediately to running application
 - Global shortcut configuration uses key capture dialog
+- Close via X button or Esc key
 
 **Settings Categories:**
 
@@ -284,12 +355,19 @@ On first launch (no config.toml exists):
 | Lifecycle | Trash TTL            | Days before items auto-trash          |
 | Lifecycle | Purge TTL            | Days before trashed items are deleted |
 
-**Note:** If tray icon is hidden and window is also hidden, user can still access settings by relaunching the app (which
-shows the existing instance's window) and pressing `Ctrl+,`.
+**Note:** If tray icon is hidden and window is also hidden, user can still access by double-clicking the .exe (which
+activates the existing instance's window) and pressing `Ctrl+,`.
 
 ### Drag & Drop
 
-**Drop Target Behavior:**
+**Drop Targets:**
+
+- Right pane: stores to current target key
+- Key in left pane: stores to that specific key
+- Trashed key: rejected (cannot drop on trashed key)
+- Search bar: not a drop target
+
+**Drop Behavior Matrix:**
 
 | Existing Value | Drop Content | Behavior                                |
 |----------------|--------------|-----------------------------------------|
@@ -311,12 +389,38 @@ shows the existing instance's window) and pressing `Ctrl+,`.
 - Files exceeding threshold show confirmation: "File X is Y MB. Store anyway?"
 - **Hard maximum:** 1 GB per file (reject larger files with error message)
 - Multiple files: each checked individually against threshold
+- Applies to both drag & drop and clipboard paste
+
+### Clipboard Paste
+
+**Context-Aware Paste (`Ctrl+V`):**
+
+| Focus                    | Clipboard | Action                                              |
+|--------------------------|-----------|-----------------------------------------------------|
+| Search bar               | Text      | Insert text into search bar (as query)              |
+| Search bar               | Files     | Create/update key value for search bar text         |
+| Right pane (text editor) | Text      | Insert at cursor                                    |
+| Right pane (text editor) | Files     | Show warning, Ctrl+V again to overwrite             |
+| Right pane (files list)  | Text      | Show warning, Ctrl+V again to overwrite             |
+| Right pane (files list)  | Files     | Silent append                                       |
+| Left pane (key selected) | Text      | Show warning if Files value; replace if Text value  |
+| Left pane (key selected) | Files     | Silent append if Files value; replace if Text/empty |
+
+**Overwrite Warning:**
+
+- Red text at bottom of right pane: "Press Ctrl+V again to overwrite"
+- Timeout: 2 seconds or any other action clears warning
+- Second Ctrl+V within timeout executes overwrite
+
+**Large File Handling:**
+
+Same rules as drag & drop apply to pasted files.
 
 ## 5. Configuration
 
 ### Data Directory
 
-Default location: `~/.keva/`
+Default location: `%APPDATA%\Keva`
 
 Override via environment variable: `KEVA_DATA_DIR`
 
@@ -341,8 +445,8 @@ config_version = 1
 theme = "system"
 
 # Global shortcut to show window
-# Format: "Modifier+Key" (e.g., "Ctrl+Shift+K")
-global_shortcut = "Ctrl+Shift+K"
+# Format: "Modifier+Key" (e.g., "Ctrl+Alt+K")
+global_shortcut = "Ctrl+Alt+K"
 
 # Start automatically at login
 launch_at_login = true
@@ -392,7 +496,7 @@ If config.toml is missing: created with defaults, no popup.
 |------------------------|---------------------|------------------------------------------------------------|
 | `config_version`       | `1`                 | Config format version for migrations                       |
 | `theme`                | `"system"`          | `"dark"`, `"light"`, or `"system"` (follow OS)             |
-| `global_shortcut`      | `"Ctrl+Shift+K"`    | Key combination to show window                             |
+| `global_shortcut`      | `"Ctrl+Alt+K"`      | Key combination to show window                             |
 | `launch_at_login`      | `true`              | Start automatically at system login                        |
 | `show_tray_icon`       | `true`              | Show system tray icon                                      |
 | `delete_style`         | `"soft"`            | `"soft"` = move to trash, `"immediate"` = permanent delete |
@@ -423,9 +527,9 @@ TTL expiration is based on `last_accessed`. Operations that update `last_accesse
 
 1. **Active:** Normal visibility. Transitions to Trash when `last_accessed + trash_ttl` expires.
 
-2. **Trash:** Soft-deleted, hidden from default view.
+2. **Trash:** Soft-deleted, shown in trash section.
     - Skipped if delete style is Immediate.
-    - Searchable (bottom of results, 🗑️ icon).
+    - Searchable (shown in trash section with 🗑️ icon).
     - Read-only (must restore to edit).
     - Transitions to Purge when `trashed_at + purge_ttl` expires.
 
@@ -452,83 +556,16 @@ Triggers:
 
 Note: Search results may be slightly outdated until maintenance runs.
 
-## 7. Search Library (keva_search)
-
-Separate crate providing fuzzy search over key names.
-
-### Architecture
-
-- Uses nucleo for fuzzy matching
-- Two independent indexes: Active and Trash
-- Append-only design with tombstones + periodic rebuild for deletions
-- Non-blocking API for responsive GUI
-
-### Public Interface
-
-```rust
-pub struct SearchEngine {
-    /* ... */
-}
-
-impl SearchEngine {
-    pub fn new() -> Self;
-
-    // Non-blocking search API
-    pub fn set_query(&mut self, query: SearchQuery);
-    pub fn tick(&mut self);  // Drive search (non-blocking)
-    pub fn is_finished(&self) -> bool;
-    pub fn active_results(&self) -> SearchResults;
-    pub fn trashed_results(&self) -> SearchResults;
-
-    // Mutation operations
-    pub fn add_active(&mut self, key: &Key);
-    pub fn trash(&mut self, key: &Key);
-    pub fn restore(&mut self, key: &Key);
-    pub fn remove(&mut self, key: &Key);
-    pub fn rename(&mut self, old: &Key, new: &Key);
-
-    // Maintenance
-    pub fn maintenance_compact(&mut self);
-}
-
-pub struct SearchResult {
-    pub key: Key,
-    pub is_trashed: bool,
-    pub match_indices: Vec<u32>,  // For UI highlighting
-}
-
-pub enum SearchQuery {
-    Fuzzy(String),
-    // Future: Regex(String)
-}
-
-pub struct SearchConfig {
-    pub case_matching: CaseMatching,
-    pub unicode_normalization: bool,
-    pub rebuild_threshold: usize,
-}
-```
-
-### Behavior
-
-| Aspect        | Specification                                             |
-|---------------|-----------------------------------------------------------|
-| Smart case    | Lowercase query → case-insensitive; uppercase → sensitive |
-| Ranking       | Determined by nucleo; active keys always before trashed   |
-| Empty query   | Returns all keys, active first, then trashed              |
-| Match indices | Positions of matched characters for UI highlighting       |
-| Performance   | <10ms for 10,000 keys                                     |
-
-## 8. Error Handling
+## 7. Error Handling
 
 ### Global Shortcut Conflicts
 
 If the configured shortcut is already registered by another application:
 
-1. Show notification: "Shortcut Ctrl+Shift+K is in use by another application"
+1. Show notification: "Shortcut Ctrl+Alt+K is in use by another application"
 2. Open settings dialog with shortcut field focused
 3. User must choose a different shortcut or resolve the conflict externally
-4. Alternative: User can launch app executable to show window if hotkey unavailable
+4. Alternative: User can double-click .exe to show window if hotkey unavailable
 
 ### Database Errors
 
@@ -546,5 +583,4 @@ If auto-save fails (disk full, permissions, etc.):
 1. Show non-blocking notification: "Failed to save changes"
 2. Keep unsaved changes in memory
 3. Retry on next edit or explicit save
-4. On window hide: warn user before hiding if unsaved changes exist
-
+4. On window hide: auto-save pending changes (if save fails, window still hides)
