@@ -254,36 +254,92 @@ The search bar and left pane selection are **mutually exclusive**. Only one can 
 
 **Requirements:**
 
-| Requirement       | Description                                          | Status |
-|-------------------|------------------------------------------------------|--------|
-| Text editing      | Right pane text content is editable (not read-only)  | ❌      |
-| Edit trigger      | Clicking in right pane text area enables editing     | ❌      |
-| Auto-save         | Save changes after 3 seconds of inactivity           | ❌      |
-| Save method       | Call upsert_text() on keva_core                      | ❌      |
-| Key list update   | New key appears in left pane after first save        | ❌      |
-| Unsaved indicator | Optional: visual indicator for unsaved changes       | ❌      |
-| Save on hide      | Save pending changes when window hides (Esc)         | ❌      |
-| Empty text        | Saving empty string stores empty Text value (key preserved) | ❌ |
-
-**Scope:**
-
-| In Scope                          | Out of Scope             |
-|-----------------------------------|--------------------------|
-| Edit existing Text value          | Creating new key (M9)    |
-| Edit empty value for existing key | Clipboard paste (M6)     |
-| Auto-save timing                  | Files value editing      |
+| Requirement     | Description                                                  | Status |
+|-----------------|--------------------------------------------------------------|--------|
+| Text editing    | Right pane text content is editable                          | ❌      |
+| Edit trigger    | Clicking in right pane text area enables editing             | ❌      |
+| Auto-save       | Save changes after 3 seconds of inactivity                   | ❌      |
+| Save method     | Call upsert_text() on keva_core                              | ❌      |
+| Key list update | New key appears in left pane after first save                | ❌      |
+| Save on hide    | Save pending changes when window hides (Esc)                 | ❌      |
+| Save on quit    | Save pending changes when app exits (Alt+F4, tray Quit)      | ❌      |
+| Save on switch  | Save pending changes when selecting different key            | ❌      |
+| Empty text      | Saving empty string stores empty Text value (key preserved)  | ❌      |
 
 **Test Cases:**
 
-| TC       | Description                                              | Status |
-|----------|----------------------------------------------------------|--------|
-| TC-M5-01 | Clicking text area allows typing                         | ❌      |
-| TC-M5-02 | Changes auto-save after 3 seconds idle                   | ❌      |
-| TC-M5-03 | Saved changes persist after app restart                  | ❌      |
-| TC-M5-04 | Pressing Esc saves pending changes before hiding         | ❌      |
-| TC-M5-05 | Deleting all text saves empty string (key not deleted)   | ❌      |
-| TC-M5-06 | Rapid typing delays save until 3 seconds after last keystroke | ❌ |
-| TC-M5-07 | Switching selection saves pending changes to previous key | ❌     |
+| TC       | Description                                                  | Status |
+|----------|--------------------------------------------------------------|--------|
+| TC-M5-01 | Clicking text area allows typing                             | ❌      |
+| TC-M5-02 | Changes auto-save after 3 seconds idle                       | ❌      |
+| TC-M5-03 | Saved changes persist after app restart                      | ❌      |
+| TC-M5-04 | Pressing Esc saves pending changes before hiding             | ❌      |
+| TC-M5-05 | Quitting app saves pending changes                           | ❌      |
+| TC-M5-06 | Switching selection saves pending changes to previous key    | ❌      |
+| TC-M5-07 | Deleting all text saves empty string (key not deleted)       | ❌      |
+| TC-M5-08 | Rapid typing delays save until 3 seconds after last keystroke | ❌     |
+
+### M6-win: Clipboard Paste Handling
+
+**Goal:** App-wide Ctrl+V with context-aware behavior.
+
+**Status:** Not Started
+
+**Requirements:**
+
+| Requirement     | Description                                          | Status |
+|-----------------|------------------------------------------------------|--------|
+| Paste scope     | App-wide Ctrl+V interception                         | ❌      |
+| Clipboard read  | Detect clipboard content type (text, files, both)    | ❌      |
+| Files priority  | If clipboard has both text and files, treat as files | ❌      |
+
+**Paste Behavior by Context:**
+
+| Focus                         | Clipboard | Action                                         |
+|-------------------------------|-----------|------------------------------------------------|
+| Search bar                    | Text      | Insert text into search bar (as query)         |
+| Search bar                    | Files     | Create/update key value for search bar text    |
+| Right pane (text editor)      | Text      | Insert at cursor                               |
+| Right pane (text editor)      | Files     | Show warning, Ctrl+V again to overwrite        |
+| Right pane (Files display)    | Text      | Show warning, Ctrl+V again to overwrite        |
+| Right pane (Files display)    | Files     | Silent append                                  |
+| Key selected in left pane     | Files     | Silent append to selected key's Files value    |
+| Key selected in left pane     | Text      | Show warning if Files value, insert if Text value |
+
+**Overwrite Confirmation:**
+
+| Element              | Description                                        |
+|----------------------|----------------------------------------------------|
+| Warning text         | Red text at bottom of right pane                   |
+| Message (text→files) | "Press Ctrl+V again to replace text with files"    |
+| Message (files→text) | "Press Ctrl+V again to replace files with text"    |
+| Timeout              | Warning clears after 2 seconds or any other action |
+| Second Ctrl+V        | Execute overwrite within timeout window            |
+
+**File Size Handling:**
+
+| Condition                       | Behavior                                     |
+|---------------------------------|----------------------------------------------|
+| Any file > 1GB                  | Reject entire paste with error message       |
+| Any file > large_file_threshold | Reject entire paste with confirmation dialog |
+
+**Test Cases:**
+
+| TC       | Description                                                   | Status |
+|----------|---------------------------------------------------------------|--------|
+| TC-M6-01 | Paste text with search bar focused inserts into search bar    | ❌      |
+| TC-M6-02 | Paste files with search bar focused creates/updates key value | ❌      |
+| TC-M6-03 | Paste text into text editor inserts at cursor                 | ❌      |
+| TC-M6-04 | Paste files into text editor shows warning                    | ❌      |
+| TC-M6-05 | Paste text into Files display shows warning                   | ❌      |
+| TC-M6-06 | Paste files into Files display appends silently               | ❌      |
+| TC-M6-07 | Second Ctrl+V within 2 seconds overwrites                     | ❌      |
+| TC-M6-08 | Warning clears after timeout                                  | ❌      |
+| TC-M6-09 | Clipboard with both text and files treated as files           | ❌      |
+| TC-M6-10 | File over 1GB rejected with error                             | ❌      |
+| TC-M6-11 | File over threshold shows confirmation dialog                 | ❌      |
+| TC-M6-12 | Duplicate file (same hash) silently ignored on append         | ❌      |
+| TC-M6-13 | Paste files with search bar focused and key doesn't exist creates key | ❌ |
 
 ---
 
