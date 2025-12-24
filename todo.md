@@ -6,9 +6,9 @@ Keva is a local key-value store for clipboard-like data. The core library (`keva
 
 **Architecture Decision:** Hybrid native approach.
 
-- **Windows:** Pure Rust (`windows` crate for Win32 API)
+- **Windows:** Pure Rust (`windows` crate for Win32 + Direct2D)
 - **macOS:** Swift/AppKit with FFI to `keva_core`
-- **Shared:** `keva_core` (Rust)
+- **Shared:** `keva_core` (Rust), `keva_search` (Rust)
 
 **Rationale:**
 
@@ -22,14 +22,16 @@ Keva is a local key-value store for clipboard-like data. The core library (`keva
 - `Spec.md` - Product specification (source of truth for behavior)
 - `implementation_detail.md` - keva_core API reference
 - `Planned.md` - Future features (not in scope)
+- `windows_crate_research.md` - Windows API research
 
 **Project structure:**
 
 ```
 keva/
-├── core/           # keva_core (Rust library)
+├── core/           # keva_core (Rust library) - IMPLEMENTED
+├── search/         # keva_search (Rust library) - IMPLEMENTED
 ├── ffi/            # C FFI bindings for macOS (Rust, builds dylib)
-├── app-windows/    # Windows app (Rust + windows crate)
+├── app-windows/    # Windows app (Rust + windows crate + Direct2D)
 ├── app-macos/      # macOS app (Swift/AppKit, links keva_ffi)
 ├── Spec.md
 ├── Planned.md
@@ -89,10 +91,12 @@ windows = { version = "0.62", features = [
 
 **Goal:** Connect UI to keva_core.
 
+**Status:** In Progress
+
 **Tasks:**
 
-1. Load keys on startup
-2. Render key list (custom draw or list control)
+1. ✅ Load keys on startup (KevaCore integration)
+2. ✅ Render key list (Direct2D custom draw)
 3. Text preview (Rich Edit control)
 4. File preview (IPreviewHandler)
 5. Clipboard paste to create key
@@ -103,7 +107,7 @@ windows = { version = "0.62", features = [
 
 **Tasks:**
 
-1. Fuzzy search (nucleo)
+1. Fuzzy search (keva_search integration)
 2. Edit/rename/delete keys
 3. Copy to clipboard
 4. Trash support
@@ -115,13 +119,14 @@ windows = { version = "0.62", features = [
 
 ### M0-mac: Core FFI Layer
 
-**Goal:** Expose keva_core to Swift via C FFI.
+**Goal:** Expose keva_core and keva_search to Swift via C FFI.
 
 **Dependencies:**
 
 ```toml
 [dependencies]
 keva_core = { path = "../core" }
+keva_search = { path = "../search" }
 
 [build-dependencies]
 cbindgen = "0.27"
@@ -134,6 +139,7 @@ cbindgen = "0.27"
 3. Handle memory management (Box for heap, CString for strings)
 4. Generate `keva.h` via cbindgen
 5. Build as `libkeva.dylib`
+6. Expose keva_search API for fuzzy search
 
 **API:**
 
@@ -204,7 +210,7 @@ void keva_free_key_list(KevaKeyList* list);
 
 **Tasks:**
 
-1. Fuzzy search (nucleo via FFI, or native NSPredicate)
+1. Fuzzy search (keva_search via FFI)
 2. Edit/rename/delete keys
 3. Copy to clipboard (NSPasteboard)
 4. Trash support

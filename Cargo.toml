@@ -1,5 +1,5 @@
 [workspace]
-members = ["core", "ffi", "app-windows"]
+members = ["core", "search", "ffi", "app-windows"]
 resolver = "3"
 
 # ffi: C FFI for macOS Swift app (cdylib)

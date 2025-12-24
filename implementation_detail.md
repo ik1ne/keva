@@ -7,13 +7,26 @@ This document describes the current implementation status of Keva based on codeb
 ```
 keva/
 ├── core/           # keva_core - Core storage library (IMPLEMENTED)
-├── cli/            # keva_cli - Future scope, not v1 (placeholder in workspace)
-├── gui/            # keva_gui - GUI application (PLACEHOLDER)
-├── Spec.md         # Functional specification (v1 = GUI-only)
-└── Planned.md      # Future features (CLI, rich formats, etc.)
+├── search/         # keva_search - Fuzzy search library (IMPLEMENTED)
+│   └── src/
+│       ├── lib.rs      # Public exports
+│       ├── engine.rs   # SearchEngine struct
+│       ├── index.rs    # Internal Index (nucleo wrapper)
+│       ├── config.rs   # SearchConfig, CaseMatching
+│       ├── query.rs    # SearchQuery enum
+│       ├── results.rs  # SearchResults struct
+│       └── tests.rs    # All tests (32 tests)
+├── ffi/            # keva_ffi - C FFI bindings for macOS (PLACEHOLDER)
+├── app-windows/    # Windows GUI app (IN PROGRESS)
+│   └── src/
+│       ├── main.rs     # Window creation, message loop, tray icon
+│       ├── app.rs      # App state, keva_core integration
+│       └── renderer.rs # Direct2D rendering
+├── app-macos/      # macOS GUI app (NOT STARTED)
+├── Spec.md         # Functional specification
+├── Planned.md      # Future features (CLI, rich formats, etc.)
+└── todo.md         # Implementation plan and progress
 ```
-
-> **Note**: The workspace `Cargo.toml` includes `cli` member for future development, but CLI is not part of v1 scope.
 
 ---
 
@@ -26,7 +39,6 @@ keva/
 | `core/`     | `core/src/core/`        | Main `KevaCore` struct, database operations, file storage |
 | `types/`    | `core/src/types/`       | Key, Value, Config, TTL types                             |
 | `clipboard` | `core/src/clipboard.rs` | Clipboard read/write operations                           |
-| `search`    | `gui/src/search/`       | Fuzzy search engine (lives in GUI crate)                  |
 
 ---
 
@@ -84,22 +96,45 @@ Active  ──[trash_ttl expires]──►  Trash  ──[purge_ttl expires]─�
 - Removes orphan blob files
 - Triggered manually via `gc(now)` method
 
-### 6. Search Engine
+### 6. Search Engine (`keva_search`)
 
-Lives in `keva_gui` crate for non-blocking UI integration.
+**Status:** ✅ Implemented
 
-**Fuzzy Search**:
+Uses `nucleo` library for fuzzy matching. Shared between Windows (direct) and macOS (via FFI).
 
-- Uses `nucleo` library
-- Non-blocking API: `set_query()` + `tick()` + zero-copy iteration
-- Smart case matching (case-insensitive unless query contains uppercase)
-- Callback-based notification for UI updates
+**Architecture:**
+- Two independent fuzzy indexes: **Active** and **Trash**
+- Append-only design with tombstone-based deletion
+- Periodic rebuild during maintenance when tombstones exceed threshold
 
-**Index Management**:
-
-- Incremental updates via mutation methods (`add_active`, `trash`, `restore`, etc.)
+**Features:**
+- Fuzzy matching with configurable case matching (Sensitive, Insensitive, Smart)
+- Non-blocking API for responsive UI (`set_query()`, `tick()`, `is_finished()`)
 - Separate indexes for Active and Trash keys
-- Tombstone tracking for pending deletions
+- Zero-copy iteration over search results
+
+**Public API:**
+```rust
+// Create
+SearchEngine::new(active, trashed, config, notify)
+
+// Mutation
+engine.add_active(key)
+engine.trash(&key)
+engine.restore(&key)
+engine.remove(&key)
+engine.rename(&old, new)
+
+// Search
+engine.set_query(SearchQuery::Fuzzy(pattern))
+engine.tick()  // Non-blocking
+engine.is_finished()
+engine.active_results().iter()
+engine.trashed_results().iter()
+
+// Maintenance
+engine.maintenance_compact()
+```
 
 ### 7. Clipboard Integration
 
@@ -191,11 +226,18 @@ Lives in `keva_gui` crate for non-blocking UI integration.
 | `nutype`       | 0.6     | Validated string types  |
 | `thiserror`    | -       | Error handling          |
 
-### keva_gui
+### keva_search
 
-| Crate    | Version | Purpose      |
-|----------|---------|--------------|
-| `nucleo` | 0.5     | Fuzzy search |
+| Crate       | Version | Purpose              |
+|-------------|---------|----------------------|
+| `keva_core` | path    | Key type             |
+| `nucleo`    | 0.5     | Fuzzy matching       |
+
+### app-windows
+
+| Crate     | Version | Purpose                    |
+|-----------|---------|----------------------------|
+| `windows` | 0.62    | Win32 API, Direct2D, Shell |
 
 ---
 
@@ -206,25 +248,45 @@ Lives in `keva_gui` crate for non-blocking UI integration.
 | Database tests | `core/src/core/db/tests.rs` | CRUD, TTL, GC, transactions   |
 | KevaCore tests | `core/src/core/tests.rs`    | Integration tests (132 tests) |
 | Type tests     | `core/src/types/*/tests.rs` | Key, Value, Config validation |
-| Search tests   | `gui/src/search/tests.rs`   | Fuzzy search, index mutations |
+| Search tests   | `search/src/tests.rs`       | All search operations (32 tests) |
 
 ---
 
-## Not Implemented
+## Implementation Status
 
-### From Spec.md (v1 Scope - GUI Only)
+### Windows App (`app-windows`)
 
-| Feature           | Status                                      |
-|-------------------|---------------------------------------------|
-| GUI application   | Placeholder only (`"Hello from keva_gui!"`) |
-| macOS .app bundle | Not started                                 |
-| Windows installer | Not started                                 |
+| Feature                     | Status         |
+|-----------------------------|----------------|
+| Borderless window           | ✅ Complete    |
+| System tray icon            | ✅ Complete    |
+| Resize from edges           | ✅ Complete    |
+| Esc hides window            | ✅ Complete    |
+| Tray click toggles window   | ✅ Complete    |
+| Alt+Tab visibility          | ✅ Complete    |
+| keva_core integration       | ✅ Complete    |
+| Direct2D rendering          | ✅ Complete    |
+| Key list display            | ✅ Basic       |
+| Text preview (Rich Edit)    | ⏳ Pending     |
+| File preview (IPreviewHandler) | ⏳ Pending  |
+| Clipboard paste to create   | ⏳ Pending     |
+| Fuzzy search                | ⏳ Pending     |
+| Global hotkey               | ⏳ Pending     |
+| Settings dialog             | ⏳ Pending     |
+
+### macOS App (`app-macos`)
+
+| Feature           | Status      |
+|-------------------|-------------|
+| FFI layer         | ⏳ Pending  |
+| App skeleton      | ⏳ Pending  |
+| Core integration  | ⏳ Pending  |
 
 ### From Planned.md (Future Scope)
 
 | Feature                                 | Status                           |
 |-----------------------------------------|----------------------------------|
-| CLI interface                           | Placeholder exists, not v1 scope |
+| CLI interface                           | Not v1 scope                     |
 | Regex search mode                       | Not implemented                  |
 | Rich format support (HTML, RTF, images) | Not implemented                  |
 | Value content search                    | Not implemented                  |
@@ -234,7 +296,7 @@ Lives in `keva_gui` crate for non-blocking UI integration.
 ## Architecture Summary
 
 ```
-keva_core (Storage Layer)
+keva_core (Storage Layer - Rust)
 ├── Database (redb)
 │   ├── Main Table: Key → VersionedValue
 │   ├── TRASHED_TTL Table
@@ -245,17 +307,35 @@ keva_core (Storage Layer)
 └── Clipboard
     └── Cross-platform I/O
 
-keva_gui (UI Layer)
-└── SearchEngine
-    ├── Nucleo fuzzy search
-    ├── Non-blocking tick-based API
-    └── Zero-copy result iteration
+keva_search (Fuzzy Search - Rust)
+├── SearchEngine (dual Active/Trash indexes)
+├── Index (nucleo wrapper with tombstones)
+└── Non-blocking API for GUI integration
+
+app-windows (Windows GUI - Rust)
+├── Win32 API via `windows` crate
+├── Direct2D for custom rendering
+├── DirectWrite for text
+├── keva_search for fuzzy search
+└── Native controls (Rich Edit, IPreviewHandler)
+
+app-macos (macOS GUI - Swift, planned)
+├── AppKit/Cocoa
+├── FFI to keva_core and keva_search via keva_ffi
+└── Native controls (NSTextView, QLPreviewView)
 ```
 
 **Key Design Decisions**:
 
 1. **Content-Addressable Storage**: BLAKE3 enables deduplication
 2. **GC as Source of Truth**: State transitions only happen during maintenance
-3. **Non-Blocking Search**: GUI-owned search with callback notifications
+3. **Hybrid Native UI**: Platform-specific apps for best UX, shared core
 4. **Single Writer Model**: redb supports multi-reader/single-writer
 5. **Versioned Values**: Supports future schema migrations
+
+**Windows-Specific Notes**:
+
+- Taskbar icon remains visible (hiding breaks Alt+Tab - Windows limitation)
+- Uses Direct2D + DirectWrite for custom key list rendering
+- Native Rich Edit control for text preview
+- IPreviewHandler for file preview (same as Explorer)

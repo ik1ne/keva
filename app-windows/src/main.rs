@@ -4,37 +4,43 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod app;
+mod renderer;
+
+use app::App;
+use keva_core::types::Key;
 use std::mem::size_of;
 use std::sync::atomic::{AtomicIsize, Ordering};
-
+use std::time::SystemTime;
 use windows::{
-    core::{w, Result},
     Win32::{
         Foundation::{HWND, LPARAM, LRESULT, RECT, TRUE, WPARAM},
         Graphics::{
             Dwm::DwmExtendFrameIntoClientArea,
-            Gdi::{GetStockObject, ValidateRect, BLACK_BRUSH, HBRUSH},
+            Gdi::{BLACK_BRUSH, GetStockObject, HBRUSH, ValidateRect},
         },
         System::LibraryLoader::GetModuleHandleW,
         UI::{
             Controls::MARGINS,
             Input::KeyboardAndMouse::VK_ESCAPE,
             Shell::{
-                Shell_NotifyIconW, NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE,
-                NOTIFYICONDATAW,
+                NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NOTIFYICONDATAW,
+                Shell_NotifyIconW,
             },
             WindowsAndMessaging::{
-                CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, GetSystemMetrics,
-                GetWindowRect, IsWindowVisible, LoadIconW, PostQuitMessage, RegisterClassW,
-                ShowWindow, HTBOTTOM, HTBOTTOMLEFT, HTBOTTOMRIGHT, HTCAPTION, HTLEFT, HTRIGHT,
-                HTTOP, HTTOPLEFT, HTTOPRIGHT, IDC_ARROW, IDI_APPLICATION, LoadCursorW, MSG,
-                SetForegroundWindow, SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_SHOW, WM_ACTIVATE,
-                WM_DESTROY, WM_KEYDOWN, WM_LBUTTONUP, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST,
-                WM_PAINT, WM_USER, WNDCLASSW, WS_EX_APPWINDOW, WS_MAXIMIZEBOX,
-                WS_MINIMIZEBOX, WS_POPUP, WS_SIZEBOX, WS_SYSMENU,
+                CreateWindowExW, DefWindowProcW, DispatchMessageW, GWLP_USERDATA, GetMessageW,
+                GetSystemMetrics, GetWindowLongPtrW, GetWindowRect, HTBOTTOM, HTBOTTOMLEFT,
+                HTBOTTOMRIGHT, HTCAPTION, HTLEFT, HTRIGHT, HTTOP, HTTOPLEFT, HTTOPRIGHT, IDC_ARROW,
+                IDI_APPLICATION, IsWindowVisible, LoadCursorW, LoadIconW, MSG, PostQuitMessage,
+                RegisterClassW, SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_SHOW, SetForegroundWindow,
+                SetWindowLongPtrW, ShowWindow, WM_ACTIVATE, WM_CREATE, WM_DESTROY, WM_KEYDOWN,
+                WM_LBUTTONUP, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT, WM_SIZE,
+                WM_USER, WNDCLASSW, WS_EX_APPWINDOW, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP,
+                WS_SIZEBOX, WS_SYSMENU,
             },
         },
     },
+    core::{Result, w},
 };
 
 /// Border width in pixels for resize hit detection.
@@ -51,6 +57,15 @@ const TRAY_ICON_ID: u32 = 1;
 static PREV_FOREGROUND: AtomicIsize = AtomicIsize::new(0);
 
 fn main() -> Result<()> {
+    // Initialize keva_core
+    let app = match App::new() {
+        Ok(app) => Box::new(app),
+        Err(e) => {
+            eprintln!("Failed to initialize Keva: {e}");
+            return Ok(());
+        }
+    };
+
     unsafe {
         let instance = GetModuleHandleW(None)?;
         let class_name = w!("KevaWindowClass");
@@ -90,6 +105,10 @@ fn main() -> Result<()> {
             Some(instance.into()),
             None,
         )?;
+
+        // Store app state in window
+        let app_ptr = Box::into_raw(app);
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, app_ptr as isize);
 
         // Extend DWM frame into entire client area for smooth compositing
         let margins = MARGINS {
@@ -156,9 +175,21 @@ fn remove_tray_icon(hwnd: HWND) {
     }
 }
 
+/// Gets the App instance from the window's user data.
+fn get_app(hwnd: HWND) -> Option<&'static mut App> {
+    unsafe {
+        let ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut App;
+        if ptr.is_null() { None } else { Some(&mut *ptr) }
+    }
+}
+
 extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     unsafe {
         match msg {
+            WM_CREATE => {
+                // App is set up after CreateWindowExW returns
+                LRESULT(0)
+            }
             WM_NCCALCSIZE => {
                 // Return 0 to remove the non-client area entirely (borderless)
                 LRESULT(0)
@@ -206,11 +237,27 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
                 }
                 LRESULT(0)
             }
+            WM_SIZE => {
+                let width = (lparam.0 & 0xFFFF) as u32;
+                let height = ((lparam.0 >> 16) & 0xFFFF) as u32;
+                if let Some(app) = get_app(hwnd) {
+                    app.resize(width, height);
+                }
+                LRESULT(0)
+            }
             WM_PAINT => {
+                if let Some(app) = get_app(hwnd) {
+                    app.paint(hwnd);
+                }
                 let _ = ValidateRect(Some(hwnd), None);
                 LRESULT(0)
             }
             WM_DESTROY => {
+                // Clean up app state
+                let ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut App;
+                if !ptr.is_null() {
+                    drop(Box::from_raw(ptr));
+                }
                 remove_tray_icon(hwnd);
                 PostQuitMessage(0);
                 LRESULT(0)

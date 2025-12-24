@@ -1,5 +1,5 @@
 pub(crate) mod config;
-pub use config::Config;
+pub use config::{Config, SavedConfig};
 
 pub(crate) mod key;
 pub use key::{Key, KeyError, MAX_KEY_LENGTH};

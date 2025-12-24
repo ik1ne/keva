@@ -123,30 +123,52 @@ Shell_NotifyIconW(NIM_ADD, &nid);
 
 ### 4. Hide from Taskbar (Keep Alt+Tab)
 
-**API:** `ITaskbarList3::DeleteTab`
+**Status:** ❌ NOT POSSIBLE on Windows
 
-This is a COM interface. We need to:
-1. Initialize COM
-2. Create `ITaskbarList3` instance
-3. Call `HrInit()`
-4. Call `DeleteTab(hwnd)`
+After extensive research and testing, hiding from taskbar while keeping Alt+Tab visibility is **impossible on Windows**:
 
-**Features:**
-```toml
-"Win32_UI_Shell",
-"Win32_System_Com",
-```
+- `ITaskbarList3::DeleteTab` - Removes from both taskbar AND Alt+Tab
+- Hidden owner window trick - Removes from Alt+Tab
+- `WS_EX_TOOLWINDOW` - Removes from Alt+Tab
+- Shell hook approaches - Don't work reliably
 
-**Methods available on ITaskbarList3:**
-- `HrInit()` - initialize
-- `DeleteTab(hwnd)` - remove from taskbar
-- `AddTab(hwnd)` - add to taskbar (if needed later)
-- `SetProgressValue`, `SetProgressState` - progress indicators
-- `SetOverlayIcon` - overlay badge
+**Decision:** Keep taskbar icon visible (Alt+Tab is more important for UX).
+
+This is documented in `Spec.md` as a Windows limitation.
 
 ---
 
-### 5. Clipboard
+### 5. Direct2D Rendering
+
+**Status:** ✅ Implemented
+
+**APIs:**
+- `D2D1CreateFactory` - Create factory
+- `ID2D1Factory::CreateHwndRenderTarget` - Create render target for window
+- `ID2D1RenderTarget::BeginDraw/EndDraw` - Drawing frame
+- `ID2D1RenderTarget::Clear` - Clear background
+- `ID2D1RenderTarget::DrawText` - Draw text
+
+**DirectWrite for text:**
+- `DWriteCreateFactory` - Create factory
+- `IDWriteFactory::CreateTextFormat` - Create font/size/style
+
+**Features:**
+```toml
+"Win32_Graphics_Direct2D",
+"Win32_Graphics_Direct2D_Common",
+"Win32_Graphics_DirectWrite",
+"Win32_Graphics_Dxgi_Common",
+```
+
+**Notes:**
+- Render target must be recreated on window resize (or use `Resize` method)
+- Brushes are tied to render target - recreate when target changes
+- Use `D2D1_RENDER_TARGET_TYPE_DEFAULT` for hardware acceleration with software fallback
+
+---
+
+### 6. Clipboard
 
 **APIs:**
 - `OpenClipboard`, `CloseClipboard` - clipboard access
@@ -168,7 +190,7 @@ This is a COM interface. We need to:
 
 ---
 
-### 6. File Preview (IPreviewHandler)
+### 7. File Preview (IPreviewHandler)
 
 **API:** `IPreviewHandler` COM interface
 
@@ -196,7 +218,7 @@ This is a COM interface. We need to:
 
 ---
 
-### 7. Keyboard & Input
+### 8. Keyboard & Input
 
 **Messages:**
 - `WM_KEYDOWN`, `WM_KEYUP` - key events
@@ -210,7 +232,7 @@ This is a COM interface. We need to:
 
 ---
 
-### 8. Global Hotkey
+### 9. Global Hotkey
 
 **APIs:**
 - `RegisterHotKey(hwnd, id, modifiers, vk)` - register
@@ -227,6 +249,8 @@ This is a COM interface. We need to:
 
 ## Complete Feature List for Keva
 
+Current features in use (as of M2-win):
+
 ```toml
 [target.'cfg(windows)'.dependencies.windows]
 version = "0.62"
@@ -238,17 +262,24 @@ features = [
     "Win32_UI_WindowsAndMessaging",
     "Win32_System_LibraryLoader",
     "Win32_Graphics_Gdi",
+    "Win32_Graphics_Dwm",
 
-    # System tray and taskbar
+    # Direct2D rendering
+    "Win32_Graphics_Direct2D",
+    "Win32_Graphics_Direct2D_Common",
+    "Win32_Graphics_DirectWrite",
+    "Win32_Graphics_Dxgi_Common",
+
+    # System tray
     "Win32_UI_Shell",
 
-    # COM (for ITaskbarList3, IPreviewHandler)
+    # COM (for IPreviewHandler - future)
     "Win32_System_Com",
 
-    # Keyboard/hotkeys
+    # Keyboard
     "Win32_UI_Input_KeyboardAndMouse",
 
-    # Controls (for text input, list views)
+    # Controls (for Rich Edit - future)
     "Win32_UI_Controls",
 ]
 ```
@@ -311,8 +342,14 @@ These wrap the `windows` crate but provide higher-level APIs. Trade-off: less co
 
 2. **Clipboard:** Handled by `keva_core`, not the Windows app. The app just calls keva_core APIs.
 
-3. **File preview:** Use `IPreviewHandler` (shell) for native Windows preview experience.
+3. **File preview:** Will use `IPreviewHandler` (shell) for native Windows preview experience.
+
+4. **Taskbar visibility:** Keep taskbar icon visible - hiding breaks Alt+Tab (Windows limitation).
+
+5. **Rendering:** Direct2D + DirectWrite for custom key list. Native controls (Rich Edit) for text editing.
 
 ## Remaining Questions
 
 1. **Dark mode:** How to detect/respond to Windows dark mode? (Future enhancement)
+
+2. **DPI awareness:** Need to handle high-DPI displays properly.
