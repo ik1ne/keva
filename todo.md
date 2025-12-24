@@ -24,6 +24,17 @@ Keva is a local key-value store for clipboard-like data. The core library (`keva
 - `Planned.md` - Future features (not in scope)
 - `windows_crate_research.md` - Windows API research
 
+---
+
+## To Decide
+
+| Question | Context | Decision |
+|----------|---------|----------|
+| Keep 3px inner border drag zone? | M1-win requires 3px inner border for dragging, M2-win adds search icon as drag handle. Should we keep both drag methods or remove the border drag zone? | Pending |
+| Data directory location? | Currently uses ~/.keva (%USERPROFILE%\.keva on Windows). Should we use %APPDATA%\Keva instead for Windows convention? Or keep ~/.keva for cross-platform consistency? | Pending |
+
+---
+
 **Project structure:**
 
 ```
@@ -42,76 +53,191 @@ keva/
 
 ## Phase 1: Windows App (Pure Rust)
 
-### M1-win: Window Skeleton ✅
+### M1-win: Window Skeleton
 
-**Goal:** Basic borderless window with system tray.
+**Goal:** Borderless window with system tray, basic window management.
 
-**Status:** Complete
+**Status:** Partial (missing tray menu, drag zone refinement)
 
-**Dependencies:**
+**Requirements:**
 
-```toml
-[dependencies]
-keva_core = { path = "../core" }
-windows = { version = "0.62", features = [
-    "Win32_Foundation",
-    "Win32_System_LibraryLoader",
-    "Win32_UI_WindowsAndMessaging",
-    "Win32_UI_Controls",
-    "Win32_UI_Shell",
-    "Win32_UI_Input_KeyboardAndMouse",
-    "Win32_Graphics_Gdi",
-    "Win32_Graphics_Dwm",
-] }
-```
+| Requirement      | Description                                                | Status                |
+|------------------|------------------------------------------------------------|-----------------------|
+| Window style     | Borderless (WS_POPUP), no title bar or native controls     | ✅                     |
+| Resize           | 5px outer zone triggers OS resize                          | ⚠️ 6px                |
+| Drag             | 3px inner border zone moves window                         | ❌ Entire window drags |
+| Initial position | Centered on primary monitor                                | ✅                     |
+| Smooth resize    | DwmExtendFrameIntoClientArea enabled                       | ✅                     |
+| Tray icon        | Visible with tooltip "Keva"                                | ✅                     |
+| Tray left-click  | Toggle window visibility                                   | ✅                     |
+| Tray right-click | Context menu (Show, Settings, Launch at Login, Quit)       | ❌                     | 
+| Esc key          | Hides window                                               | ✅                     |
+| Alt+Tab          | Window visible (taskbar icon remains - Windows limitation) | ✅                     |
 
-**Completed:**
+**Tray Menu Items:**
 
-1. ✅ Create `app-windows` crate as `[[bin]]`
-2. ✅ Register window class, create borderless window (WS_POPUP)
-3. ✅ Implement WM_NCHITTEST for resize edges
-4. ✅ System tray icon (Shell_NotifyIconW)
-5. ✅ Message loop with tray events
-6. ✅ Tray click toggles window visibility
-7. ⚠️ Taskbar icon visible (hiding from taskbar while keeping Alt+Tab is impossible on Windows)
-8. ✅ DwmExtendFrameIntoClientArea for smooth resize compositing
-9. ✅ WM_NCACTIVATE handling to prevent gray border on activation
-10. ✅ Window centered on screen
-11. ✅ Esc key hides window (WM_KEYDOWN)
+| Item            | Action                | Notes                        |
+|-----------------|-----------------------|------------------------------|
+| Show Keva       | Show window           | Disabled if already visible  |
+| Settings...     | Open settings dialog  | Non-functional until M13-win |
+| Launch at Login | Toggle checkbox       | Non-functional until M18-win |
+| Quit Keva       | Terminate application |                              |
 
-**Acceptance criteria:** ✅
+**Test Cases:**
 
-- ✅ Window appears, can resize from edges
-- ✅ Tray icon visible, click toggles window
-- ✅ Visible in Alt+Tab
-- ⚠️ Taskbar icon visible (Windows limitation - hiding breaks Alt+Tab)
-- ✅ Esc hides window and restores focus to previous app
+| TC       | Description                            | Status |
+|----------|----------------------------------------|--------|
+| TC-M1-01 | Window appears centered on launch      | ✅      |
+| TC-M1-02 | Drag from inner border moves window    | ❌      |
+| TC-M1-03 | Drag from outer edge resizes window    | ✅      |
+| TC-M1-04 | Tray icon visible with correct tooltip | ✅      |
+| TC-M1-05 | Tray left-click toggles visibility     | ✅      |
+| TC-M1-06 | Tray right-click shows menu            | ❌      |
+| TC-M1-07 | Esc hides window                       | ✅      |
+| TC-M1-08 | Window visible in Alt+Tab              | ✅      |
+| TC-M1-09 | Quit menu item terminates app          | ❌      |
 
-### M2-win: Core Integration
+**Remaining Tasks:**
 
-**Goal:** Connect UI to keva_core.
+1. Add tray right-click context menu (TrackPopupMenu)
+2. Implement drag zone (3px inner border returns HTCAPTION, rest returns HTCLIENT)
+3. Adjust resize border from 6px to 5px
 
-**Status:** In Progress
+### M2-win: Layout Skeleton
 
-**Tasks:**
+**Goal:** Three-pane visual structure with no business logic.
 
-1. ✅ Load keys on startup (KevaCore integration)
-2. ✅ Render key list (Direct2D custom draw)
-3. Text preview (Rich Edit control)
-4. File preview (IPreviewHandler)
-5. Clipboard paste to create key
+**Status:** Not Started
 
-### M3-win: Full Features
+**Requirements:**
 
-**Goal:** All Spec.md features.
+| Requirement         | Description                                                            | Status |
+|---------------------|------------------------------------------------------------------------|--------|
+| Layout              | Three panes: search bar (top), key list (left), preview area (right)   | ❌      |
+| Search bar          | Text input with placeholder "Search keys...", search icon (🔍) on left | ❌      |
+| Search icon         | Drag handle (drag moves window, click does nothing)                    | ❌      |
+| Left pane           | Empty placeholder area for future key list                             | ❌      |
+| Right pane          | Empty placeholder area for future preview/editor                       | ❌      |
+| Minimum window size | Enforce minimum (e.g., 400x300)                                        | ❌      |
 
-**Tasks:**
+**Test Cases:**
 
-1. Fuzzy search (keva_search integration)
-2. Edit/rename/delete keys
-3. Copy to clipboard
-4. Trash support
-5. Settings dialog
+| TC       | Description                                        | Status |
+|----------|----------------------------------------------------|--------|
+| TC-M2-01 | Three-pane layout renders correctly                | ❌      |
+| TC-M2-02 | Search bar visible with placeholder text           | ❌      |
+| TC-M2-03 | Search icon drag moves window                      | ❌      |
+| TC-M2-04 | Window enforces minimum size on resize             | ❌      |
+| TC-M2-05 | Typing in search bar shows text (no filtering yet) | ❌      |
+
+**Notes:**
+
+- Current Direct2D renderer and basic key list display will be refactored for this layout
+- Search icon provides an additional drag handle for moving the window
+
+### M3-win: Core Integration & Key List
+
+**Goal:** Initialize keva_core, display active keys in left pane.
+
+**Status:** Partial (keva_core init exists, key list basic)
+
+**Requirements:**
+
+| Requirement      | Description                                                 | Status |
+|------------------|-------------------------------------------------------------|--------|
+| keva_core init   | Initialize KevaCore on app startup                          | ✅      |
+| Data directory   | Use default ~/.keva/ or KEVA_DATA_DIR environment variable  | ✅      |
+| Config           | Load config.toml if exists, use defaults otherwise          | ❌      |
+| Key list         | Display all active keys from active_keys()                  | ✅      |
+| Scrolling        | Key list scrolls when content exceeds viewport              | ❌      |
+| Empty state      | Empty database shows empty list (or "No keys" placeholder)  | ❌      |
+| Refresh          | Key list reflects current database state on window show     | ❌      |
+
+**Test Cases:**
+
+| TC       | Description                                       | Status |
+|----------|---------------------------------------------------|--------|
+| TC-M3-01 | App starts successfully with no existing database | ✅      |
+| TC-M3-02 | App starts successfully with existing database    | ✅      |
+| TC-M3-03 | Key list displays all active keys                 | ✅      |
+| TC-M3-04 | Key list scrolls when many keys exist             | ❌      |
+| TC-M3-05 | Empty database shows appropriate empty state      | ❌      |
+| TC-M3-06 | Keys sorted alphabetically (or by nucleo default) | ❌      |
+
+**Notes:**
+
+- Current implementation has basic key list rendering but lacks scrolling, empty state, and config loading
+- Refresh on window show needed for consistency after external changes
+
+### M4-win: Key Selection & Value Display
+
+**Goal:** Click key to select, display value in right pane.
+
+**Status:** Not Started
+
+**Requirements:**
+
+| Requirement           | Description                                                  | Status |
+|-----------------------|--------------------------------------------------------------|--------|
+| Click to select       | Clicking key in list selects it                              | ❌      |
+| Selection highlight   | Selected key visually highlighted                            | ❌      |
+| Right pane display    | Shows selected key's value                                   | ❌      |
+| Text value            | Display text content (read-only for now)                     | ❌      |
+| Files value           | Display placeholder "N file(s)" (detailed in M11)            | ❌      |
+| Empty value           | Display placeholder "No value"                               | ❌      |
+| Touch on select       | Call touch() when key selected                               | ❌      |
+| Focus exclusivity     | Search bar focused OR key selected, never both               | ❌      |
+| Search bar focus      | Clicking search bar clears key selection                     | ❌      |
+| Search bar highlight  | Visual focus indicator when search bar active                | ❌      |
+| Right pane on deselect| Shows placeholder for search bar text                        | ❌      |
+
+**Test Cases:**
+
+| TC       | Description                                              | Status |
+|----------|----------------------------------------------------------|--------|
+| TC-M4-01 | Clicking key highlights it                               | ❌      |
+| TC-M4-02 | Selected key's text value displays in right pane         | ❌      |
+| TC-M4-03 | Clicking different key updates selection and right pane  | ❌      |
+| TC-M4-04 | Clicking search bar clears selection highlight           | ❌      |
+| TC-M4-05 | Search bar shows focus highlight when clicked            | ❌      |
+| TC-M4-06 | Only one focus indicator visible at a time               | ❌      |
+| TC-M4-07 | Selecting key updates last_accessed                      | ❌      |
+| TC-M4-08 | Files value shows placeholder text                       | ❌      |
+
+**UX Model (Search Bar & Selection):**
+
+The search bar and left pane selection are **mutually exclusive**. Only one can be "active" at a time, indicated by visual focus.
+
+**Search Bar States:**
+
+| State | Text Style | Button | Right Pane |
+|-------|------------|--------|------------|
+| Empty | Gray placeholder | Hidden | Empty |
+| Text, key EXISTS | Normal | ✏️ Pen (edit) | Existing key's value |
+| Text, key DOESN'T EXIST | Normal | ➕ Plus (add) | "Press Enter to add {key}..." |
+| Inactive (left pane selected) | Dimmed gray | Hidden | Selected key's value |
+
+**Selection Transitions:**
+
+| Action | Search Bar | Left Pane | Right Pane |
+|--------|------------|-----------|------------|
+| Click search bar | Focused, normal text | Selection clears | Updates based on search text |
+| Click key in list | Dimmed gray | Key highlighted | Selected key's value |
+| Type in search bar | Focused (was already) | Selection clears | Updates live |
+
+**Visual Focus (mutual exclusivity):**
+
+| State | Search Bar | Left Pane |
+|-------|------------|-----------|
+| Search bar focused | Focus border/highlight | No selection |
+| Key selected | No focus, dimmed text | Selected row highlighted (Spotlight-style) |
+
+**Button Behavior (M7-win scope):**
+
+| State | Icon | Tooltip | Enter Action |
+|-------|------|---------|--------------|
+| Key EXISTS | ✏️ Pen | "Edit {key} (Enter)" | Focus editor |
+| Key DOESN'T EXIST | ➕ Plus | "Create {key} (Enter)" | Create key, focus editor |
 
 ---
 
