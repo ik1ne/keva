@@ -2,21 +2,21 @@
 
 use super::theme::COLOR_BG;
 use windows::{
-    core::Result,
     Win32::{
         Foundation::HWND,
         Graphics::{
             Direct2D::{
-                Common::{D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_PIXEL_FORMAT, D2D_SIZE_U},
-                D2D1CreateFactory, ID2D1Factory, ID2D1HwndRenderTarget,
+                Common::{D2D_SIZE_U, D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_PIXEL_FORMAT},
                 D2D1_FACTORY_TYPE_SINGLE_THREADED, D2D1_HWND_RENDER_TARGET_PROPERTIES,
                 D2D1_PRESENT_OPTIONS_NONE, D2D1_RENDER_TARGET_PROPERTIES,
-                D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1_RENDER_TARGET_USAGE_NONE,
+                D2D1_RENDER_TARGET_TYPE_DEFAULT, D2D1_RENDER_TARGET_USAGE_NONE, D2D1CreateFactory,
+                ID2D1Factory, ID2D1HwndRenderTarget,
             },
             Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM,
         },
         UI::WindowsAndMessaging::GetClientRect,
     },
+    core::Result,
 };
 
 /// Direct2D renderer for the application window.
@@ -50,13 +50,10 @@ impl Renderer {
         }
 
         // Check if we need to create or resize
-        let needs_create = match &self.render_target {
-            None => true,
-            Some(rt) => {
-                let size = unsafe { rt.GetSize() };
-                size.width as u32 != width || size.height as u32 != height
-            }
-        };
+        let needs_create = self.render_target.as_ref().is_none_or(|rt| {
+            let size = unsafe { rt.GetSize() };
+            size.width as u32 != width || size.height as u32 != height
+        });
 
         if needs_create {
             self.render_target = None;
