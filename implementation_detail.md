@@ -264,8 +264,8 @@ engine.maintenance_compact()
 | Borderless window              | ✅ Complete                                             |
 | System tray icon               | ✅ Complete                                             |
 | Tray left-click toggles window | ✅ Complete                                             |
-| Tray right-click menu          | ❌ Not implemented                                      |
-| Resize from edges              | ⚠️ 6px (spec: 5px)                                     |
+| Tray right-click menu          | ✅ Complete                                             |
+| Resize from edges              | ✅ Complete (5px)                                       |
 | Esc hides window               | ✅ Complete                                             |
 | Alt+Tab visibility             | ✅ Complete                                             |
 | keva_core integration          | ✅ Complete                                             |

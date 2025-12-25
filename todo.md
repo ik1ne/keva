@@ -48,19 +48,19 @@ keva/
 
 **Goal:** Borderless window with system tray, basic window management.
 
-**Status:** Partial (missing tray menu, resize border 6px→5px)
+**Status:** Complete
 
 **Requirements:**
 
 | Requirement      | Description                                                | Status |
 |------------------|------------------------------------------------------------|--------|
 | Window style     | Borderless (WS_POPUP), no title bar or native controls     | ✅      |
-| Resize           | 5px outer zone triggers OS resize                          | ⚠️ 6px |
+| Resize           | 5px outer zone triggers OS resize                          | ✅      |
 | Initial position | Centered on primary monitor                                | ✅      |
 | Smooth resize    | DwmExtendFrameIntoClientArea enabled                       | ✅      |
 | Tray icon        | Visible with tooltip "Keva"                                | ✅      |
 | Tray left-click  | Toggle window visibility                                   | ✅      |
-| Tray right-click | Context menu (Show, Settings, Launch at Login, Quit)       | ❌      |
+| Tray right-click | Context menu (Show, Settings, Launch at Login, Quit)       | ✅      |
 | Esc key          | Hides window                                               | ✅      |
 | Alt+Tab          | Window visible (taskbar icon remains - Windows limitation) | ✅      |
 
@@ -81,15 +81,10 @@ keva/
 | TC-M1-02 | Drag from outer edge resizes window    | ✅      |
 | TC-M1-03 | Tray icon visible with correct tooltip | ✅      |
 | TC-M1-04 | Tray left-click toggles visibility     | ✅      |
-| TC-M1-05 | Tray right-click shows menu            | ❌      |
+| TC-M1-05 | Tray right-click shows menu            | ✅      |
 | TC-M1-06 | Esc hides window                       | ✅      |
 | TC-M1-07 | Window visible in Alt+Tab              | ✅      |
-| TC-M1-08 | Quit menu item terminates app          | ❌      |
-
-**Remaining Tasks:**
-
-1. Add tray right-click context menu (TrackPopupMenu)
-2. Adjust resize border from 6px to 5px
+| TC-M1-08 | Quit menu item terminates app          | ✅      |
 
 ### M2-win: Layout Skeleton
 

@@ -9,6 +9,16 @@
 
 ## Cargo Commands
 
+Working directory is the keva project root. Do not use `--manifest-path` or `-C` flags:
+```sh
+# Good
+cargo build -q
+cargo build -q -p keva_core
+
+# Bad - unnecessary path specification
+cargo build -q --manifest-path "C:/Users/.../Cargo.toml"
+```
+
 Always use `-q` flag to minimize output:
 ```sh
 cargo build -q

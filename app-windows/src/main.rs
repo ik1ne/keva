@@ -8,13 +8,11 @@ mod app;
 mod renderer;
 
 use app::App;
-use keva_core::types::Key;
 use std::mem::size_of;
 use std::sync::atomic::{AtomicIsize, Ordering};
-use std::time::SystemTime;
 use windows::{
     Win32::{
-        Foundation::{HWND, LPARAM, LRESULT, RECT, TRUE, WPARAM},
+        Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, TRUE, WPARAM},
         Graphics::{
             Dwm::DwmExtendFrameIntoClientArea,
             Gdi::{BLACK_BRUSH, GetStockObject, HBRUSH, ValidateRect},
@@ -28,15 +26,17 @@ use windows::{
                 Shell_NotifyIconW,
             },
             WindowsAndMessaging::{
-                CreateWindowExW, DefWindowProcW, DispatchMessageW, GWLP_USERDATA, GetMessageW,
-                GetSystemMetrics, GetWindowLongPtrW, GetWindowRect, HTBOTTOM, HTBOTTOMLEFT,
-                HTBOTTOMRIGHT, HTCAPTION, HTLEFT, HTRIGHT, HTTOP, HTTOPLEFT, HTTOPRIGHT, IDC_ARROW,
-                IDI_APPLICATION, IsWindowVisible, LoadCursorW, LoadIconW, MSG, PostQuitMessage,
-                RegisterClassW, SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_SHOW, SetForegroundWindow,
-                SetWindowLongPtrW, ShowWindow, WM_ACTIVATE, WM_CREATE, WM_DESTROY, WM_KEYDOWN,
-                WM_LBUTTONUP, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT, WM_SIZE,
-                WM_USER, WNDCLASSW, WS_EX_APPWINDOW, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP,
-                WS_SIZEBOX, WS_SYSMENU,
+                AppendMenuW, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu,
+                DispatchMessageW, GetCursorPos, GetMessageW, GetSystemMetrics, GetWindowLongPtrW,
+                GetWindowRect, GWLP_USERDATA, HTBOTTOM, HTBOTTOMLEFT, HTBOTTOMRIGHT, HTCAPTION,
+                HTLEFT, HTRIGHT, HTTOP, HTTOPLEFT, HTTOPRIGHT, IDC_ARROW, IDI_APPLICATION,
+                IsWindowVisible, LoadCursorW, LoadIconW, MF_GRAYED, MF_SEPARATOR, MF_STRING, MSG,
+                PostQuitMessage, RegisterClassW, SetForegroundWindow, SetWindowLongPtrW,
+                ShowWindow, SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_SHOW, TPM_BOTTOMALIGN,
+                TPM_LEFTALIGN, TPM_RIGHTBUTTON, TrackPopupMenu, WM_ACTIVATE, WM_COMMAND,
+                WM_CREATE, WM_DESTROY, WM_KEYDOWN, WM_LBUTTONUP, WM_NCACTIVATE, WM_NCCALCSIZE,
+                WM_NCHITTEST, WM_PAINT, WM_RBUTTONUP, WM_SIZE, WM_USER, WNDCLASSW, WS_EX_APPWINDOW,
+                WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SIZEBOX, WS_SYSMENU,
             },
         },
     },
@@ -44,7 +44,7 @@ use windows::{
 };
 
 /// Border width in pixels for resize hit detection.
-const RESIZE_BORDER: i32 = 6;
+const RESIZE_BORDER: i32 = 5;
 const WINDOW_WIDTH: i32 = 800;
 const WINDOW_HEIGHT: i32 = 600;
 
@@ -52,6 +52,12 @@ const WINDOW_HEIGHT: i32 = 600;
 const WM_TRAYICON: u32 = WM_USER + 1;
 /// Tray icon ID.
 const TRAY_ICON_ID: u32 = 1;
+
+/// Tray menu item IDs.
+const IDM_SHOW: u32 = 1001;
+const IDM_SETTINGS: u32 = 1002;
+const IDM_LAUNCH_AT_LOGIN: u32 = 1003;
+const IDM_QUIT: u32 = 1004;
 
 /// Stores the previously focused window to restore on Esc.
 static PREV_FOREGROUND: AtomicIsize = AtomicIsize::new(0);
@@ -175,6 +181,63 @@ fn remove_tray_icon(hwnd: HWND) {
     }
 }
 
+/// Shows the tray icon context menu.
+fn show_tray_menu(hwnd: HWND) {
+    unsafe {
+        let Ok(hmenu) = CreatePopupMenu() else {
+            return;
+        };
+
+        let is_visible = IsWindowVisible(hwnd).as_bool();
+
+        // "Show Keva" - disabled if already visible
+        let show_flags = if is_visible {
+            MF_STRING | MF_GRAYED
+        } else {
+            MF_STRING
+        };
+        let _ = AppendMenuW(hmenu, show_flags, IDM_SHOW as usize, w!("Show Keva"));
+
+        // "Settings..." - non-functional until M15-win
+        let _ = AppendMenuW(hmenu, MF_STRING | MF_GRAYED, IDM_SETTINGS as usize, w!("Settings..."));
+
+        let _ = AppendMenuW(hmenu, MF_SEPARATOR, 0, None);
+
+        // "Launch at Login" - non-functional until M20-win
+        let _ = AppendMenuW(
+            hmenu,
+            MF_STRING | MF_GRAYED,
+            IDM_LAUNCH_AT_LOGIN as usize,
+            w!("Launch at Login"),
+        );
+
+        let _ = AppendMenuW(hmenu, MF_SEPARATOR, 0, None);
+
+        // "Quit Keva"
+        let _ = AppendMenuW(hmenu, MF_STRING, IDM_QUIT as usize, w!("Quit Keva"));
+
+        // Get cursor position for menu placement
+        let mut pt = POINT::default();
+        let _ = GetCursorPos(&mut pt);
+
+        // Required to make the menu dismiss when clicking outside
+        let _ = SetForegroundWindow(hwnd);
+
+        // Show the menu
+        let _ = TrackPopupMenu(
+            hmenu,
+            TPM_LEFTALIGN | TPM_BOTTOMALIGN | TPM_RIGHTBUTTON,
+            pt.x,
+            pt.y,
+            None,
+            hwnd,
+            None,
+        );
+
+        let _ = DestroyMenu(hmenu);
+    }
+}
+
 /// Gets the App instance from the window's user data.
 fn get_app(hwnd: HWND) -> Option<&'static mut App> {
     unsafe {
@@ -234,6 +297,30 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
                         let _ = ShowWindow(hwnd, SW_SHOW);
                         let _ = SetForegroundWindow(hwnd);
                     }
+                } else if mouse_msg == WM_RBUTTONUP {
+                    // Show context menu on right click
+                    show_tray_menu(hwnd);
+                }
+                LRESULT(0)
+            }
+            WM_COMMAND => {
+                let cmd_id = (wparam.0 & 0xFFFF) as u32;
+                match cmd_id {
+                    IDM_SHOW => {
+                        let _ = ShowWindow(hwnd, SW_SHOW);
+                        let _ = SetForegroundWindow(hwnd);
+                    }
+                    IDM_SETTINGS => {
+                        // Non-functional until M15-win
+                    }
+                    IDM_LAUNCH_AT_LOGIN => {
+                        // Non-functional until M20-win
+                    }
+                    IDM_QUIT => {
+                        let _ = ShowWindow(hwnd, SW_HIDE);
+                        PostQuitMessage(0);
+                    }
+                    _ => {}
                 }
                 LRESULT(0)
             }
