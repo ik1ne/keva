@@ -377,13 +377,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "keva_ffi"
-version = "0.1.0"
-dependencies = [
- "keva_core",
-]
-
-[[package]]
 name = "keva_search"
 version = "0.1.0"
 dependencies = [
