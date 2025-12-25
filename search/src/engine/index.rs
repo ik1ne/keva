@@ -1,17 +1,18 @@
 //! Internal per-lifecycle fuzzy index.
 
-use crate::results::SearchResults;
 use keva_core::types::Key;
-use nucleo::{Config as NucleoConfig, Nucleo, Utf32String};
+use nucleo::pattern::{CaseMatching, Normalization};
+use nucleo::{Config as NucleoConfig, Nucleo, Snapshot, Utf32String};
 use std::collections::HashSet;
 use std::sync::Arc;
 
 /// Internal per-lifecycle fuzzy index.
 ///
-/// Wraps nucleo with tombstone-based deletion tracking.
+/// Wraps nucleo with tombstone-based deletion tracking and query caching.
 /// Nucleo is append-only, so we track:
 /// - `injected_keys`: keys injected into Nucleo at least once
 /// - `tombstones`: keys to filter out from search results
+/// - `current_pattern`: cached for append optimization
 pub(crate) struct Index {
     nucleo: Nucleo<Key>,
     /// Keys that have been injected into Nucleo at least once.
@@ -20,6 +21,8 @@ pub(crate) struct Index {
     tombstones: HashSet<Key>,
     pending_deletions: usize,
     rebuild_threshold: usize,
+    /// Cached pattern for append optimization.
+    current_pattern: String,
 }
 
 impl Index {
@@ -36,6 +39,7 @@ impl Index {
             tombstones: HashSet::new(),
             pending_deletions: 0,
             rebuild_threshold,
+            current_pattern: String::new(),
         };
 
         for key in initial {
@@ -70,6 +74,32 @@ impl Index {
         }
     }
 
+    /// Sets the search pattern with automatic append detection.
+    ///
+    /// If the new pattern extends the current one (e.g., "fo" -> "foo"),
+    /// nucleo can reuse previous matching work for better performance.
+    pub(crate) fn set_pattern(
+        &mut self,
+        pattern: &str,
+        case_matching: CaseMatching,
+        normalization: Normalization,
+    ) {
+        let append = !self.current_pattern.is_empty() && pattern.starts_with(&self.current_pattern);
+
+        self.nucleo
+            .pattern
+            .reparse(0, pattern, case_matching, normalization, append);
+        self.current_pattern = pattern.to_string();
+    }
+
+    /// Drives the search forward without blocking.
+    ///
+    /// Returns true if the search has finished.
+    pub(crate) fn tick(&mut self) -> bool {
+        let status = self.nucleo.tick(0);
+        !status.running
+    }
+
     pub(crate) fn rebuild_if_needed(&mut self) {
         if self.pending_deletions > self.rebuild_threshold {
             self.rebuild();
@@ -77,28 +107,21 @@ impl Index {
     }
 
     fn rebuild(&mut self) {
-        // Compute surviving keys before clearing state.
-        let surviving: HashSet<Key> = self
-            .injected_keys
-            .difference(&self.tombstones)
-            .cloned()
-            .collect();
-
         self.nucleo.restart(true);
         self.pending_deletions = 0;
-
-        // Update tracking sets to reflect the new Nucleo state.
-        // This ensures insert() works correctly for previously-tombstoned keys.
-        self.injected_keys = surviving;
-        self.tombstones.clear();
+        self.current_pattern.clear();
 
         let injector = self.nucleo.injector();
-        for key in &self.injected_keys {
+        for key in self.injected_keys.difference(&self.tombstones) {
             let key_clone = key.clone();
             injector.push(key_clone, |item, cols| {
                 cols[0] = Utf32String::from(item.as_str());
             });
         }
+
+        self.injected_keys.retain(|k| !self.tombstones.contains(k));
+        self.tombstones.clear();
+        self.current_pattern.clear();
     }
 
     pub(crate) fn results(&self) -> SearchResults<'_> {
@@ -107,8 +130,23 @@ impl Index {
             tombstones: &self.tombstones,
         }
     }
+}
 
-    pub(crate) fn nucleo_mut(&mut self) -> &mut Nucleo<Key> {
-        &mut self.nucleo
+/// Search results snapshot that provides zero-copy iteration.
+///
+/// Borrows from the SearchEngine. Use `iter()` to iterate over
+/// matched keys without collecting.
+pub struct SearchResults<'a> {
+    pub(crate) snapshot: &'a Snapshot<Key>,
+    pub(crate) tombstones: &'a HashSet<Key>,
+}
+
+impl<'a> SearchResults<'a> {
+    /// Iterates over matched keys, filtering out tombstoned entries.
+    pub fn iter(&self) -> impl Iterator<Item = &Key> + '_ {
+        self.snapshot
+            .matched_items(..)
+            .filter(|item| !self.tombstones.contains(item.data))
+            .map(|item| item.data)
     }
 }

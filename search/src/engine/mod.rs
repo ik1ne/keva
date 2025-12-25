@@ -1,11 +1,16 @@
 //! Search engine with dual indexes for Active and Trash keys.
 
+mod index;
+mod query;
+
 use crate::config::{CaseMatching, SearchConfig};
-use crate::index::Index;
-use crate::query::SearchQuery;
-use crate::results::SearchResults;
+use index::Index;
 use keva_core::types::Key;
+use nucleo::pattern::{CaseMatching as NucleoCaseMatching, Normalization};
 use std::sync::Arc;
+
+pub use index::SearchResults;
+pub use query::SearchQuery;
 
 /// Search engine using two independent fuzzy indexes:
 /// - Active index
@@ -97,25 +102,19 @@ impl SearchEngine {
         let SearchQuery::Fuzzy(ref pattern) = query;
 
         let case_matching = match self.config.case_matching {
-            CaseMatching::Sensitive => nucleo::pattern::CaseMatching::Respect,
-            CaseMatching::Insensitive => nucleo::pattern::CaseMatching::Ignore,
-            CaseMatching::Smart => nucleo::pattern::CaseMatching::Smart,
+            CaseMatching::Sensitive => NucleoCaseMatching::Respect,
+            CaseMatching::Insensitive => NucleoCaseMatching::Ignore,
+            CaseMatching::Smart => NucleoCaseMatching::Smart,
         };
 
         let normalization = if self.config.unicode_normalization {
-            nucleo::pattern::Normalization::Smart
+            Normalization::Smart
         } else {
-            nucleo::pattern::Normalization::Never
+            Normalization::Never
         };
 
-        self.active
-            .nucleo_mut()
-            .pattern
-            .reparse(0, pattern, case_matching, normalization, false);
-        self.trash
-            .nucleo_mut()
-            .pattern
-            .reparse(0, pattern, case_matching, normalization, false);
+        self.active.set_pattern(pattern, case_matching, normalization);
+        self.trash.set_pattern(pattern, case_matching, normalization);
 
         self.active_finished = false;
         self.trashed_finished = false;
@@ -123,15 +122,12 @@ impl SearchEngine {
 
     /// Drives the search forward without blocking.
     ///
-    /// This calls `nucleo.tick(0)` on both indexes, which returns immediately.
+    /// This calls `tick()` on both indexes, which returns immediately.
     /// Call this from the GUI event loop (e.g., after receiving a notify callback
     /// or on each frame while `!is_finished()`).
     pub fn tick(&mut self) {
-        let active_status = self.active.nucleo_mut().tick(0);
-        let trash_status = self.trash.nucleo_mut().tick(0);
-
-        self.active_finished = !active_status.running;
-        self.trashed_finished = !trash_status.running;
+        self.active_finished = self.active.tick();
+        self.trashed_finished = self.trash.tick();
     }
 
     /// Returns true if both indexes have finished searching.

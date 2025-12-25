@@ -19,14 +19,9 @@
 
 mod config;
 mod engine;
-mod index;
-mod query;
-mod results;
 
 pub use config::{CaseMatching, SearchConfig};
-pub use engine::SearchEngine;
-pub use query::SearchQuery;
-pub use results::SearchResults;
+pub use engine::{SearchEngine, SearchQuery, SearchResults};
 
 #[cfg(test)]
 mod tests;
