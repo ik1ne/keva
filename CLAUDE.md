@@ -36,6 +36,22 @@ cargo clippy -q --lib --tests
 
 ## Code Style
 
+### Win32 Message Parameters
+
+Extract raw `wparam`/`lparam` values into named variables that explain their meaning:
+```rust
+// Good - reader understands the values without looking up Windows docs
+let cursor_x = (lparam.0 & 0xFFFF) as i16 as i32;
+let cursor_y = ((lparam.0 >> 16) & 0xFFFF) as i16 as i32;
+let previous_window = lparam.0;
+let virtual_key = wparam.0 as u16;
+
+// Bad - requires Windows API knowledge to understand
+let x = (lparam.0 & 0xFFFF) as i16 as i32;
+if lparam.0 != 0 { ... }
+if wparam.0 as u16 == VK_ESCAPE.0 { ... }
+```
+
 ### Module Organization
 
 - Split large impl blocks into multiple impl blocks with doc comments for logical grouping:

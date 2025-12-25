@@ -139,20 +139,21 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
                 LRESULT(TRUE.0 as isize)
             }
             WM_NCHITTEST => {
-                let x = (lparam.0 & 0xFFFF) as i16 as i32;
-                let y = ((lparam.0 >> 16) & 0xFFFF) as i16 as i32;
-                hit_test(hwnd, x, y)
+                let cursor_x = (lparam.0 & 0xFFFF) as i16 as i32;
+                let cursor_y = ((lparam.0 >> 16) & 0xFFFF) as i16 as i32;
+                hit_test(hwnd, cursor_x, cursor_y)
             }
             WM_ACTIVATE => {
-                // When activated, lParam contains the handle of the window being deactivated
                 let activating = (wparam.0 & 0xFFFF) != 0;
-                if activating && lparam.0 != 0 {
-                    PREV_FOREGROUND.store(lparam.0, Ordering::Relaxed);
+                let previous_window = lparam.0;
+                if activating && previous_window != 0 {
+                    PREV_FOREGROUND.store(previous_window, Ordering::Relaxed);
                 }
                 DefWindowProcW(hwnd, msg, wparam, lparam)
             }
             WM_KEYDOWN => {
-                if wparam.0 as u16 == VK_ESCAPE.0 {
+                let virtual_key = wparam.0 as u16;
+                if virtual_key == VK_ESCAPE.0 {
                     // Restore focus to previous window before hiding
                     let prev = PREV_FOREGROUND.load(Ordering::Relaxed);
                     if prev != 0 {
