@@ -1,5 +1,8 @@
 //! Central application state.
 
+use crate::ui::Layout;
+use windows::Win32::Foundation::HWND;
+
 /// Application state container.
 ///
 /// This struct will grow with each milestone to hold:
@@ -9,12 +12,23 @@
 /// - Search state (query, results)
 /// - Configuration state
 pub struct AppState {
-    // Will be populated as milestones are implemented
+    /// Handle to the search bar EDIT control.
+    pub search_edit: Option<HWND>,
+    /// Computed layout based on window dimensions.
+    pub layout: Layout,
 }
 
 impl AppState {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            search_edit: None,
+            layout: Layout::default(),
+        }
+    }
+
+    /// Updates the layout for the given window dimensions.
+    pub fn update_layout(&mut self, width: u32, height: u32) {
+        self.layout = Layout::compute(width, height);
     }
 }
 

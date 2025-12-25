@@ -33,7 +33,7 @@ keva/
 ├── core/           # keva_core (Rust library) - IMPLEMENTED
 ├── search/         # keva_search (Rust library) - IMPLEMENTED
 ├── ffi/            # C FFI bindings for macOS (Rust, builds dylib)
-├── app-windows/    # Windows app (Rust + windows crate + Direct2D)
+├── keva_windows/   # Windows app (Rust + windows crate + Direct2D)
 ├── app-macos/      # macOS app (Swift/AppKit, links keva_ffi)
 ├── Spec.md
 ├── Planned.md
@@ -92,33 +92,69 @@ keva/
 
 **Goal:** Three-pane visual structure with no business logic.
 
-**Status:** Not Started
+**Status:** Complete
 
 **Requirements:**
 
 | Requirement         | Description                                                            | Status |
 |---------------------|------------------------------------------------------------------------|--------|
-| Layout              | Three panes: search bar (top), key list (left), preview area (right)   | ❌      |
-| Search bar          | Text input with placeholder "Search keys...", search icon (🔍) on left | ❌      |
-| Search icon         | Drag handle (drag moves window, click does nothing)                    | ❌      |
-| Left pane           | Empty placeholder area for future key list                             | ❌      |
-| Right pane          | Empty placeholder area for future preview/editor                       | ❌      |
-| Minimum window size | Enforce minimum (e.g., 400x300)                                        | ❌      |
+| Layout              | Three panes: search bar (top), key list (left), preview area (right)   | ✅      |
+| Search bar          | Text input with placeholder "Search keys...", search icon (🔍) on left | ✅      |
+| Search icon         | Drag handle (drag moves window, click does nothing)                    | ✅      |
+| Left pane           | Empty placeholder area for future key list                             | ✅      |
+| Right pane          | Empty placeholder area for future preview/editor                       | ✅      |
+| Minimum window size | Enforce minimum (e.g., 400x300)                                        | ✅      |
 
 **Test Cases:**
 
 | TC       | Description                                        | Status |
 |----------|----------------------------------------------------|--------|
-| TC-M2-01 | Three-pane layout renders correctly                | ❌      |
-| TC-M2-02 | Search bar visible with placeholder text           | ❌      |
-| TC-M2-03 | Search icon drag moves window                      | ❌      |
-| TC-M2-04 | Window enforces minimum size on resize             | ❌      |
-| TC-M2-05 | Typing in search bar shows text (no filtering yet) | ❌      |
+| TC-M2-01 | Three-pane layout renders correctly                | ✅      |
+| TC-M2-02 | Search bar visible with placeholder text           | ✅      |
+| TC-M2-03 | Search icon drag moves window                      | ✅      |
+| TC-M2-04 | Window enforces minimum size on resize             | ✅      |
+| TC-M2-05 | Typing in search bar shows text (no filtering yet) | ✅      |
 
 **Notes:**
 
-- Current Direct2D renderer and basic key list display will be refactored for this layout
-- Search icon is the primary drag handle for moving the window
+- Layout computed dynamically based on window size using `ui::Layout`
+- DirectWrite integration for text rendering
+- Search icon only area triggers window drag (HTCAPTION)
+
+### M2.5-win: Win32 EDIT Control for Search Bar
+
+**Goal:** Replace custom text input handling with native Win32 EDIT control.
+
+**Status:** Complete
+
+**Requirements:**
+
+| Requirement          | Description                                               | Status |
+|----------------------|-----------------------------------------------------------|--------|
+| EDIT control         | Native Win32 EDIT control for search bar                  | ✅      |
+| Placeholder text     | "Search keys..." shown when empty via EM_SETCUEBANNER     | ✅      |
+| Text input           | Full text editing (cursor, selection, clipboard, IME)     | ✅      |
+| Resize handling      | EDIT control repositions on window resize                 | ✅      |
+| get_search_text()    | Method to retrieve text from EDIT control                 | ✅      |
+
+**Test Cases:**
+
+| TC         | Description                                        | Status |
+|------------|----------------------------------------------------|--------|
+| TC-M2.5-01 | EDIT control visible in search bar area            | ✅      |
+| TC-M2.5-02 | Typing shows text with cursor                      | ✅      |
+| TC-M2.5-03 | Text selection works (Shift+arrows, mouse drag)    | ✅      |
+| TC-M2.5-04 | Ctrl+A selects all text                            | ✅      |
+| TC-M2.5-05 | Ctrl+C/V/X clipboard operations work               | ✅      |
+| TC-M2.5-06 | Placeholder "Search keys..." shown when empty      | ✅      |
+| TC-M2.5-07 | EDIT control repositions correctly on window resize| ✅      |
+| TC-M2.5-08 | Escape still hides window                          | ✅      |
+
+**Notes:**
+
+- Uses Win32 EDIT child window instead of custom character handling
+- Same pattern will be used for M5 (text editor), M10 (inline rename), M15 (settings)
+- Basic styling (dark theme refinement deferred)
 
 ### M3-win: Core Integration & Key List
 

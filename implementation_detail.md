@@ -17,7 +17,7 @@ keva/
 │       ├── results.rs  # SearchResults struct
 │       └── tests.rs    # All tests (32 tests)
 ├── ffi/            # keva_ffi - C FFI bindings for macOS (PLACEHOLDER)
-├── app-windows/    # Windows GUI app (IN PROGRESS)
+├── keva_windows/   # Windows GUI app (IN PROGRESS)
 │   └── src/
 │       ├── main.rs     # Window creation, message loop, tray icon
 │       ├── app.rs      # App state, keva_core integration
@@ -236,7 +236,7 @@ engine.maintenance_compact()
 | `keva_core` | path    | Key type       |
 | `nucleo`    | 0.5     | Fuzzy matching |
 
-### app-windows
+### keva_windows
 
 | Crate     | Version | Purpose                    |
 |-----------|---------|----------------------------|
@@ -257,7 +257,7 @@ engine.maintenance_compact()
 
 ## Implementation Status
 
-### Windows App (`app-windows`)
+### Windows App (`keva_windows`)
 
 **M1-win Complete** - Window skeleton with tray integration.
 
@@ -319,7 +319,7 @@ keva_search (Fuzzy Search - Rust)
 ├── Index (nucleo wrapper with tombstones)
 └── Non-blocking API for GUI integration
 
-app-windows (Windows GUI - Rust)
+keva_windows (Windows GUI - Rust)
 ├── Win32 API via `windows` crate
 ├── Direct2D for custom rendering
 ├── DirectWrite for text

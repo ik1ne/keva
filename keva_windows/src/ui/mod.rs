@@ -2,4 +2,4 @@
 
 mod layout;
 
-pub use layout::Layout;
+pub use layout::{Layout, Rect};
