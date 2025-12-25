@@ -259,26 +259,27 @@ engine.maintenance_compact()
 
 ### Windows App (`app-windows`)
 
-| Feature                        | Status                                                 |
-|--------------------------------|--------------------------------------------------------|
-| Borderless window              | ✅ Complete                                             |
-| System tray icon               | ✅ Complete                                             |
-| Tray left-click toggles window | ✅ Complete                                             |
-| Tray right-click menu          | ✅ Complete                                             |
-| Resize from edges              | ✅ Complete (5px)                                       |
-| Esc hides window               | ✅ Complete                                             |
-| Alt+Tab visibility             | ✅ Complete                                             |
-| keva_core integration          | ✅ Complete                                             |
-| Data directory                 | ⚠️ Uses `%USERPROFILE%\.keva` (spec: `%APPDATA%\Keva`) |
-| Direct2D rendering             | ✅ Complete                                             |
-| Key list display               | ⚠️ Basic (no scrolling, limited to 20 keys)            |
-| Layout (search/left/right)     | ❌ Not implemented                                      |
-| Text preview (Rich Edit)       | ❌ Not implemented                                      |
-| File preview (IPreviewHandler) | ❌ Not implemented                                      |
-| Clipboard paste to create      | ❌ Not implemented                                      |
-| Fuzzy search                   | ❌ Not implemented                                      |
-| Global hotkey                  | ❌ Not implemented                                      |
-| Settings dialog                | ❌ Not implemented                                      |
+**M1-win Complete** - Window skeleton with tray integration.
+
+| Feature                        | Status         | Milestone |
+|--------------------------------|----------------|-----------|
+| Borderless window              | ✅ Complete    | M1        |
+| System tray icon               | ✅ Complete    | M1        |
+| Tray left-click toggles window | ✅ Complete    | M1        |
+| Tray right-click menu          | ✅ Complete    | M1        |
+| Resize from edges (5px)        | ✅ Complete    | M1        |
+| Esc hides window               | ✅ Complete    | M1        |
+| Alt+Tab visibility             | ✅ Complete    | M1        |
+| Direct2D rendering             | ✅ Complete    | M1        |
+| Layout (search/left/right)     | ❌ Pending     | M2        |
+| keva_core integration          | ❌ Pending     | M3        |
+| Key list display               | ❌ Pending     | M3        |
+| Text preview (Rich Edit)       | ❌ Pending     | M5        |
+| File preview (IPreviewHandler) | ❌ Pending     | M13       |
+| Clipboard paste to create      | ❌ Pending     | M6        |
+| Fuzzy search                   | ❌ Pending     | M7        |
+| Global hotkey                  | ❌ Pending     | M16       |
+| Settings dialog                | ❌ Pending     | M15       |
 
 ### macOS App (`app-macos`)
 

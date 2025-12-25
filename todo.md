@@ -122,16 +122,16 @@ keva/
 
 **Goal:** Initialize keva_core, display active keys in left pane.
 
-**Status:** Partial (keva_core init exists, key list basic)
+**Status:** Not Started
 
 **Requirements:**
 
 | Requirement    | Description                                                        | Status |
 |----------------|--------------------------------------------------------------------|--------|
-| keva_core init | Initialize KevaCore on app startup                                 | ✅      |
-| Data directory | Use default `%APPDATA%\Keva` or KEVA_DATA_DIR environment variable | ⚠️     |
+| keva_core init | Initialize KevaCore on app startup                                 | ❌      |
+| Data directory | Use default `%APPDATA%\Keva` or KEVA_DATA_DIR environment variable | ❌      |
 | Config         | Load config.toml if exists, use defaults otherwise                 | ❌      |
-| Key list       | Display all active keys from active_keys()                         | ✅      |
+| Key list       | Display all active keys from active_keys()                         | ❌      |
 | Scrolling      | Key list scrolls when content exceeds viewport                     | ❌      |
 | Empty state    | Empty database shows empty list (or "No keys" placeholder)         | ❌      |
 | Refresh        | Key list reflects current database state on window show            | ❌      |
@@ -140,18 +140,12 @@ keva/
 
 | TC       | Description                                       | Status |
 |----------|---------------------------------------------------|--------|
-| TC-M3-01 | App starts successfully with no existing database | ✅      |
-| TC-M3-02 | App starts successfully with existing database    | ✅      |
-| TC-M3-03 | Key list displays all active keys                 | ✅      |
+| TC-M3-01 | App starts successfully with no existing database | ❌      |
+| TC-M3-02 | App starts successfully with existing database    | ❌      |
+| TC-M3-03 | Key list displays all active keys                 | ❌      |
 | TC-M3-04 | Key list scrolls when many keys exist             | ❌      |
 | TC-M3-05 | Empty database shows appropriate empty state      | ❌      |
 | TC-M3-06 | Keys sorted alphabetically (or by nucleo default) | ❌      |
-
-**Notes:**
-
-- Current implementation has basic key list rendering but lacks scrolling, empty state, and config loading
-- Data directory: Code uses `%USERPROFILE%\.keva`, should be `%APPDATA%\Keva`
-- Refresh on window show needed for consistency after external changes
 
 ### M4-win: Key Selection & Value Display
 

@@ -388,7 +388,6 @@ dependencies = [
 name = "keva_windows"
 version = "0.1.0"
 dependencies = [
- "keva_core",
  "windows 0.62.2",
 ]
 

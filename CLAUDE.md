@@ -9,11 +9,14 @@
 
 ## Cargo Commands
 
-Working directory is the keva project root. Do not use `--manifest-path` or `-C` flags:
+Working directory is the keva project root. Do not use `cd`, `--manifest-path`, or `-C` flags:
 ```sh
 # Good
 cargo build -q
 cargo build -q -p keva_core
+
+# Bad - unnecessary cd
+cd /c/Users/ik1ne/Sources/Rust/keva && cargo build -q
 
 # Bad - unnecessary path specification
 cargo build -q --manifest-path "C:/Users/.../Cargo.toml"
