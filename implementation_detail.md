@@ -103,27 +103,30 @@ Active  ──[trash_ttl expires]──►  Trash  ──[purge_ttl expires]─�
 Uses `nucleo` library for fuzzy matching. Shared between Windows (direct) and macOS (via FFI).
 
 **Architecture:**
+
 - Two independent fuzzy indexes: **Active** and **Trash**
 - Append-only design with tombstone-based deletion
 - Periodic rebuild during maintenance when tombstones exceed threshold
 
 **Features:**
+
 - Fuzzy matching with configurable case matching (Sensitive, Insensitive, Smart)
 - Non-blocking API for responsive UI (`set_query()`, `tick()`, `is_finished()`)
 - Separate indexes for Active and Trash keys
 - Zero-copy iteration over search results
 
 **Public API:**
+
 ```rust
 // Create
 SearchEngine::new(active, trashed, config, notify)
 
 // Mutation
 engine.add_active(key)
-engine.trash(&key)
-engine.restore(&key)
-engine.remove(&key)
-engine.rename(&old, new)
+engine.trash( & key)
+engine.restore( & key)
+engine.remove( & key)
+engine.rename( & old, new)
 
 // Search
 engine.set_query(SearchQuery::Fuzzy(pattern))
@@ -228,10 +231,10 @@ engine.maintenance_compact()
 
 ### keva_search
 
-| Crate       | Version | Purpose              |
-|-------------|---------|----------------------|
-| `keva_core` | path    | Key type             |
-| `nucleo`    | 0.5     | Fuzzy matching       |
+| Crate       | Version | Purpose        |
+|-------------|---------|----------------|
+| `keva_core` | path    | Key type       |
+| `nucleo`    | 0.5     | Fuzzy matching |
 
 ### app-windows
 
@@ -243,11 +246,11 @@ engine.maintenance_compact()
 
 ## Test Coverage
 
-| Test Module    | Location                    | Coverage                      |
-|----------------|-----------------------------|-------------------------------|
-| Database tests | `core/src/core/db/tests.rs` | CRUD, TTL, GC, transactions   |
-| KevaCore tests | `core/src/core/tests.rs`    | Integration tests (132 tests) |
-| Type tests     | `core/src/types/*/tests.rs` | Key, Value, Config validation |
+| Test Module    | Location                    | Coverage                         |
+|----------------|-----------------------------|----------------------------------|
+| Database tests | `core/src/core/db/tests.rs` | CRUD, TTL, GC, transactions      |
+| KevaCore tests | `core/src/core/tests.rs`    | Integration tests (132 tests)    |
+| Type tests     | `core/src/types/*/tests.rs` | Key, Value, Config validation    |
 | Search tests   | `search/src/tests.rs`       | All search operations (32 tests) |
 
 ---
@@ -256,40 +259,43 @@ engine.maintenance_compact()
 
 ### Windows App (`app-windows`)
 
-| Feature                     | Status         |
-|-----------------------------|----------------|
-| Borderless window           | ✅ Complete    |
-| System tray icon            | ✅ Complete    |
-| Resize from edges           | ✅ Complete    |
-| Esc hides window            | ✅ Complete    |
-| Tray click toggles window   | ✅ Complete    |
-| Alt+Tab visibility          | ✅ Complete    |
-| keva_core integration       | ✅ Complete    |
-| Direct2D rendering          | ✅ Complete    |
-| Key list display            | ✅ Basic       |
-| Text preview (Rich Edit)    | ⏳ Pending     |
-| File preview (IPreviewHandler) | ⏳ Pending  |
-| Clipboard paste to create   | ⏳ Pending     |
-| Fuzzy search                | ⏳ Pending     |
-| Global hotkey               | ⏳ Pending     |
-| Settings dialog             | ⏳ Pending     |
+| Feature                        | Status                                                 |
+|--------------------------------|--------------------------------------------------------|
+| Borderless window              | ✅ Complete                                             |
+| System tray icon               | ✅ Complete                                             |
+| Tray left-click toggles window | ✅ Complete                                             |
+| Tray right-click menu          | ❌ Not implemented                                      |
+| Resize from edges              | ⚠️ 6px (spec: 5px)                                     |
+| Esc hides window               | ✅ Complete                                             |
+| Alt+Tab visibility             | ✅ Complete                                             |
+| keva_core integration          | ✅ Complete                                             |
+| Data directory                 | ⚠️ Uses `%USERPROFILE%\.keva` (spec: `%APPDATA%\Keva`) |
+| Direct2D rendering             | ✅ Complete                                             |
+| Key list display               | ⚠️ Basic (no scrolling, limited to 20 keys)            |
+| Layout (search/left/right)     | ❌ Not implemented                                      |
+| Text preview (Rich Edit)       | ❌ Not implemented                                      |
+| File preview (IPreviewHandler) | ❌ Not implemented                                      |
+| Clipboard paste to create      | ❌ Not implemented                                      |
+| Fuzzy search                   | ❌ Not implemented                                      |
+| Global hotkey                  | ❌ Not implemented                                      |
+| Settings dialog                | ❌ Not implemented                                      |
 
 ### macOS App (`app-macos`)
 
-| Feature           | Status      |
-|-------------------|-------------|
-| FFI layer         | ⏳ Pending  |
-| App skeleton      | ⏳ Pending  |
-| Core integration  | ⏳ Pending  |
+| Feature          | Status    |
+|------------------|-----------|
+| FFI layer        | ⏳ Pending |
+| App skeleton     | ⏳ Pending |
+| Core integration | ⏳ Pending |
 
 ### From Planned.md (Future Scope)
 
-| Feature                                 | Status                           |
-|-----------------------------------------|----------------------------------|
-| CLI interface                           | Not v1 scope                     |
-| Regex search mode                       | Not implemented                  |
-| Rich format support (HTML, RTF, images) | Not implemented                  |
-| Value content search                    | Not implemented                  |
+| Feature                                 | Status          |
+|-----------------------------------------|-----------------|
+| CLI interface                           | Not v1 scope    |
+| Regex search mode                       | Not implemented |
+| Rich format support (HTML, RTF, images) | Not implemented |
+| Value content search                    | Not implemented |
 
 ---
 

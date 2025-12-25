@@ -26,14 +26,6 @@ Keva is a local key-value store for clipboard-like data. The core library (`keva
 
 ---
 
-## To Decide
-
-| Question                         | Context                                                                                                                                                 | Decision |
-|----------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
-| Keep 3px inner border drag zone? | M1-win requires 3px inner border for dragging, M2-win adds search icon as drag handle. Should we keep both drag methods or remove the border drag zone? | Pending  |
-
----
-
 **Project structure:**
 
 ```
@@ -56,22 +48,21 @@ keva/
 
 **Goal:** Borderless window with system tray, basic window management.
 
-**Status:** Partial (missing tray menu, drag zone refinement)
+**Status:** Partial (missing tray menu, resize border 6px→5px)
 
 **Requirements:**
 
-| Requirement      | Description                                                | Status                |
-|------------------|------------------------------------------------------------|-----------------------|
-| Window style     | Borderless (WS_POPUP), no title bar or native controls     | ✅                     |
-| Resize           | 5px outer zone triggers OS resize                          | ⚠️ 6px                |
-| Drag             | 3px inner border zone moves window                         | ❌ Entire window drags |
-| Initial position | Centered on primary monitor                                | ✅                     |
-| Smooth resize    | DwmExtendFrameIntoClientArea enabled                       | ✅                     |
-| Tray icon        | Visible with tooltip "Keva"                                | ✅                     |
-| Tray left-click  | Toggle window visibility                                   | ✅                     |
-| Tray right-click | Context menu (Show, Settings, Launch at Login, Quit)       | ❌                     |
-| Esc key          | Hides window                                               | ✅                     |
-| Alt+Tab          | Window visible (taskbar icon remains - Windows limitation) | ✅                     |
+| Requirement      | Description                                                | Status |
+|------------------|------------------------------------------------------------|--------|
+| Window style     | Borderless (WS_POPUP), no title bar or native controls     | ✅      |
+| Resize           | 5px outer zone triggers OS resize                          | ⚠️ 6px |
+| Initial position | Centered on primary monitor                                | ✅      |
+| Smooth resize    | DwmExtendFrameIntoClientArea enabled                       | ✅      |
+| Tray icon        | Visible with tooltip "Keva"                                | ✅      |
+| Tray left-click  | Toggle window visibility                                   | ✅      |
+| Tray right-click | Context menu (Show, Settings, Launch at Login, Quit)       | ❌      |
+| Esc key          | Hides window                                               | ✅      |
+| Alt+Tab          | Window visible (taskbar icon remains - Windows limitation) | ✅      |
 
 **Tray Menu Items:**
 
@@ -87,20 +78,18 @@ keva/
 | TC       | Description                            | Status |
 |----------|----------------------------------------|--------|
 | TC-M1-01 | Window appears centered on launch      | ✅      |
-| TC-M1-02 | Drag from inner border moves window    | ❌      |
-| TC-M1-03 | Drag from outer edge resizes window    | ✅      |
-| TC-M1-04 | Tray icon visible with correct tooltip | ✅      |
-| TC-M1-05 | Tray left-click toggles visibility     | ✅      |
-| TC-M1-06 | Tray right-click shows menu            | ❌      |
-| TC-M1-07 | Esc hides window                       | ✅      |
-| TC-M1-08 | Window visible in Alt+Tab              | ✅      |
-| TC-M1-09 | Quit menu item terminates app          | ❌      |
+| TC-M1-02 | Drag from outer edge resizes window    | ✅      |
+| TC-M1-03 | Tray icon visible with correct tooltip | ✅      |
+| TC-M1-04 | Tray left-click toggles visibility     | ✅      |
+| TC-M1-05 | Tray right-click shows menu            | ❌      |
+| TC-M1-06 | Esc hides window                       | ✅      |
+| TC-M1-07 | Window visible in Alt+Tab              | ✅      |
+| TC-M1-08 | Quit menu item terminates app          | ❌      |
 
 **Remaining Tasks:**
 
 1. Add tray right-click context menu (TrackPopupMenu)
-2. Implement drag zone (3px inner border returns HTCAPTION, rest returns HTCLIENT)
-3. Adjust resize border from 6px to 5px
+2. Adjust resize border from 6px to 5px
 
 ### M2-win: Layout Skeleton
 
@@ -132,7 +121,7 @@ keva/
 **Notes:**
 
 - Current Direct2D renderer and basic key list display will be refactored for this layout
-- Search icon provides an additional drag handle for moving the window
+- Search icon is the primary drag handle for moving the window
 
 ### M3-win: Core Integration & Key List
 
@@ -166,6 +155,7 @@ keva/
 **Notes:**
 
 - Current implementation has basic key list rendering but lacks scrolling, empty state, and config loading
+- Data directory: Code uses `%USERPROFILE%\.keva`, should be `%APPDATA%\Keva`
 - Refresh on window show needed for consistency after external changes
 
 ### M4-win: Key Selection & Value Display

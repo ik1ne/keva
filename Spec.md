@@ -103,13 +103,8 @@ Single-process application containing GUI window and keva-core storage layer.
 
 **Resize and Move:**
 
-The window has a thin border area (approximately 8px total):
-
-- **Outer 5px:** Resize handle (triggers OS-level resize)
-- **Inner 3px:** Drag to move window
-
-Additionally, the search icon (🔍) in the search bar acts as a drag handle. Clicking it does nothing; dragging it moves
-the window.
+- **Outer 5px border:** Resize handle (triggers OS-level resize)
+- **Search icon (🔍):** Drag handle for moving window (click does nothing, drag moves window)
 
 **Window Positioning:**
 
