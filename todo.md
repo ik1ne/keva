@@ -58,6 +58,7 @@ keva/
 | Resize           | 5px outer zone triggers OS resize                          | ✅      |
 | Initial position | Centered on primary monitor                                | ✅      |
 | Smooth resize    | DwmExtendFrameIntoClientArea enabled                       | ✅      |
+| Always on top    | Window stays above other windows (enables drag/drop)       | ✅      |
 | Tray icon        | Visible with tooltip "Keva"                                | ✅      |
 | Tray left-click  | Toggle window visibility                                   | ✅      |
 | Tray right-click | Context menu (Show, Settings, Launch at Login, Quit)       | ✅      |
@@ -85,6 +86,7 @@ keva/
 | TC-M1-06 | Esc hides window                       | ✅      |
 | TC-M1-07 | Window visible in Alt+Tab              | ✅      |
 | TC-M1-08 | Quit menu item terminates app          | ✅      |
+| TC-M1-09 | Window stays on top of other windows   | ✅      |
 
 ### M2-win: Layout Skeleton
 

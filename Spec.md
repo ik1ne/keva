@@ -99,6 +99,7 @@ Single-process application containing GUI window and keva-core storage layer.
 - `Esc` → Hide window (only when window is focused)
 - `Alt+F4` → Quit app entirely (only when window is focused)
 - Window does NOT close on focus loss (supports drag/drop and copy/paste workflows)
+- Window stays on top of other windows (enables drag/drop from other apps)
 - Tray icon left-click also toggles visibility
 
 **Resize and Move:**

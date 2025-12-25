@@ -4,36 +4,36 @@ use crate::app::App;
 use crate::platform::{
     hit_test::hit_test,
     tray::{
-        add_tray_icon, remove_tray_icon, show_tray_menu, IDM_LAUNCH_AT_LOGIN, IDM_QUIT,
-        IDM_SETTINGS, IDM_SHOW, WM_TRAYICON,
+        IDM_LAUNCH_AT_LOGIN, IDM_QUIT, IDM_SETTINGS, IDM_SHOW, WM_TRAYICON, add_tray_icon,
+        remove_tray_icon, show_tray_menu,
     },
 };
 use crate::render::theme::{WINDOW_HEIGHT, WINDOW_WIDTH};
 use std::sync::atomic::{AtomicIsize, Ordering};
+use windows::Win32::UI::WindowsAndMessaging::WS_EX_TOPMOST;
 use windows::{
-    core::{w, Result},
     Win32::{
         Foundation::{HWND, LPARAM, LRESULT, TRUE, WPARAM},
         Graphics::{
             Dwm::DwmExtendFrameIntoClientArea,
-            Gdi::{GetStockObject, ValidateRect, BLACK_BRUSH, HBRUSH},
+            Gdi::{BLACK_BRUSH, GetStockObject, HBRUSH, ValidateRect},
         },
         System::LibraryLoader::GetModuleHandleW,
         UI::{
             Controls::MARGINS,
             Input::KeyboardAndMouse::VK_ESCAPE,
             WindowsAndMessaging::{
-                CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW,
-                GetSystemMetrics, GetWindowLongPtrW, IsWindowVisible, LoadCursorW, MSG,
-                PostQuitMessage, RegisterClassW, SetForegroundWindow, SetWindowLongPtrW,
-                ShowWindow, GWLP_USERDATA, IDC_ARROW, SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_SHOW,
-                WM_ACTIVATE, WM_COMMAND, WM_CREATE, WM_DESTROY, WM_KEYDOWN, WM_LBUTTONUP,
-                WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT, WM_RBUTTONUP, WM_SIZE,
-                WNDCLASSW, WS_EX_APPWINDOW, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SIZEBOX,
-                WS_SYSMENU,
+                CreateWindowExW, DefWindowProcW, DispatchMessageW, GWLP_USERDATA, GetMessageW,
+                GetSystemMetrics, GetWindowLongPtrW, IDC_ARROW, IsWindowVisible, LoadCursorW, MSG,
+                PostQuitMessage, RegisterClassW, SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_SHOW,
+                SetForegroundWindow, SetWindowLongPtrW, ShowWindow, WM_ACTIVATE, WM_COMMAND,
+                WM_CREATE, WM_DESTROY, WM_KEYDOWN, WM_LBUTTONUP, WM_NCACTIVATE, WM_NCCALCSIZE,
+                WM_NCHITTEST, WM_PAINT, WM_RBUTTONUP, WM_SIZE, WNDCLASSW, WS_EX_APPWINDOW,
+                WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SIZEBOX, WS_SYSMENU,
             },
         },
     },
+    core::{Result, w},
 };
 
 /// Stores the previously focused window to restore on Esc.
@@ -69,7 +69,7 @@ pub fn run(app: App) -> Result<()> {
         let y = (screen_height - WINDOW_HEIGHT) / 2;
 
         let hwnd = CreateWindowExW(
-            WS_EX_APPWINDOW, // Force Alt+Tab visibility
+            WS_EX_APPWINDOW | WS_EX_TOPMOST, // Alt+Tab visible, always on top
             class_name,
             w!("Keva"),
             style,
@@ -114,11 +114,7 @@ pub fn run(app: App) -> Result<()> {
 fn get_app(hwnd: HWND) -> Option<&'static mut App> {
     unsafe {
         let ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut App;
-        if ptr.is_null() {
-            None
-        } else {
-            Some(&mut *ptr)
-        }
+        if ptr.is_null() { None } else { Some(&mut *ptr) }
     }
 }
 
