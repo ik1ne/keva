@@ -10,17 +10,8 @@ mod render;
 mod state;
 mod ui;
 
-use app::App;
 use windows::core::Result;
 
 fn main() -> Result<()> {
-    let app = match App::new() {
-        Ok(app) => app,
-        Err(e) => {
-            eprintln!("Failed to initialize Keva: {e}");
-            return Ok(());
-        }
-    };
-
-    platform::window::run(app)
+    platform::window::run()
 }

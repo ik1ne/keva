@@ -16,17 +16,20 @@ pub struct App {
 }
 
 impl App {
-    /// Creates a new App instance.
-    pub fn new() -> Result<Self, windows::core::Error> {
+    /// Creates a new App instance bound to the given window.
+    pub fn new(hwnd: HWND, width: u32, height: u32) -> Result<Self, windows::core::Error> {
+        let mut state = AppState::new();
+        state.update_layout(width, height);
+
         Ok(Self {
-            renderer: Renderer::new()?,
-            state: AppState::new(),
+            renderer: Renderer::new(hwnd, width, height)?,
+            state,
         })
     }
 
     /// Paints the window content.
-    pub fn paint(&mut self, hwnd: HWND) {
-        if let Err(e) = self.renderer.render(hwnd, &self.state.layout) {
+    pub fn paint(&self) {
+        if let Err(e) = self.renderer.render(&self.state.layout) {
             eprintln!("Failed to render: {e}");
         }
     }
@@ -34,7 +37,9 @@ impl App {
     /// Handles window resize.
     pub fn resize(&mut self, width: u32, height: u32) {
         self.state.update_layout(width, height);
-        // Render target resize is handled in render() via ensure_target()
+        if let Err(e) = self.renderer.resize(width, height) {
+            eprintln!("Failed to resize renderer: {e}");
+        }
     }
 
     /// Returns a reference to the app state.

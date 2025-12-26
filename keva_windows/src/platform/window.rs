@@ -30,11 +30,12 @@ use windows::{
                 LoadCursorW, MINMAXINFO, MSG, PostQuitMessage, RegisterClassW, SM_CXSCREEN,
                 SM_CYSCREEN, SW_HIDE, SW_SHOW, SWP_NOZORDER, SendMessageW, SetForegroundWindow,
                 SetWindowLongPtrW, SetWindowPos, ShowWindow, TranslateMessage, WINDOW_EX_STYLE,
-                WM_ACTIVATE, WM_COMMAND, WM_CREATE, WM_CTLCOLOREDIT, WM_DESTROY, WM_ERASEBKGND,
+                WM_ACTIVATE, WM_COMMAND, WM_CREATE, WM_CTLCOLOREDIT, WM_DESTROY,
                 WM_GETMINMAXINFO, WM_KEYDOWN, WM_LBUTTONUP, WM_NCACTIVATE, WM_NCCALCSIZE,
                 WM_NCHITTEST, WM_PAINT, WM_RBUTTONUP, WM_SIZE, WNDCLASSW, WS_CHILD,
-                WS_CLIPCHILDREN, WS_EX_APPWINDOW, WS_EX_TOPMOST, WS_MAXIMIZEBOX, WS_MINIMIZEBOX,
-                WS_POPUP, WS_SIZEBOX, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE,
+                WS_CLIPCHILDREN, WS_EX_APPWINDOW, WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOPMOST,
+                WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SIZEBOX, WS_SYSMENU, WS_TABSTOP,
+                WS_VISIBLE,
             },
         },
     },
@@ -58,7 +59,7 @@ unsafe extern "system" fn edit_subclass_proc(
 ) -> LRESULT {
     unsafe {
         match msg {
-            WM_ERASEBKGND => {
+            windows::Win32::UI::WindowsAndMessaging::WM_ERASEBKGND => {
                 // Paint background with dark color
                 let hdc = HDC(wparam.0 as *mut _);
                 let mut rect = RECT::default();
@@ -80,10 +81,8 @@ unsafe extern "system" fn edit_subclass_proc(
     }
 }
 
-/// Runs the application with the given App instance.
-pub fn run(app: App) -> Result<()> {
-    let app = Box::new(app);
-
+/// Runs the application.
+pub fn run() -> Result<()> {
     unsafe {
         let instance = GetModuleHandleW(None)?;
         let class_name = w!("KevaWindowClass");
@@ -100,9 +99,12 @@ pub fn run(app: App) -> Result<()> {
         debug_assert!(atom != 0);
 
         // Borderless window with resize capability
-        // WS_CLIPCHILDREN prevents Direct2D from painting over child windows (EDIT control)
+        // WS_CLIPCHILDREN prevents painting over child windows (EDIT control)
         let style =
             WS_POPUP | WS_SIZEBOX | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU | WS_CLIPCHILDREN;
+
+        // WS_EX_NOREDIRECTIONBITMAP required for DirectComposition (flicker-free resize)
+        let ex_style = WS_EX_APPWINDOW | WS_EX_TOPMOST | WS_EX_NOREDIRECTIONBITMAP;
 
         // Center window on screen
         let screen_width = GetSystemMetrics(SM_CXSCREEN);
@@ -111,7 +113,7 @@ pub fn run(app: App) -> Result<()> {
         let y = (screen_height - WINDOW_HEIGHT) / 2;
 
         let hwnd = CreateWindowExW(
-            WS_EX_APPWINDOW | WS_EX_TOPMOST, // Alt+Tab visible, always on top
+            ex_style,
             class_name,
             w!("Keva"),
             style,
@@ -125,15 +127,13 @@ pub fn run(app: App) -> Result<()> {
             None,
         )?;
 
-        // Store app state in window
+        // Create App after window (DirectComposition needs hwnd)
+        let app = Box::new(App::new(hwnd, WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32)?);
         let app_ptr = Box::into_raw(app);
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, app_ptr as isize);
 
-        // Compute initial layout (WM_SIZE is sent before app pointer is stored)
+        // Create search bar EDIT control
         if let Some(app) = get_app(hwnd) {
-            app.resize(WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32);
-
-            // Create search bar EDIT control
             let layout = &app.state().layout;
             let search_edit = CreateWindowExW(
                 WINDOW_EX_STYLE::default(),
@@ -226,10 +226,6 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
                 // Prevent default non-client area painting (gray border)
                 // Return TRUE to indicate we handled it
                 LRESULT(TRUE.0 as isize)
-            }
-            WM_ERASEBKGND => {
-                // Suppress default background erase - Direct2D handles it in WM_PAINT
-                LRESULT(1)
             }
             WM_NCHITTEST => {
                 let cursor_x = (lparam.0 & 0xFFFF) as i16 as i32;
@@ -339,7 +335,7 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             }
             WM_PAINT => {
                 if let Some(app) = get_app(hwnd) {
-                    app.paint(hwnd);
+                    app.paint();
                 }
                 let _ = ValidateRect(Some(hwnd), None);
                 LRESULT(0)
