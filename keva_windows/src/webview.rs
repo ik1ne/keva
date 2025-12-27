@@ -6,7 +6,8 @@ use std::sync::mpsc::Sender;
 
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_COLOR, CreateCoreWebView2Environment, ICoreWebView2, ICoreWebView2Controller,
-    ICoreWebView2Controller2, ICoreWebView2Environment, ICoreWebView2WebMessageReceivedEventArgs,
+    ICoreWebView2Controller2, ICoreWebView2Environment, ICoreWebView2Settings9,
+    ICoreWebView2WebMessageReceivedEventArgs,
 };
 use webview2_com::{
     CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
@@ -15,13 +16,13 @@ use webview2_com::{
 use windows::Win32::Foundation::{HWND, RECT};
 use windows::Win32::System::Com::CoTaskMemFree;
 use windows::core::{Interface, PWSTR};
+use windows_strings::PCWSTR;
 
 static MESSAGE_SENDER: OnceLock<Sender<String>> = OnceLock::new();
 
 pub struct WebView {
     controller: ICoreWebView2Controller,
     webview: ICoreWebView2,
-    #[allow(dead_code)]
     parent_hwnd: HWND,
 }
 
@@ -42,14 +43,13 @@ impl WebView {
         }
     }
 
-    pub fn navigate_to_string(&self, html: &str) {
+    pub fn navigate_html(&self, html: PCWSTR) {
         unsafe {
-            let html_pwstr = pwstr_from_str(html);
-            let _ = self.webview.NavigateToString(html_pwstr);
+            let _ = self.webview.NavigateToString(html);
         }
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn post_message(&self, json: &str) {
         unsafe {
             let msg = pwstr_from_str(json);
@@ -57,12 +57,13 @@ impl WebView {
         }
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     pub fn hwnd(&self) -> HWND {
         self.parent_hwnd
     }
 }
 
+#[expect(dead_code)]
 pub fn set_message_sender(sender: Sender<String>) {
     let _ = MESSAGE_SENDER.set(sender);
 }
@@ -140,14 +141,20 @@ fn setup_webview(controller: ICoreWebView2Controller) -> Option<ICoreWebView2> {
     unsafe {
         let webview = controller.CoreWebView2().ok()?;
 
+        // Enable CSS app-region: drag support for window dragging
+        if let Ok(settings) = webview.Settings()
+            && let Ok(settings9) = settings.cast::<ICoreWebView2Settings9>()
+        {
+            let _ = settings9.SetIsNonClientRegionSupportEnabled(true);
+        }
+
         let mut token = 0i64;
         let _ = webview.add_WebMessageReceived(
             &WebMessageReceivedEventHandler::create(Box::new(
                 |_webview, args: Option<ICoreWebView2WebMessageReceivedEventArgs>| {
                     if let Some(args) = args {
                         let mut message = PWSTR::null();
-                        if args.TryGetWebMessageAsString(&mut message).is_ok()
-                            && !message.is_null()
+                        if args.TryGetWebMessageAsString(&mut message).is_ok() && !message.is_null()
                         {
                             let msg_str = pwstr_to_string(message);
                             if let Some(sender) = MESSAGE_SENDER.get() {

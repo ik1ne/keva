@@ -8,35 +8,34 @@ use crate::platform::{
         remove_tray_icon, show_tray_menu,
     },
 };
-use crate::render::theme::{MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, RESIZE_BORDER, WINDOW_HEIGHT, WINDOW_WIDTH};
-use crate::templates::{MAIN_HTML, SEARCH_HTML};
+use crate::render::theme::{
+    MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, RESIZE_BORDER, WINDOW_HEIGHT, WINDOW_WIDTH,
+};
+use crate::templates::APP_HTML_W;
 use crate::webview::init_webview;
 use std::sync::atomic::{AtomicIsize, Ordering};
 use windows::{
     Win32::{
-        Foundation::{HWND, LPARAM, LRESULT, RECT, TRUE, WPARAM},
+        Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, TRUE, WPARAM},
         Graphics::{
-            Dwm::DwmExtendFrameIntoClientArea,
-            Gdi::{InvalidateRect, UpdateWindow, ValidateRect},
+            Dwm::{DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND, DwmSetWindowAttribute},
+            Gdi::{CreateSolidBrush, ValidateRect},
         },
         System::LibraryLoader::GetModuleHandleW,
-        UI::Controls::MARGINS,
         UI::{
             Input::KeyboardAndMouse::VK_ESCAPE,
             WindowsAndMessaging::{
-                CreateWindowExW, DefWindowProcW, DispatchMessageW, GWLP_USERDATA,
-                GetMessageW, GetSystemMetrics, GetWindowLongPtrW, GetWindowRect, IDC_ARROW,
-                IsWindowVisible, LoadCursorW, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, PostQuitMessage,
-                RegisterClassW, SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_SHOW, SWP_FRAMECHANGED,
-                SWP_NOCOPYBITS, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER,
-                SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, ShowWindow,
-                TranslateMessage, WINDOWPOS, WM_ACTIVATE, WM_COMMAND, WM_CREATE,
-                WM_DESTROY, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN,
-                WM_LBUTTONUP, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT, WM_RBUTTONUP,
-                WM_SIZE, WM_WINDOWPOSCHANGING, WNDCLASSW, WS_CLIPCHILDREN,
-                WS_EX_APPWINDOW, WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOPMOST, WS_MAXIMIZEBOX,
-                WS_MINIMIZEBOX, WS_POPUP, WS_SIZEBOX, WS_SYSMENU,
-                WVR_VALIDRECTS,
+                CreateWindowExW, DefWindowProcW, DispatchMessageW, GWLP_USERDATA, GetMessageW,
+                GetSystemMetrics, GetWindowLongPtrW, GetWindowRect, IDC_ARROW, IsWindowVisible,
+                LoadCursorW, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, PostQuitMessage, RegisterClassW,
+                SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_SHOW, SWP_FRAMECHANGED, SWP_NOCOPYBITS,
+                SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, SetForegroundWindow,
+                SetWindowLongPtrW, SetWindowPos, ShowWindow, TranslateMessage, WINDOWPOS,
+                WM_ACTIVATE, WM_COMMAND, WM_CREATE, WM_DESTROY, WM_ERASEBKGND, WM_GETMINMAXINFO,
+                WM_KEYDOWN, WM_LBUTTONUP, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT,
+                WM_RBUTTONUP, WM_SIZE, WM_WINDOWPOSCHANGING, WNDCLASSW, WS_CLIPCHILDREN,
+                WS_EX_APPWINDOW, WS_EX_TOPMOST, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP,
+                WS_SIZEBOX, WS_SYSMENU, WVR_VALIDRECTS,
             },
         },
     },
@@ -52,10 +51,14 @@ pub fn run() -> Result<()> {
         let instance = GetModuleHandleW(None)?;
         let class_name = w!("KevaWindowClass");
 
+        // Create a dark background brush for resize border areas
+        let bg_brush = CreateSolidBrush(COLORREF(0x001a1a1a)); // #1a1a1a in BGR
+
         let wc = WNDCLASSW {
             lpfnWndProc: Some(wndproc),
             hInstance: instance.into(),
             hCursor: LoadCursorW(None, IDC_ARROW)?,
+            hbrBackground: bg_brush,
             lpszClassName: class_name,
             ..Default::default()
         };
@@ -64,12 +67,11 @@ pub fn run() -> Result<()> {
         debug_assert!(atom != 0);
 
         // Borderless window with resize capability
-        // WS_CLIPCHILDREN prevents painting over child windows (EDIT control)
+        // WS_CLIPCHILDREN prevents painting over child windows
         let style =
             WS_POPUP | WS_SIZEBOX | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU | WS_CLIPCHILDREN;
 
-        // WS_EX_NOREDIRECTIONBITMAP required for DirectComposition (flicker-free resize)
-        let ex_style = WS_EX_APPWINDOW | WS_EX_TOPMOST | WS_EX_NOREDIRECTIONBITMAP;
+        let ex_style = WS_EX_APPWINDOW | WS_EX_TOPMOST;
 
         // Center window on screen
         let screen_width = GetSystemMetrics(SM_CXSCREEN);
@@ -92,42 +94,23 @@ pub fn run() -> Result<()> {
             None,
         )?;
 
-        // Create App after window (DirectComposition needs hwnd)
-        let app = Box::new(App::new(hwnd, WINDOW_WIDTH as u32, WINDOW_HEIGHT as u32)?);
+        // Create App
+        let app = Box::new(App::new(hwnd));
         let app_ptr = Box::into_raw(app);
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, app_ptr as isize);
 
-        // Create WebViews for search and main content
-        if let Some(app) = get_app(hwnd) {
-            let layout = &app.state().layout;
+        // Create single WebView covering the entire window (with resize border insets on all sides)
+        let wv_x = RESIZE_BORDER;
+        let wv_y = RESIZE_BORDER;
+        let wv_width = WINDOW_WIDTH - 2 * RESIZE_BORDER;
+        let wv_height = WINDOW_HEIGHT - 2 * RESIZE_BORDER;
 
-            // Search WebView: next to icon, inset from right edge for resize border
-            let search_x = layout.search_input.x as i32;
-            let search_y = layout.search_input.y as i32;
-            let search_width = layout.search_input.width as i32 - RESIZE_BORDER;
-            let search_height = layout.search_input.height as i32;
-
-            init_webview(hwnd, search_x, search_y, search_width, search_height, move |wv| {
-                wv.navigate_to_string(SEARCH_HTML);
-                if let Some(app) = get_app(hwnd) {
-                    app.state_mut().search_webview = Some(wv);
-                }
-            });
-
-            // Main WebView: left + right panes combined, inset from edges for resize borders
-            let main_x = RESIZE_BORDER;
-            let main_y = layout.left_pane.y as i32;
-            let main_width = (layout.left_pane.width + layout.divider.width + layout.right_pane.width) as i32
-                - 2 * RESIZE_BORDER;
-            let main_height = layout.left_pane.height as i32 - RESIZE_BORDER;
-
-            init_webview(hwnd, main_x, main_y, main_width, main_height, move |wv| {
-                wv.navigate_to_string(MAIN_HTML);
-                if let Some(app) = get_app(hwnd) {
-                    app.state_mut().main_webview = Some(wv);
-                }
-            });
-        }
+        init_webview(hwnd, wv_x, wv_y, wv_width, wv_height, move |wv| {
+            wv.navigate_html(APP_HTML_W);
+            if let Some(app) = get_app(hwnd) {
+                app.state_mut().webview = Some(wv);
+            }
+        });
 
         // Create system tray icon
         add_tray_icon(hwnd)?;
@@ -163,6 +146,15 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
     unsafe {
         match msg {
             WM_CREATE => {
+                // Enable rounded corners on Windows 11
+                let preference = DWMWCP_ROUND;
+                let _ = DwmSetWindowAttribute(
+                    hwnd,
+                    DWMWA_WINDOW_CORNER_PREFERENCE,
+                    &preference as *const _ as *const _,
+                    size_of_val(&preference) as u32,
+                );
+
                 // Trigger WM_NCCALCSIZE to properly set up the borderless frame
                 let mut rect = RECT::default();
                 let _ = GetWindowRect(hwnd, &mut rect);
@@ -224,43 +216,19 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             WM_NCHITTEST => {
                 let cursor_x = (lparam.0 & 0xFFFF) as i16 as i32;
                 let cursor_y = ((lparam.0 >> 16) & 0xFFFF) as i16 as i32;
-                if let Some(app) = get_app(hwnd) {
-                    hit_test(hwnd, cursor_x, cursor_y, app.layout())
-                } else {
-                    // During window creation, fall back to default behavior
-                    DefWindowProcW(hwnd, msg, wparam, lparam)
-                }
+                hit_test(hwnd, cursor_x, cursor_y)
             }
             WM_ACTIVATE => {
                 let activating = (wparam.0 & 0xFFFF) != 0;
                 let previous_window = lparam.0;
-                if activating {
-                    // Extend frame into client area for DWM shadow support
-                    let margins = MARGINS {
-                        cxLeftWidth: 1,
-                        cxRightWidth: 1,
-                        cyTopHeight: 1,
-                        cyBottomHeight: 1,
-                    };
-                    let _ = DwmExtendFrameIntoClientArea(hwnd, &margins);
-
-                    if previous_window != 0 {
-                        PREV_FOREGROUND.store(previous_window, Ordering::Relaxed);
-                    }
+                if activating && previous_window != 0 {
+                    PREV_FOREGROUND.store(previous_window, Ordering::Relaxed);
                 }
                 DefWindowProcW(hwnd, msg, wparam, lparam)
             }
             WM_ERASEBKGND => {
-                // No-op background erase.
-                //
-                // With WS_EX_NOREDIRECTIONBITMAP + DirectComposition, erasing the window background
-                // can reveal a white "new area" during interactive resize (especially when expanding
-                // from top/left, where Windows may expose pixels before our next composed frame).
-                //
-                // Returning non-zero tells Windows we've handled background erasure, preventing the
-                // default erase (often white). The composed content (our swapchain) should cover
-                // the client area on the subsequent WM_PAINT.
-                LRESULT(1)
+                // Let DefWindowProcW paint the background using hbrBackground brush
+                DefWindowProcW(hwnd, msg, wparam, lparam)
             }
             WM_KEYDOWN => {
                 let virtual_key = wparam.0 as u16;
@@ -314,45 +282,35 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
                 LRESULT(0)
             }
             WM_SIZE => {
-                let width = (lparam.0 & 0xFFFF) as u32;
-                let height = ((lparam.0 >> 16) & 0xFFFF) as u32;
-                if let Some(app) = get_app(hwnd) {
-                    app.resize(width, height);
+                let size_type = wparam.0 as u32;
+                let width = (lparam.0 & 0xFFFF) as i32;
+                let height = ((lparam.0 >> 16) & 0xFFFF) as i32;
 
-                    let layout = &app.state().layout;
+                // SIZE_MAXIMIZED = 2: window is maximized or snapped
+                let is_maximized = size_type == 2;
 
-                    // Resize search WebView
-                    if let Some(ref search_wv) = app.state().search_webview {
-                        let search_x = layout.search_input.x as i32;
-                        let search_y = layout.search_input.y as i32;
-                        let search_width = layout.search_input.width as i32 - RESIZE_BORDER;
-                        let search_height = layout.search_input.height as i32;
-                        search_wv.set_bounds(search_x, search_y, search_width, search_height);
-                    }
-
-                    // Resize main WebView
-                    if let Some(ref main_wv) = app.state().main_webview {
-                        let main_x = RESIZE_BORDER;
-                        let main_y = layout.left_pane.y as i32;
-                        let main_width = (layout.left_pane.width + layout.divider.width + layout.right_pane.width) as i32
-                            - 2 * RESIZE_BORDER;
-                        let main_height = layout.left_pane.height as i32 - RESIZE_BORDER;
-                        main_wv.set_bounds(main_x, main_y, main_width, main_height);
-                    }
+                // Resize WebView to fill window
+                // When maximized/snapped, use full window; otherwise inset for resize borders
+                if let Some(app) = get_app(hwnd)
+                    && let Some(wv) = &app.state().webview
+                {
+                    let (wv_x, wv_y, wv_width, wv_height) = if is_maximized {
+                        (0, 0, width, height)
+                    } else {
+                        (
+                            RESIZE_BORDER,
+                            RESIZE_BORDER,
+                            width - 2 * RESIZE_BORDER,
+                            height - 2 * RESIZE_BORDER,
+                        )
+                    };
+                    wv.set_bounds(wv_x, wv_y, wv_width, wv_height);
                 }
-
-                // During interactive resize, Windows may expose new client pixels and show the
-                // default erase color before our next paint. Force an immediate repaint so the
-                // DComp surface catches up and the new area is filled with theme colors.
-                let _ = InvalidateRect(Some(hwnd), None, false);
-                let _ = UpdateWindow(hwnd);
 
                 LRESULT(0)
             }
             WM_PAINT => {
-                if let Some(app) = get_app(hwnd) {
-                    app.paint();
-                }
+                // No D2D rendering needed - WebView handles all content
                 let _ = ValidateRect(Some(hwnd), None);
                 LRESULT(0)
             }

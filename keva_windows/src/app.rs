@@ -2,40 +2,21 @@
 
 use windows::Win32::Foundation::HWND;
 
-use crate::render::Renderer;
 use crate::state::AppState;
-use crate::ui::Layout;
 
 /// Application coordinator, owns state and services.
 pub struct App {
-    renderer: Renderer,
     state: AppState,
+    #[expect(dead_code)]
+    hwnd: HWND,
 }
 
 impl App {
     /// Creates a new App instance bound to the given window.
-    pub fn new(hwnd: HWND, width: u32, height: u32) -> Result<Self, windows::core::Error> {
-        let mut state = AppState::new();
-        state.update_layout(width, height);
-
-        Ok(Self {
-            renderer: Renderer::new(hwnd, width, height)?,
-            state,
-        })
-    }
-
-    /// Paints the window content.
-    pub fn paint(&self) {
-        if let Err(e) = self.renderer.render(&self.state.layout) {
-            eprintln!("Failed to render: {e}");
-        }
-    }
-
-    /// Handles window resize.
-    pub fn resize(&mut self, width: u32, height: u32) {
-        self.state.update_layout(width, height);
-        if let Err(e) = self.renderer.resize(width, height) {
-            eprintln!("Failed to resize renderer: {e}");
+    pub fn new(hwnd: HWND) -> Self {
+        Self {
+            hwnd,
+            state: AppState::new(),
         }
     }
 
@@ -47,10 +28,5 @@ impl App {
     /// Returns a mutable reference to the app state.
     pub fn state_mut(&mut self) -> &mut AppState {
         &mut self.state
-    }
-
-    /// Returns the current layout.
-    pub fn layout(&self) -> &Layout {
-        &self.state.layout
     }
 }

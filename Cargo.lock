@@ -391,6 +391,7 @@ dependencies = [
  "once_cell",
  "webview2-com",
  "windows 0.62.2",
+ "windows-strings 0.5.1",
 ]
 
 [[package]]

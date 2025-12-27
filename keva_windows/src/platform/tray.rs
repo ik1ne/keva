@@ -2,7 +2,6 @@
 
 use std::mem::size_of;
 use windows::{
-    core::{w, Result},
     Win32::{
         Foundation::{HWND, POINT},
         UI::{
@@ -18,6 +17,7 @@ use windows::{
             },
         },
     },
+    core::{Result, w},
 };
 
 /// Custom message for tray icon events.
@@ -92,7 +92,12 @@ pub fn show_tray_menu(hwnd: HWND) {
         let _ = AppendMenuW(hmenu, show_flags, IDM_SHOW as usize, w!("Show Keva"));
 
         // "Settings..." - non-functional until M15-win
-        let _ = AppendMenuW(hmenu, MF_STRING | MF_GRAYED, IDM_SETTINGS as usize, w!("Settings..."));
+        let _ = AppendMenuW(
+            hmenu,
+            MF_STRING | MF_GRAYED,
+            IDM_SETTINGS as usize,
+            w!("Settings..."),
+        );
 
         let _ = AppendMenuW(hmenu, MF_SEPARATOR, 0, None);
 
