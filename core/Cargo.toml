@@ -11,7 +11,6 @@ postcard = { version = "1", features = ["alloc"] }
 redb = "3"
 serde = { version = "1", features = ["derive"] }
 thiserror = "2.0"
-tracing = "0.1"
 
 [dev-dependencies]
 tempfile = "3.10"
