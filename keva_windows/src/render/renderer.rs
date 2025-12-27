@@ -1,9 +1,6 @@
 //! Direct2D rendering infrastructure with DirectComposition for flicker-free resize.
 
-use super::theme::{
-    COLOR_BG, COLOR_DIVIDER, COLOR_LEFT_PANE_BG, COLOR_RIGHT_PANE_BG, COLOR_SEARCH_BAR_BG,
-    COLOR_SEARCH_ICON, COLOR_SEARCH_ICON_BG,
-};
+use super::theme::{COLOR_BG, COLOR_SEARCH_ICON, COLOR_SEARCH_ICON_BG};
 use crate::ui::{Layout, Rect};
 use windows::{
     Win32::{
@@ -125,7 +122,8 @@ impl Renderer {
             unsafe { DCompositionCreateDevice(&dxgi_device)? };
 
         // Step 8: Create composition target and visual, bind swap chain
-        let dcomp_target = unsafe { dcomp_device.CreateTargetForHwnd(hwnd, true)? };
+        // topmost=false puts D2D visual behind WebView2's composition target
+        let dcomp_target = unsafe { dcomp_device.CreateTargetForHwnd(hwnd, false)? };
         let dcomp_visual = unsafe { dcomp_device.CreateVisual()? };
 
         unsafe {
@@ -226,6 +224,8 @@ impl Renderer {
     }
 
     /// Renders the window content with the given layout.
+    ///
+    /// Only draws the base background and search icon. WebViews handle the rest.
     pub fn render(&self, layout: &Layout) -> Result<()> {
         if self.target_bitmap.is_none() {
             return Ok(());
@@ -235,23 +235,11 @@ impl Renderer {
             self.d2d_context.BeginDraw();
             self.d2d_context.Clear(Some(&COLOR_BG));
 
-            // Draw search bar background
-            self.fill_rect(&layout.search_bar, &COLOR_SEARCH_BAR_BG)?;
-
-            // Draw search icon background
+            // Draw search icon background (rounded)
             self.fill_rounded_rect(&layout.search_icon, 4.0, &COLOR_SEARCH_ICON_BG)?;
 
-            // Draw search icon (magnifying glass emoji)
+            // Draw search icon (magnifying glass)
             self.draw_centered_text(&layout.search_icon, SEARCH_ICON_GLYPH, &COLOR_SEARCH_ICON)?;
-
-            // Draw left pane background
-            self.fill_rect(&layout.left_pane, &COLOR_LEFT_PANE_BG)?;
-
-            // Draw divider
-            self.fill_rect(&layout.divider, &COLOR_DIVIDER)?;
-
-            // Draw right pane background
-            self.fill_rect(&layout.right_pane, &COLOR_RIGHT_PANE_BG)?;
 
             self.d2d_context.EndDraw(None, None)?;
 

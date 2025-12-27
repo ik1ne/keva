@@ -1,7 +1,7 @@
 //! Central application state.
 
 use crate::ui::Layout;
-use windows::Win32::Foundation::HWND;
+use crate::webview::WebView;
 
 /// Application state container.
 ///
@@ -12,8 +12,10 @@ use windows::Win32::Foundation::HWND;
 /// - Search state (query, results)
 /// - Configuration state
 pub struct AppState {
-    /// Handle to the search bar EDIT control.
-    pub search_edit: Option<HWND>,
+    /// The search bar WebView.
+    pub search_webview: Option<WebView>,
+    /// The main content WebView.
+    pub main_webview: Option<WebView>,
     /// Computed layout based on window dimensions.
     pub layout: Layout,
 }
@@ -21,7 +23,8 @@ pub struct AppState {
 impl AppState {
     pub fn new() -> Self {
         Self {
-            search_edit: None,
+            search_webview: None,
+            main_webview: None,
             layout: Layout::default(),
         }
     }

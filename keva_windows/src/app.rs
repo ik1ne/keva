@@ -1,9 +1,6 @@
 //! Application coordinator.
 
-use windows::Win32::{
-    Foundation::HWND,
-    UI::WindowsAndMessaging::{GetWindowTextLengthW, GetWindowTextW},
-};
+use windows::Win32::Foundation::HWND;
 
 use crate::render::Renderer;
 use crate::state::AppState;
@@ -55,23 +52,5 @@ impl App {
     /// Returns the current layout.
     pub fn layout(&self) -> &Layout {
         &self.state.layout
-    }
-
-    /// Returns the current search bar text.
-    pub fn get_search_text(&self) -> String {
-        let Some(search_edit) = self.state.search_edit else {
-            return String::new();
-        };
-
-        unsafe {
-            let len = GetWindowTextLengthW(search_edit);
-            if len == 0 {
-                return String::new();
-            }
-
-            let mut buffer = vec![0u16; (len + 1) as usize];
-            GetWindowTextW(search_edit, &mut buffer);
-            String::from_utf16_lossy(&buffer[..len as usize])
-        }
     }
 }

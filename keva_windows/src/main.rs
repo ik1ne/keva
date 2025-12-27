@@ -8,7 +8,9 @@ mod app;
 mod platform;
 mod render;
 mod state;
+mod templates;
 mod ui;
+mod webview;
 
 use windows::core::Result;
 

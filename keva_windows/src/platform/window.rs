@@ -8,39 +8,35 @@ use crate::platform::{
         remove_tray_icon, show_tray_menu,
     },
 };
-use crate::render::theme::{
-    EDIT_BG_COLORREF, EDIT_TEXT_COLORREF, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, WINDOW_HEIGHT,
-    WINDOW_WIDTH,
-};
+use crate::render::theme::{MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, RESIZE_BORDER, WINDOW_HEIGHT, WINDOW_WIDTH};
+use crate::templates::{MAIN_HTML, SEARCH_HTML};
+use crate::webview::init_webview;
 use std::sync::atomic::{AtomicIsize, Ordering};
 use windows::{
     Win32::{
         Foundation::{HWND, LPARAM, LRESULT, RECT, TRUE, WPARAM},
         Graphics::{
             Dwm::DwmExtendFrameIntoClientArea,
-            Gdi::{
-                CreateSolidBrush, FillRect, HBRUSH, HDC, SetBkColor, SetTextColor, ValidateRect,
-            },
+            Gdi::{InvalidateRect, UpdateWindow, ValidateRect},
         },
-        UI::Controls::MARGINS,
         System::LibraryLoader::GetModuleHandleW,
+        UI::Controls::MARGINS,
         UI::{
-            Controls::EM_SETCUEBANNER,
-            Input::KeyboardAndMouse::{SetFocus, VK_ESCAPE},
-            Shell::{DefSubclassProc, SetWindowSubclass},
+            Input::KeyboardAndMouse::VK_ESCAPE,
             WindowsAndMessaging::{
-                CreateWindowExW, DefWindowProcW, DispatchMessageW, GWLP_USERDATA, GetClientRect,
+                CreateWindowExW, DefWindowProcW, DispatchMessageW, GWLP_USERDATA,
                 GetMessageW, GetSystemMetrics, GetWindowLongPtrW, GetWindowRect, IDC_ARROW,
                 IsWindowVisible, LoadCursorW, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, PostQuitMessage,
                 RegisterClassW, SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_SHOW, SWP_FRAMECHANGED,
-                SWP_NOCOPYBITS, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE,
-                SWP_NOZORDER, SendMessageW, SetForegroundWindow, SetWindowLongPtrW, SetWindowPos,
-                ShowWindow, TranslateMessage, WINDOWPOS, WINDOW_EX_STYLE, WM_ACTIVATE, WM_COMMAND,
-                WM_CREATE, WM_CTLCOLOREDIT, WM_DESTROY, WM_GETMINMAXINFO, WM_KEYDOWN, WM_LBUTTONUP,
-                WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT, WM_RBUTTONUP, WM_SIZE,
-                WM_WINDOWPOSCHANGING, WNDCLASSW, WS_CHILD, WS_CLIPCHILDREN, WS_EX_APPWINDOW,
-                WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOPMOST, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP,
-                WS_SIZEBOX, WS_SYSMENU, WS_TABSTOP, WS_VISIBLE, WVR_VALIDRECTS,
+                SWP_NOCOPYBITS, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER,
+                SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, ShowWindow,
+                TranslateMessage, WINDOWPOS, WM_ACTIVATE, WM_COMMAND, WM_CREATE,
+                WM_DESTROY, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN,
+                WM_LBUTTONUP, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT, WM_RBUTTONUP,
+                WM_SIZE, WM_WINDOWPOSCHANGING, WNDCLASSW, WS_CLIPCHILDREN,
+                WS_EX_APPWINDOW, WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOPMOST, WS_MAXIMIZEBOX,
+                WS_MINIMIZEBOX, WS_POPUP, WS_SIZEBOX, WS_SYSMENU,
+                WVR_VALIDRECTS,
             },
         },
     },
@@ -49,42 +45,6 @@ use windows::{
 
 /// Stores the previously focused window to restore on Esc.
 static PREV_FOREGROUND: AtomicIsize = AtomicIsize::new(0);
-
-/// Cached brush for EDIT control background (stored as isize for thread safety).
-static EDIT_BG_BRUSH: AtomicIsize = AtomicIsize::new(0);
-
-/// Subclass procedure for EDIT control to handle WM_ERASEBKGND directly.
-unsafe extern "system" fn edit_subclass_proc(
-    hwnd: HWND,
-    msg: u32,
-    wparam: WPARAM,
-    lparam: LPARAM,
-    _uid_subclass: usize,
-    _dw_ref_data: usize,
-) -> LRESULT {
-    unsafe {
-        match msg {
-            windows::Win32::UI::WindowsAndMessaging::WM_ERASEBKGND => {
-                // Paint background with dark color
-                let hdc = HDC(wparam.0 as *mut _);
-                let mut rect = RECT::default();
-                let _ = GetClientRect(hwnd, &mut rect);
-
-                // Get or create the background brush
-                let mut brush_handle = EDIT_BG_BRUSH.load(Ordering::Relaxed);
-                if brush_handle == 0 {
-                    let brush = CreateSolidBrush(EDIT_BG_COLORREF);
-                    brush_handle = brush.0 as isize;
-                    EDIT_BG_BRUSH.store(brush_handle, Ordering::Relaxed);
-                }
-                let brush = HBRUSH(brush_handle as *mut _);
-                FillRect(hdc, &rect, brush);
-                LRESULT(1) // Return non-zero to indicate we handled it
-            }
-            _ => DefSubclassProc(hwnd, msg, wparam, lparam),
-        }
-    }
-}
 
 /// Runs the application.
 pub fn run() -> Result<()> {
@@ -137,52 +97,44 @@ pub fn run() -> Result<()> {
         let app_ptr = Box::into_raw(app);
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, app_ptr as isize);
 
-        // Create search bar EDIT control
+        // Create WebViews for search and main content
         if let Some(app) = get_app(hwnd) {
             let layout = &app.state().layout;
-            let search_edit = CreateWindowExW(
-                WINDOW_EX_STYLE::default(),
-                w!("EDIT"),
-                w!(""),
-                WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-                layout.search_input.x as i32,
-                layout.search_input.y as i32,
-                layout.search_input.width as i32,
-                layout.search_input.height as i32,
-                Some(hwnd),
-                None,
-                Some(instance.into()),
-                None,
-            )?;
 
-            // Subclass the EDIT control to handle WM_ERASEBKGND directly
-            let _ = SetWindowSubclass(search_edit, Some(edit_subclass_proc), 1, 0);
+            // Search WebView: next to icon, inset from right edge for resize border
+            let search_x = layout.search_input.x as i32;
+            let search_y = layout.search_input.y as i32;
+            let search_width = layout.search_input.width as i32 - RESIZE_BORDER;
+            let search_height = layout.search_input.height as i32;
 
-            // Set placeholder text
-            let placeholder = w!("Search keys...");
-            let _ = SendMessageW(
-                search_edit,
-                EM_SETCUEBANNER,
-                Some(WPARAM(1)),
-                Some(LPARAM(placeholder.as_ptr() as isize)),
-            );
+            init_webview(hwnd, search_x, search_y, search_width, search_height, move |wv| {
+                wv.navigate_to_string(SEARCH_HTML);
+                if let Some(app) = get_app(hwnd) {
+                    app.state_mut().search_webview = Some(wv);
+                }
+            });
 
-            // Store EDIT handle in app state
-            app.state_mut().search_edit = Some(search_edit);
+            // Main WebView: left + right panes combined, inset from edges for resize borders
+            let main_x = RESIZE_BORDER;
+            let main_y = layout.left_pane.y as i32;
+            let main_width = (layout.left_pane.width + layout.divider.width + layout.right_pane.width) as i32
+                - 2 * RESIZE_BORDER;
+            let main_height = layout.left_pane.height as i32 - RESIZE_BORDER;
+
+            init_webview(hwnd, main_x, main_y, main_width, main_height, move |wv| {
+                wv.navigate_to_string(MAIN_HTML);
+                if let Some(app) = get_app(hwnd) {
+                    app.state_mut().main_webview = Some(wv);
+                }
+            });
         }
 
         // Create system tray icon
         add_tray_icon(hwnd)?;
 
-        // Show window, bring to foreground, then set focus to search bar
-        // SetFocus must be called AFTER ShowWindow for the EDIT control to receive input
+        // Show window and bring to foreground
         let _ = ShowWindow(hwnd, SW_SHOW);
         let _ = SetForegroundWindow(hwnd);
-        if let Some(app) = get_app(hwnd)
-            && let Some(search_edit) = app.state().search_edit
-        {
-            let _ = SetFocus(Some(search_edit));
-        }
 
         let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).into() {
@@ -298,20 +250,17 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
                 }
                 DefWindowProcW(hwnd, msg, wparam, lparam)
             }
-            WM_CTLCOLOREDIT => {
-                // Customize EDIT control text colors for dark theme
-                let hdc = HDC(wparam.0 as *mut _);
-                SetTextColor(hdc, EDIT_TEXT_COLORREF);
-                SetBkColor(hdc, EDIT_BG_COLORREF);
-
-                // Return cached background brush (create on first use)
-                let mut brush_handle = EDIT_BG_BRUSH.load(Ordering::Relaxed);
-                if brush_handle == 0 {
-                    let brush = CreateSolidBrush(EDIT_BG_COLORREF);
-                    brush_handle = brush.0 as isize;
-                    EDIT_BG_BRUSH.store(brush_handle, Ordering::Relaxed);
-                }
-                LRESULT(brush_handle)
+            WM_ERASEBKGND => {
+                // No-op background erase.
+                //
+                // With WS_EX_NOREDIRECTIONBITMAP + DirectComposition, erasing the window background
+                // can reveal a white "new area" during interactive resize (especially when expanding
+                // from top/left, where Windows may expose pixels before our next composed frame).
+                //
+                // Returning non-zero tells Windows we've handled background erasure, preventing the
+                // default erase (often white). The composed content (our swapchain) should cover
+                // the client area on the subsequent WM_PAINT.
+                LRESULT(1)
             }
             WM_KEYDOWN => {
                 let virtual_key = wparam.0 as u16;
@@ -370,20 +319,34 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
                 if let Some(app) = get_app(hwnd) {
                     app.resize(width, height);
 
-                    // Reposition EDIT control
-                    if let Some(search_edit) = app.state().search_edit {
-                        let layout = &app.state().layout;
-                        let _ = SetWindowPos(
-                            search_edit,
-                            None,
-                            layout.search_input.x as i32,
-                            layout.search_input.y as i32,
-                            layout.search_input.width as i32,
-                            layout.search_input.height as i32,
-                            SWP_NOZORDER,
-                        );
+                    let layout = &app.state().layout;
+
+                    // Resize search WebView
+                    if let Some(ref search_wv) = app.state().search_webview {
+                        let search_x = layout.search_input.x as i32;
+                        let search_y = layout.search_input.y as i32;
+                        let search_width = layout.search_input.width as i32 - RESIZE_BORDER;
+                        let search_height = layout.search_input.height as i32;
+                        search_wv.set_bounds(search_x, search_y, search_width, search_height);
+                    }
+
+                    // Resize main WebView
+                    if let Some(ref main_wv) = app.state().main_webview {
+                        let main_x = RESIZE_BORDER;
+                        let main_y = layout.left_pane.y as i32;
+                        let main_width = (layout.left_pane.width + layout.divider.width + layout.right_pane.width) as i32
+                            - 2 * RESIZE_BORDER;
+                        let main_height = layout.left_pane.height as i32 - RESIZE_BORDER;
+                        main_wv.set_bounds(main_x, main_y, main_width, main_height);
                     }
                 }
+
+                // During interactive resize, Windows may expose new client pixels and show the
+                // default erase color before our next paint. Force an immediate repaint so the
+                // DComp surface catches up and the new area is filled with theme colors.
+                let _ = InvalidateRect(Some(hwnd), None, false);
+                let _ = UpdateWindow(hwnd);
+
                 LRESULT(0)
             }
             WM_PAINT => {
