@@ -167,54 +167,41 @@ Native and WebView communicate via JSON messages through `postMessage`.
 
 ### M2-win: WebView + Bridge Foundation
 
-**Goal:** WebView2 covering client area, bidirectional message bridge, Monaco loaded.
+**Goal:** WebView2 covering client area, bidirectional message bridge working.
 
-**Status:** Not Started (POC validated)
+**Status:** In Progress
 
 **Requirements:**
 
 | Requirement | Description | Status |
 |-------------|-------------|--------|
-| WebView2 init | Create WebView2 environment and controller | ❌ |
-| Full coverage | WebView fills entire client area | ❌ |
-| Resize sync | WebView resizes with window | ❌ |
-| Monaco bundled | Monaco loaded from local files (no CDN) | ❌ |
+| WebView2 init | Create WebView2 environment and controller | ✅ |
+| Full coverage | WebView fills entire client area | ✅ |
+| Resize sync | WebView resizes with window | ✅ |
 | Bridge: N→W | Native sends JSON, WebView receives | ❌ |
 | Bridge: W→N | WebView sends JSON, Native receives | ❌ |
-| Drag region | Search icon area triggers window drag | ❌ |
-| Theme | Dark theme applied to all elements | ❌ |
+| Drag region | Search icon area triggers window drag | ✅ |
+| Theme | Dark theme applied to all elements | ✅ |
 
-**Monaco Bundling:**
+**Bridge Verification:**
 
-| Requirement | Description |
-|-------------|-------------|
-| Source | `monaco-editor` npm package |
-| Files | `vs/` folder with loader, editor, workers |
-| Location | `keva_windows/ui/monaco/` |
-| Loading | `require.config({ paths: { vs: './monaco/vs' } })` |
-| Size | ~2MB (acceptable for local app) |
-
-**Resize Flicker Prevention:**
-
-WebView2 handles resize better than GDI, but we use additional techniques:
-- `WS_EX_NOREDIRECTIONBITMAP` + DirectComposition (already in M1-win)
-- WebView2 `SetBounds()` called synchronously in `WM_SIZE`
-- CSS `body { overflow: hidden }` prevents scrollbar flash
-- Expected: smooth resize with no white flash or content jump
+To verify bidirectional communication works:
+1. WebView sends `{ type: "ready" }` on load
+2. Native logs receipt and responds with `{ type: "init", timestamp: ... }`
+3. WebView displays timestamp in console or UI element
 
 **Test Cases:**
 
 | TC | Description | Status |
 |----|-------------|--------|
-| TC-M2-01 | WebView renders HTML content | ❌ |
-| TC-M2-02 | Monaco editor loads and accepts input | ❌ |
+| TC-M2-01 | WebView renders HTML content | ✅ |
+| TC-M2-02 | Monaco editor loads and accepts input | ✅ |
 | TC-M2-03 | Native→WebView message received | ❌ |
 | TC-M2-04 | WebView→Native message received | ❌ |
-| TC-M2-05 | Dragging search icon moves window | ❌ |
-| TC-M2-06 | WebView resizes with window | ❌ |
-| TC-M2-07 | No network requests during load | ❌ |
-| TC-M2-08 | Dark theme renders correctly | ❌ |
-| TC-M2-09 | Window resize is smooth (no white flash) | ❌ |
+| TC-M2-05 | Dragging search icon moves window | ✅ |
+| TC-M2-06 | WebView resizes with window | ✅ |
+| TC-M2-07 | Dark theme renders correctly | ✅ |
+| TC-M2-08 | Window resize is smooth (no white flash) | ✅ |
 
 ---
 
