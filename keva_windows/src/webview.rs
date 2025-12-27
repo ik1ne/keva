@@ -1,8 +1,6 @@
 //! WebView2 initialization and management.
 
 use std::ffi::c_void;
-use std::sync::OnceLock;
-use std::sync::mpsc::Sender;
 
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_COLOR, CreateCoreWebView2Environment, ICoreWebView2, ICoreWebView2Controller,
@@ -17,8 +15,6 @@ use windows::Win32::Foundation::{HWND, RECT};
 use windows::Win32::System::Com::CoTaskMemFree;
 use windows::core::{Interface, PWSTR};
 use windows_strings::PCWSTR;
-
-static MESSAGE_SENDER: OnceLock<Sender<String>> = OnceLock::new();
 
 pub struct WebView {
     controller: ICoreWebView2Controller,
@@ -63,10 +59,6 @@ impl WebView {
     }
 }
 
-#[expect(dead_code)]
-pub fn set_message_sender(sender: Sender<String>) {
-    let _ = MESSAGE_SENDER.set(sender);
-}
 
 /// Initializes a WebView2 at the specified position.
 /// WebView2 creation is async because it may need to download the runtime.
@@ -151,16 +143,16 @@ fn setup_webview(controller: ICoreWebView2Controller) -> Option<ICoreWebView2> {
         let mut token = 0i64;
         let _ = webview.add_WebMessageReceived(
             &WebMessageReceivedEventHandler::create(Box::new(
-                |_webview, args: Option<ICoreWebView2WebMessageReceivedEventArgs>| {
+                |webview_opt, args: Option<ICoreWebView2WebMessageReceivedEventArgs>| {
                     if let Some(args) = args {
                         let mut message = PWSTR::null();
                         if args.TryGetWebMessageAsString(&mut message).is_ok() && !message.is_null()
                         {
                             let msg_str = pwstr_to_string(message);
-                            if let Some(sender) = MESSAGE_SENDER.get() {
-                                let _ = sender.send(msg_str);
-                            }
                             CoTaskMemFree(Some(message.as_ptr() as *const c_void));
+
+                            // Handle incoming messages
+                            handle_webview_message(webview_opt.as_ref(), &msg_str);
                         }
                     }
                     Ok(())
@@ -171,6 +163,42 @@ fn setup_webview(controller: ICoreWebView2Controller) -> Option<ICoreWebView2> {
 
         Some(webview)
     }
+}
+
+/// Handles messages from WebView and sends responses.
+fn handle_webview_message(webview: Option<&ICoreWebView2>, msg: &str) {
+    // Parse JSON message
+    if let Some(msg_type) = parse_message_type(msg) {
+        match msg_type {
+            "ready" => {
+                eprintln!("[Native] Received 'ready' from WebView");
+                // Respond with init message
+                if let Some(wv) = webview {
+                    let timestamp = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_millis())
+                        .unwrap_or(0);
+                    let response = format!(r#"{{"type":"init","timestamp":{}}}"#, timestamp);
+                    let response_pwstr = pwstr_from_str(&response);
+                    let _ = unsafe { wv.PostWebMessageAsJson(response_pwstr) };
+                    eprintln!("[Native] Sent 'init' to WebView");
+                }
+            }
+            other => {
+                eprintln!("[Native] Received message type: {}", other);
+            }
+        }
+    }
+}
+
+/// Simple JSON parser to extract message type.
+fn parse_message_type(json: &str) -> Option<&str> {
+    // Look for "type":"<value>" pattern
+    let type_start = json.find(r#""type":""#)?;
+    let value_start = type_start + 8; // length of "type":"
+    let remaining = &json[value_start..];
+    let value_end = remaining.find('"')?;
+    Some(&remaining[..value_end])
 }
 
 fn pwstr_to_string(pwstr: PWSTR) -> String {

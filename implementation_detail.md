@@ -19,9 +19,16 @@ keva/
 ├── ffi/            # keva_ffi - C FFI bindings for macOS (PLACEHOLDER)
 ├── keva_windows/   # Windows GUI app (IN PROGRESS)
 │   └── src/
-│       ├── main.rs     # Window creation, message loop, tray icon
-│       ├── app.rs      # App state, keva_core integration
-│       └── renderer.rs # Direct2D rendering
+│       ├── main.rs       # Entry point
+│       ├── app.rs        # App state coordinator
+│       ├── webview.rs    # WebView2 initialization and message handling
+│       ├── templates.rs  # HTML template embedding
+│       ├── ui_html/      # WebView UI (HTML/CSS/JS)
+│       │   └── app.html  # Unified app interface
+│       └── platform/     # Win32 window management
+│           ├── window.rs # Window creation, message loop
+│           ├── hit_test.rs # Resize border detection
+│           └── tray.rs   # System tray integration
 ├── app-macos/      # macOS GUI app (NOT STARTED)
 ├── Spec.md         # Functional specification
 ├── Planned.md      # Future features (CLI, rich formats, etc.)
@@ -255,51 +262,6 @@ engine.maintenance_compact()
 
 ---
 
-## Implementation Status
-
-### Windows App (`keva_windows`)
-
-**M1-win Complete** - Window skeleton with tray integration.
-
-| Feature                        | Status         | Milestone |
-|--------------------------------|----------------|-----------|
-| Borderless window              | ✅ Complete    | M1        |
-| System tray icon               | ✅ Complete    | M1        |
-| Tray left-click toggles window | ✅ Complete    | M1        |
-| Tray right-click menu          | ✅ Complete    | M1        |
-| Resize from edges (5px)        | ✅ Complete    | M1        |
-| Esc hides window               | ✅ Complete    | M1        |
-| Alt+Tab visibility             | ✅ Complete    | M1        |
-| Direct2D rendering             | ✅ Complete    | M1        |
-| Layout (search/left/right)     | ❌ Pending     | M2        |
-| keva_core integration          | ❌ Pending     | M3        |
-| Key list display               | ❌ Pending     | M3        |
-| Text preview (Rich Edit)       | ❌ Pending     | M5        |
-| File preview (IPreviewHandler) | ❌ Pending     | M13       |
-| Clipboard paste to create      | ❌ Pending     | M6        |
-| Fuzzy search                   | ❌ Pending     | M7        |
-| Global hotkey                  | ❌ Pending     | M16       |
-| Settings dialog                | ❌ Pending     | M15       |
-
-### macOS App (`app-macos`)
-
-| Feature          | Status    |
-|------------------|-----------|
-| FFI layer        | ⏳ Pending |
-| App skeleton     | ⏳ Pending |
-| Core integration | ⏳ Pending |
-
-### From Planned.md (Future Scope)
-
-| Feature                                 | Status          |
-|-----------------------------------------|-----------------|
-| CLI interface                           | Not v1 scope    |
-| Regex search mode                       | Not implemented |
-| Rich format support (HTML, RTF, images) | Not implemented |
-| Value content search                    | Not implemented |
-
----
-
 ## Architecture Summary
 
 ```
@@ -321,10 +283,10 @@ keva_search (Fuzzy Search - Rust)
 
 keva_windows (Windows GUI - Rust)
 ├── Win32 API via `windows` crate
-├── Direct2D for custom rendering
-├── DirectWrite for text
-├── keva_search for fuzzy search
-└── Native controls (Rich Edit, IPreviewHandler)
+├── Single WebView2 (full-window)
+├── HTML/CSS/JS UI with Monaco Editor
+├── CSS app-region: drag for window dragging
+└── keva_search for fuzzy search
 
 app-macos (macOS GUI - Swift, planned)
 ├── AppKit/Cocoa
@@ -343,6 +305,6 @@ app-macos (macOS GUI - Swift, planned)
 **Windows-Specific Notes**:
 
 - Taskbar icon remains visible (hiding breaks Alt+Tab - Windows limitation)
-- Uses Direct2D + DirectWrite for custom key list rendering
-- Native Rich Edit control for text preview
-- IPreviewHandler for file preview (same as Explorer)
+- Single WebView2 renders all UI (see `research/single_webview_architecture.md`)
+- Monaco Editor for text editing
+- File attachments: filename/icon display, "Open in default app" action

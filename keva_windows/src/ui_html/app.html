@@ -71,6 +71,20 @@
             color: #808080;
         }
 
+        .bridge-status {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .bridge-status.connected {
+            color: #4ec9b0;
+        }
+
         /* Main content */
         .main-content {
             display: flex;
@@ -199,6 +213,7 @@
     <div class="search-bar">
         <div class="search-icon">&#128269;</div>
         <input type="text" class="search-input" id="search-input" placeholder="Search keys...">
+        <div class="bridge-status" id="bridge-status">⏳</div>
     </div>
     <div class="main-content">
         <div class="left-pane">
@@ -349,6 +364,14 @@
 
             case 'focus':
                 searchInput.focus();
+                break;
+
+            case 'init':
+                // Bridge connection confirmed
+                console.log('[WebView] Received init from Native, timestamp:', msg.timestamp);
+                const statusEl = document.getElementById('bridge-status');
+                statusEl.textContent = '✓';
+                statusEl.classList.add('connected');
                 break;
         }
     });
