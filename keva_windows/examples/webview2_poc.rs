@@ -14,8 +14,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::ffi::c_void;
-use std::sync::Mutex;
 use std::sync::mpsc::{self, Sender};
+use std::sync::Mutex;
 
 use once_cell::sync::Lazy;
 
@@ -25,8 +25,8 @@ use webview2_com::Microsoft::Web::WebView2::Win32::{
     ICoreWebView2Environment, ICoreWebView2WebMessageReceivedEventArgs,
 };
 use webview2_com::{
-    CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
-    WebMessageReceivedEventHandler, pwstr_from_str,
+    pwstr_from_str, CreateCoreWebView2ControllerCompletedHandler,
+    CreateCoreWebView2EnvironmentCompletedHandler, WebMessageReceivedEventHandler,
 };
 
 /// Window dimensions
@@ -194,6 +194,7 @@ struct WvRECT {
 #[repr(transparent)]
 #[derive(Clone, Copy)]
 struct WvHWND(pub *mut c_void);
+
 
 /// EventRegistrationToken for WebView2
 #[repr(C)]
@@ -495,12 +496,14 @@ unsafe fn create_button(parent: isize, instance: isize, id: u16, text: &str, x: 
 fn init_webview2(hwnd: isize) {
     unsafe {
         let _ = CreateCoreWebView2Environment(
-            &CreateCoreWebView2EnvironmentCompletedHandler::create(Box::new(move |_error, env| {
-                if let Some(env) = env {
-                    create_controller(hwnd, env);
-                }
-                Ok(())
-            })),
+            &CreateCoreWebView2EnvironmentCompletedHandler::create(Box::new(
+                move |_error, env| {
+                    if let Some(env) = env {
+                        create_controller(hwnd, env);
+                    }
+                    Ok(())
+                },
+            )),
         );
     }
 }

@@ -1,5 +1,17 @@
 //! Keva Windows application.
+//!
+//! A borderless window with system tray integration for the Keva clipboard manager.
 
-fn main() {
-    println!("Keva Windows - TODO: implement M2-win");
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+mod app;
+mod platform;
+mod render;
+mod state;
+mod ui;
+
+use windows::core::Result;
+
+fn main() -> Result<()> {
+    platform::window::run()
 }

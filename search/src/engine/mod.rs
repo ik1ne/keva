@@ -113,10 +113,8 @@ impl SearchEngine {
             Normalization::Never
         };
 
-        self.active
-            .set_pattern(pattern, case_matching, normalization);
-        self.trash
-            .set_pattern(pattern, case_matching, normalization);
+        self.active.set_pattern(pattern, case_matching, normalization);
+        self.trash.set_pattern(pattern, case_matching, normalization);
 
         self.active_finished = false;
         self.trashed_finished = false;
