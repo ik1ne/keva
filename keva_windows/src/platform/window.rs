@@ -8,9 +8,7 @@ use crate::platform::{
         remove_tray_icon, show_tray_menu,
     },
 };
-use crate::render::theme::{
-    MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, RESIZE_BORDER, WINDOW_HEIGHT, WINDOW_WIDTH,
-};
+use crate::render::theme::{MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_WIDTH};
 use crate::templates::APP_HTML_W;
 use crate::webview::init_webview;
 use std::sync::atomic::{AtomicIsize, Ordering};
@@ -29,14 +27,15 @@ use windows::{
                 CreateWindowExW, DefWindowProcW, DispatchMessageW, GWLP_USERDATA, GetMessageW,
                 GetSystemMetrics, GetWindowLongPtrW, GetWindowRect, IDC_ARROW, IsWindowVisible,
                 LoadCursorW, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, PostQuitMessage, RegisterClassW,
-                SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_SHOW, SWP_FRAMECHANGED, SWP_NOCOPYBITS,
-                SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, SetForegroundWindow,
-                SetWindowLongPtrW, SetWindowPos, ShowWindow, TranslateMessage,
-                USER_DEFAULT_SCREEN_DPI, WINDOWPOS, WM_ACTIVATE, WM_COMMAND, WM_CREATE,
-                WM_DESTROY, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN, WM_LBUTTONUP,
-                WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT, WM_RBUTTONUP, WM_SIZE,
-                WM_WINDOWPOSCHANGING, WNDCLASSW, WS_CLIPCHILDREN, WS_EX_APPWINDOW, WS_EX_TOPMOST,
-                WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SIZEBOX, WS_SYSMENU, WVR_VALIDRECTS,
+                SM_CXPADDEDBORDER, SM_CXSCREEN, SM_CXSIZEFRAME, SM_CYSCREEN, SM_CYSIZEFRAME,
+                SW_HIDE, SW_SHOW, SWP_FRAMECHANGED, SWP_NOCOPYBITS, SWP_NOMOVE, SWP_NOOWNERZORDER,
+                SWP_NOSIZE, SWP_NOZORDER, SetForegroundWindow, SetWindowLongPtrW, SetWindowPos,
+                ShowWindow, TranslateMessage, USER_DEFAULT_SCREEN_DPI, WINDOWPOS, WM_ACTIVATE,
+                WM_COMMAND, WM_CREATE, WM_DESTROY, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN,
+                WM_LBUTTONUP, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT, WM_RBUTTONUP,
+                WM_SIZE, WM_WINDOWPOSCHANGING, WNDCLASSW, WS_CLIPCHILDREN, WS_EX_APPWINDOW,
+                WS_EX_TOPMOST, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SIZEBOX, WS_SYSMENU,
+                WVR_VALIDRECTS,
             },
         },
     },
@@ -48,6 +47,16 @@ fn scale_for_dpi(logical: i32, dpi: u32) -> i32 {
     (logical as i64 * dpi as i64 / USER_DEFAULT_SCREEN_DPI as i64) as i32
 }
 
+/// Returns the resize border size using system metrics.
+fn get_resize_border() -> (i32, i32) {
+    unsafe {
+        let padded = GetSystemMetrics(SM_CXPADDEDBORDER);
+        let border_x = GetSystemMetrics(SM_CXSIZEFRAME) + padded;
+        let border_y = GetSystemMetrics(SM_CYSIZEFRAME) + padded;
+        (border_x, border_y)
+    }
+}
+
 /// Stores the previously focused window to restore on Esc.
 static PREV_FOREGROUND: AtomicIsize = AtomicIsize::new(0);
 
@@ -57,7 +66,7 @@ pub fn run() -> Result<()> {
         let instance = GetModuleHandleW(None)?;
         let class_name = w!("KevaWindowClass");
 
-        // Create a dark background brush for resize border areas
+        // Dark background for resize border areas
         let bg_brush = CreateSolidBrush(COLORREF(0x001a1a1a)); // #1a1a1a in BGR
 
         let wc = WNDCLASSW {
@@ -110,14 +119,15 @@ pub fn run() -> Result<()> {
         let app_ptr = Box::into_raw(app);
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, app_ptr as isize);
 
-        // Create single WebView covering the entire window (with resize border insets on all sides)
-        let resize_border = scale_for_dpi(RESIZE_BORDER, dpi);
-        let wv_x = resize_border;
-        let wv_y = resize_border;
-        let wv_width = window_width - 2 * resize_border;
-        let wv_height = window_height - 2 * resize_border;
-
-        init_webview(hwnd, wv_x, wv_y, wv_width, wv_height, move |wv| {
+        // Create WebView with resize border insets
+        let (border_x, border_y) = get_resize_border();
+        init_webview(
+            hwnd,
+            border_x,
+            border_y,
+            window_width - 2 * border_x,
+            window_height - 2 * border_y,
+            move |wv| {
             wv.navigate_html(APP_HTML_W);
             if let Some(app) = get_app(hwnd) {
                 app.state_mut().webview = Some(wv);
@@ -302,22 +312,17 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
                 // SIZE_MAXIMIZED = 2: window is maximized or snapped
                 let is_maximized = size_type == 2;
 
-                // Resize WebView to fill window
-                // When maximized/snapped, use full window; otherwise inset for resize borders
+                // Resize WebView with border insets (none when maximized)
                 if let Some(app) = get_app(hwnd)
                     && let Some(wv) = &app.state().webview
                 {
-                    let (wv_x, wv_y, wv_width, wv_height) = if is_maximized {
+                    let (x, y, w, h) = if is_maximized {
                         (0, 0, width, height)
                     } else {
-                        (
-                            RESIZE_BORDER,
-                            RESIZE_BORDER,
-                            width - 2 * RESIZE_BORDER,
-                            height - 2 * RESIZE_BORDER,
-                        )
+                        let (border_x, border_y) = get_resize_border();
+                        (border_x, border_y, width - 2 * border_x, height - 2 * border_y)
                     };
-                    wv.set_bounds(wv_x, wv_y, wv_width, wv_height);
+                    wv.set_bounds(x, y, w, h);
                 }
 
                 LRESULT(0)

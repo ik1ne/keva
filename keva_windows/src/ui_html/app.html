@@ -45,7 +45,6 @@
             font-size: 18px;
             color: #969696;
             flex-shrink: 0;
-            cursor: move;
             -webkit-app-region: drag;
             app-region: drag;
         }
@@ -248,19 +247,19 @@
 
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
-            sendToNative({ type: 'hide' });
+            sendToNative({type: 'hide'});
         }
     });
 
     searchInput.addEventListener('input', (e) => {
-        sendToNative({ type: 'search', query: e.target.value });
+        sendToNative({type: 'search', query: e.target.value});
     });
 
     searchInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             const query = searchInput.value.trim();
             if (query) {
-                sendToNative({ type: 'create', key: query });
+                sendToNative({type: 'create', key: query});
             }
         } else if (e.key === 'ArrowDown') {
             e.preventDefault();
@@ -275,21 +274,21 @@
         }
     }
 
-    require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' }});
-    require(['vs/editor/editor.main'], function() {
+    require.config({paths: {'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs'}});
+    require(['vs/editor/editor.main'], function () {
         editor = monaco.editor.create(document.getElementById('editor-container'), {
             value: '',
             language: 'plaintext',
             theme: 'vs-dark',
             automaticLayout: true,
-            minimap: { enabled: false },
+            minimap: {enabled: false},
             fontSize: 14,
             wordWrap: 'on',
             scrollBeyondLastLine: false,
             readOnly: true
         });
 
-        sendToNative({ type: 'ready' });
+        sendToNative({type: 'ready'});
     });
 
     const keyList = document.getElementById('key-list');
@@ -357,7 +356,7 @@
 
             case 'forceSave':
                 forceSave();
-                sendToNative({ type: 'saveComplete' });
+                sendToNative({type: 'saveComplete'});
                 break;
 
             case 'focus':
@@ -414,18 +413,18 @@
         }
         selectedKey = keyName;
         updateSelection();
-        sendToNative({ type: 'select', key: keyName });
+        sendToNative({type: 'select', key: keyName});
     }
 
     function renameKey(keyName) {
         const newName = prompt('Rename key:', keyName);
         if (newName && newName !== keyName) {
-            sendToNative({ type: 'rename', oldKey: keyName, newKey: newName });
+            sendToNative({type: 'rename', oldKey: keyName, newKey: newName});
         }
     }
 
     function deleteKey(keyName) {
-        sendToNative({ type: 'trash', key: keyName });
+        sendToNative({type: 'trash', key: keyName});
     }
 
     function showEditor(content) {
