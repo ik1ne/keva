@@ -635,10 +635,12 @@ Flow:
 |----------|---------|---------|--------|
 | General | Theme | Dropdown | Dark / Light / System |
 | General | Launch at Login | Checkbox | On / Off |
+| General | Show Tray Icon | Checkbox | On / Off |
 | Shortcuts | Global Shortcut | Key capture | Modifier+Key |
 | Data | Delete Style | Dropdown | Soft / Immediate |
 | Data | Large File Threshold | Number | Bytes (default 256MB) |
 | Lifecycle | Trash TTL | Number | Days (default 30) |
+| Lifecycle | Purge TTL | Number | Days (default 7) |
 
 **Test Cases:**
 
@@ -648,6 +650,8 @@ Flow:
 | TC-M12-02 | Theme change applies immediately | ❌ |
 | TC-M12-03 | Settings persist after restart | ❌ |
 | TC-M12-04 | Esc closes settings dialog | ❌ |
+| TC-M12-05 | Show Tray Icon toggle hides/shows tray icon | ❌ |
+| TC-M12-06 | Purge TTL change affects trash cleanup timing | ❌ |
 
 ---
 

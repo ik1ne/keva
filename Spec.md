@@ -246,6 +246,7 @@ Search bar and left pane selection are independent:
     - If clipboard contains plain text → insert at cursor
     - If clipboard contains only files → show hint: "Press Ctrl+V again to overwrite" (2-second timeout)
 - Auto-save after 3 seconds of inactivity (since last keystroke)
+- Auto-save on focus loss (when editor loses focus to search bar or left pane)
 - Auto-save on window hide or app quit
 
 **Files Value State:**
@@ -416,7 +417,7 @@ Same rules as drag & drop apply to pasted files.
 
 ### Data Directory
 
-Default location: `%APPDATA%\Keva`
+Default location: `%LOCALAPPDATA%\keva`
 
 Override via environment variable: `KEVA_DATA_DIR`
 
