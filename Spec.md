@@ -195,13 +195,13 @@ to where it was before leaving.
 
 **Search Bar States:**
 
-| State                         | Text Style       | Button | Right Pane                    |
-|-------------------------------|------------------|--------|-------------------------------|
-| Empty                         | Gray placeholder | Hidden | Empty                         |
-| Text, key exists              | Normal           | ✏️ Pen | Existing key's value          |
-| Text, key doesn't exist       | Normal           | ➕ Plus | "Press Enter to add {key}..." |
-| Inactive (left pane focused)  | Dimmed gray      | Hidden | Selected key's value          |
-| Inactive (right pane focused) | Dimmed gray      | Hidden | Editing selected key          |
+| State                         | Text Style       | Button | Right Pane                                         |
+|-------------------------------|------------------|--------|----------------------------------------------------|
+| Empty                         | Gray placeholder | Hidden | "Type a key name in the search bar to get started" |
+| Text, key exists              | Normal           | ✏️ Pen | Existing key's value                               |
+| Text, key doesn't exist       | Normal           | ➕ Plus | "Press Enter to add {key}..."                      |
+| Inactive (left pane focused)  | Dimmed gray      | Hidden | Selected key's value                               |
+| Inactive (right pane focused) | Dimmed gray      | Hidden | Editing selected key                               |
 
 **Button Tooltips:**
 
@@ -269,6 +269,7 @@ Each active key displays on hover/selection:
 
 - **Rename button (pen icon):** Opens inline editor to modify key.
     - If rename target exists: confirmation prompt, target key is permanently overwritten (no restoration)
+    - Invalid key names (empty, >256 chars) rejected with inline error message
 - **Delete button (trash icon):** Deletes the key (follows configured delete style).
 
 **Trashed Key Controls:**
@@ -377,8 +378,7 @@ activates the existing instance's window) and pressing `Ctrl+,`.
 
 **File Append Behavior:**
 
-- Duplicate files with same BLAKE3 hash are silently ignored
-- Duplicate filenames with different content are allowed (display shows size to distinguish)
+- Duplicate filenames are allowed (display shows size to distinguish)
 
 **Large File Handling:**
 
@@ -392,16 +392,21 @@ activates the existing instance's window) and pressing `Ctrl+,`.
 
 **Context-Aware Paste (`Ctrl+V`):**
 
-| Focus                    | Clipboard | Action                                              |
-|--------------------------|-----------|-----------------------------------------------------|
-| Search bar               | Text      | Insert text into search bar (as query)              |
-| Search bar               | Files     | Create/update key value for search bar text         |
-| Right pane (text editor) | Text      | Insert at cursor                                    |
-| Right pane (text editor) | Files     | Show warning, Ctrl+V again to overwrite             |
-| Right pane (files list)  | Text      | Show warning, Ctrl+V again to overwrite             |
-| Right pane (files list)  | Files     | Silent append                                       |
-| Left pane (key selected) | Text      | Show warning if Files value; replace if Text value  |
-| Left pane (key selected) | Files     | Silent append if Files value; replace if Text/empty |
+| Focus                    | Clipboard | Action                                                   |
+|--------------------------|-----------|----------------------------------------------------------|
+| Search bar               | Text      | Insert text into search bar (as query)                   |
+| Search bar               | Files     | Create/update key value; if search bar empty, show toast |
+| Right pane (text editor) | Text      | Insert at cursor                                         |
+| Right pane (text editor) | Files     | Show warning, Ctrl+V again to overwrite                  |
+| Right pane (files list)  | Text      | Show warning, Ctrl+V again to overwrite                  |
+| Right pane (files list)  | Files     | Silent append                                            |
+| Left pane (key selected) | Text      | Show warning if Files value; replace if Text value       |
+| Left pane (key selected) | Files     | Silent append if Files value; replace if Text/empty      |
+
+**Empty Search Bar + Paste Files:**
+
+- Toast message: "Enter a key name first"
+- No action taken (files not stored)
 
 **Overwrite Warning:**
 
