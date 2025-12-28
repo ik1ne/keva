@@ -169,7 +169,7 @@ Native and WebView communicate via JSON messages through `postMessage`.
 
 **Goal:** WebView2 covering client area, bidirectional message bridge working.
 
-**Status:** In Progress
+**Status:** Complete
 
 **Requirements:**
 
@@ -178,8 +178,8 @@ Native and WebView communicate via JSON messages through `postMessage`.
 | WebView2 init | Create WebView2 environment and controller | ✅ |
 | Full coverage | WebView fills entire client area | ✅ |
 | Resize sync | WebView resizes with window | ✅ |
-| Bridge: N→W | Native sends JSON, WebView receives | ❌ |
-| Bridge: W→N | WebView sends JSON, Native receives | ❌ |
+| Bridge: N→W | Native sends JSON, WebView receives | ✅ |
+| Bridge: W→N | WebView sends JSON, Native receives | ✅ |
 | Drag region | Search icon area triggers window drag | ✅ |
 | Theme | Dark theme applied to all elements | ✅ |
 
@@ -196,8 +196,8 @@ To verify bidirectional communication works:
 |----|-------------|--------|
 | TC-M2-01 | WebView renders HTML content | ✅ |
 | TC-M2-02 | Monaco editor loads and accepts input | ✅ |
-| TC-M2-03 | Native→WebView message received | ❌ |
-| TC-M2-04 | WebView→Native message received | ❌ |
+| TC-M2-03 | Native→WebView message received | ✅ |
+| TC-M2-04 | WebView→Native message received | ✅ |
 | TC-M2-05 | Dragging search icon moves window | ✅ |
 | TC-M2-06 | WebView resizes with window | ✅ |
 | TC-M2-07 | Dark theme renders correctly | ✅ |
