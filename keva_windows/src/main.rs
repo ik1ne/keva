@@ -8,11 +8,13 @@ mod app;
 mod platform;
 mod render;
 mod state;
+mod storage;
 mod templates;
 mod webview;
 
 use windows::core::Result;
 
 fn main() -> Result<()> {
+    storage::init();
     platform::window::run()
 }

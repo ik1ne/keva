@@ -218,7 +218,7 @@ To verify bidirectional communication works:
 | Requirement | Description | Status |
 |-------------|-------------|--------|
 | keva_core init | Initialize on startup | ❌ |
-| Data directory | `%APPDATA%\Keva` or `KEVA_DATA_DIR` | ❌ |
+| Data directory | `%LOCALAPPDATA%\keva` or `KEVA_DATA_DIR` | ❌ |
 | Key list | Display all active keys in left pane | ❌ |
 | Scrolling | Key list scrolls when needed | ❌ |
 | Click to select | Clicking key selects it | ❌ |

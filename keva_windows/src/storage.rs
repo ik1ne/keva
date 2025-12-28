@@ -23,7 +23,7 @@ pub fn init() {
 
     let keva = KevaCore::open(config).expect("Failed to open keva database");
     KEVA.set(Mutex::new(keva))
-        .expect("Storage already initialized");
+        .unwrap_or_else(|_| panic!("Storage already initialized"));
 
     eprintln!("[Storage] Initialized at {}", get_data_path().display());
 }

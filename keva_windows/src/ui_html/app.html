@@ -285,14 +285,8 @@
             minimap: { enabled: false },
             fontSize: 14,
             wordWrap: 'on',
-            scrollBeyondLastLine: false
-        });
-
-        editor.onDidChangeModelContent(() => {
-            if (selectedKey) {
-                isDirty = true;
-                scheduleSave();
-            }
+            scrollBeyondLastLine: false,
+            readOnly: true
         });
 
         sendToNative({ type: 'ready' });
@@ -343,10 +337,14 @@
                 break;
 
             case 'value':
-                if (msg.value && msg.value.type === 'text') {
-                    showEditor(msg.value.content);
+                if (msg.value) {
+                    if (msg.value.type === 'text') {
+                        showEditor(msg.value.content);
+                    } else if (msg.value.type === 'files') {
+                        showEmptyState(`${msg.value.count} file(s)`);
+                    }
                 } else {
-                    showEmptyState('No content');
+                    showEmptyState('Key not found');
                 }
                 break;
 
@@ -381,8 +379,8 @@
             <div class="key-item" data-key="${escapeHtml(key.name)}" onclick="selectKey('${escapeJs(key.name)}')">
                 <span class="key-name">${escapeHtml(key.name)}</span>
                 <div class="key-actions">
-                    <button class="key-action-btn" onclick="event.stopPropagation(); renameKey('${escapeJs(key.name)}')" title="Rename">R</button>
-                    <button class="key-action-btn" onclick="event.stopPropagation(); deleteKey('${escapeJs(key.name)}')" title="Delete">X</button>
+                    <button class="key-action-btn" onclick="event.stopPropagation(); renameKey('${escapeJs(key.name)}')" title="Rename">&#9998;</button>
+                    <button class="key-action-btn" onclick="event.stopPropagation(); deleteKey('${escapeJs(key.name)}')" title="Delete">&#128465;</button>
                 </div>
             </div>
         `).join('');
