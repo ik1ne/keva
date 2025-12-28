@@ -5,10 +5,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
+mod keva_worker;
 mod platform;
 mod render;
-mod state;
-mod storage;
 mod templates;
 mod webview;
 
@@ -18,9 +17,6 @@ use windows::Win32::UI::HiDpi::{
 use windows::core::Result;
 
 fn main() -> Result<()> {
-    unsafe {
-        let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-    };
-    storage::init();
+    let _ = unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
     platform::window::run()
 }
