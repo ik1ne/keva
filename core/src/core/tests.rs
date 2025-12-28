@@ -382,7 +382,6 @@ mod trash {
 }
 
 mod rename {
-    use super::common::{create_test_storage, make_key};
     use super::*;
 
     #[test]
@@ -517,7 +516,6 @@ mod keys {
 }
 
 mod touch {
-    use super::common::{create_test_storage, make_key};
     use super::*;
 
     #[test]
@@ -682,7 +680,6 @@ mod restore {
 }
 
 mod purge {
-    use super::common::{create_test_storage, make_key};
     use super::*;
 
     #[test]

@@ -1,8 +1,9 @@
 //! WebView2 initialization and management.
 
+use crate::storage;
+use keva_core::types::{ClipData, Key, TextContent};
 use std::ffi::c_void;
 use std::time::SystemTime;
-
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_COLOR, CreateCoreWebView2Environment, ICoreWebView2, ICoreWebView2Controller,
     ICoreWebView2Controller2, ICoreWebView2Environment, ICoreWebView2Settings9,
@@ -16,8 +17,6 @@ use windows::Win32::Foundation::{HWND, RECT};
 use windows::Win32::System::Com::CoTaskMemFree;
 use windows::core::{Interface, PWSTR};
 use windows_strings::PCWSTR;
-
-use crate::storage;
 
 pub struct WebView {
     controller: ICoreWebView2Controller,
@@ -226,8 +225,6 @@ fn send_keys(wv: &ICoreWebView2) {
 }
 
 fn send_value(wv: &ICoreWebView2, key_str: &str) {
-    use keva_core::types::{ClipData, Key, TextContent};
-
     let now = SystemTime::now();
     let result = storage::with_keva(|keva| {
         let key = Key::try_from(key_str).ok()?;

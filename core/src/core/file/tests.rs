@@ -1,3 +1,13 @@
+use crate::core::file::*;
+use crate::types::value::versioned_value::ValueVariant;
+use crate::types::value::versioned_value::latest_value::{BlobStoredFileData, FileData, Value};
+use common::*;
+use std::borrow::Cow;
+use std::ffi::OsString;
+use std::io::Write;
+use std::path::Path;
+use tempfile::tempdir;
+
 mod common {
     use crate::core::file::{FileStorage, TEXT_FILE_NAME, TextData};
     use crate::types::value::versioned_value::ValueVariant;
@@ -110,12 +120,9 @@ mod common {
         result
     }
 }
+
 mod store_file {
-    use crate::core::file::tests::common::store_blob_file;
-    use crate::core::file::*;
-    use std::ffi::OsString;
-    use std::io::Write;
-    use tempfile::tempdir;
+    use super::*;
 
     #[test]
     fn test_store_inline_file() {
@@ -241,9 +248,7 @@ mod store_file {
 }
 
 mod store_text {
-    use crate::core::file::tests::common::store_blob_text;
-    use crate::core::file::*;
-    use tempfile::tempdir;
+    use super::*;
 
     #[test]
     fn test_store_inlined_text() {
@@ -277,9 +282,7 @@ mod store_text {
 }
 
 mod remove_blob_stored_file {
-    use super::common::store_blob_file;
-    use crate::core::file::*;
-    use tempfile::tempdir;
+    use super::*;
 
     #[test]
     fn test_remove_blob_file() {
@@ -411,9 +414,7 @@ mod remove_blob_stored_file {
 }
 
 mod remove_blob_stored_text {
-    use crate::core::file::tests::common::store_blob_text;
-    use crate::core::file::*;
-    use tempfile::tempdir;
+    use super::*;
 
     #[test]
     fn test_remove_blob_stored_text() {
@@ -434,12 +435,7 @@ mod remove_blob_stored_text {
 }
 
 mod remove_all {
-    use crate::core::file::FileStorage;
-    use crate::core::file::tests::common::{
-        store_blob_file, store_blob_text, store_inline_file, store_inline_text,
-    };
-    use std::path::Path;
-    use tempfile::tempdir;
+    use super::*;
 
     #[test]
     fn test_remove_all_files_and_texts() {
@@ -468,12 +464,7 @@ mod remove_all {
 }
 
 mod ensure_file_path {
-    use crate::core::file::tests::common::{store_blob_file, store_inline_file};
-    use crate::core::file::{FileStorage, TEMP_INLINE_CACHE};
-    use crate::types::value::versioned_value::ValueVariant;
-    use crate::types::value::versioned_value::latest_value::{FileData, Value};
-    use std::path::Path;
-    use tempfile::tempdir;
+    use super::*;
 
     #[test]
     fn test_ensure_inlined_file_path() {
