@@ -211,22 +211,22 @@ To verify bidirectional communication works:
 
 **Goal:** Initialize keva_core, display keys, select to preview value.
 
-**Status:** Not Started
+**Status:** Complete
 
 **Requirements:**
 
 | Requirement | Description | Status |
 |-------------|-------------|--------|
-| keva_core init | Initialize on startup | ❌ |
-| Data directory | `%LOCALAPPDATA%\keva` or `KEVA_DATA_DIR` | ❌ |
-| Key list | Display all active keys in left pane | ❌ |
-| Scrolling | Key list scrolls when needed | ❌ |
-| Click to select | Clicking key selects it | ❌ |
-| Selection highlight | Selected key visually highlighted | ❌ |
-| Preview text | Right pane shows text value (read-only) | ❌ |
-| Preview files | Right pane shows "N file(s)" placeholder | ❌ |
-| Empty state | Shows "No keys" when database empty | ❌ |
-| Touch on select | Call `touch()` when key selected | ❌ |
+| keva_core init | Initialize on startup | ✅ |
+| Data directory | `%LOCALAPPDATA%\keva` or `KEVA_DATA_DIR` | ✅ |
+| Key list | Display all active keys in left pane | ✅ |
+| Scrolling | Key list scrolls when needed | ✅ |
+| Click to select | Clicking key selects it | ✅ |
+| Selection highlight | Selected key visually highlighted | ✅ |
+| Preview text | Right pane shows text value (read-only) | ✅ |
+| Preview files | Right pane shows "N file(s)" placeholder | ✅ |
+| Empty state | Shows "No keys" when database empty | ✅ |
+| Touch on select | Call `touch()` when key selected | ✅ |
 
 **UI States:**
 
@@ -241,14 +241,14 @@ To verify bidirectional communication works:
 
 | TC | Description | Status |
 |----|-------------|--------|
-| TC-M3-01 | App starts with empty database | ❌ |
-| TC-M3-02 | App starts with existing database | ❌ |
-| TC-M3-03 | Key list displays all active keys | ❌ |
-| TC-M3-04 | Key list scrolls when many keys | ❌ |
-| TC-M3-05 | Clicking key selects it | ❌ |
-| TC-M3-06 | Selected key's value shown in preview | ❌ |
-| TC-M3-07 | Selecting key calls touch() | ❌ |
-| TC-M3-08 | Empty database shows empty state | ❌ |
+| TC-M3-01 | App starts with empty database | ✅ |
+| TC-M3-02 | App starts with existing database | ✅ |
+| TC-M3-03 | Key list displays all active keys | ✅ |
+| TC-M3-04 | Key list scrolls when many keys | ✅ |
+| TC-M3-05 | Clicking key selects it | ✅ |
+| TC-M3-06 | Selected key's value shown in preview | ✅ |
+| TC-M3-07 | Selecting key calls touch() | ✅ |
+| TC-M3-08 | Empty database shows empty state | ✅ |
 
 ---
 
