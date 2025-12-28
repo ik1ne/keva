@@ -34,6 +34,9 @@ pub mod error {
         #[error("Commit error: {0}")]
         CommitError(#[from] redb::CommitError),
 
+        #[error("IO error: {0}")]
+        Io(#[from] std::io::Error),
+
         #[error("Key not found")]
         NotFound,
 
@@ -86,6 +89,9 @@ impl GcResult {
 impl Database {
     /// Creates or opens a database using paths and settings from the config.
     pub fn new(config: Config) -> Result<Self, DatabaseError> {
+        // Ensure the data directory exists
+        std::fs::create_dir_all(&config.base_path)?;
+
         let db = redb::Database::create(config.db_path())?;
 
         // Initialize tables
