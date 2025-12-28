@@ -1,6 +1,7 @@
 //! WebView2 initialization and management.
 
 use std::ffi::c_void;
+use std::time::SystemTime;
 
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_COLOR, CreateCoreWebView2Environment, ICoreWebView2, ICoreWebView2Controller,
@@ -15,6 +16,8 @@ use windows::Win32::Foundation::{HWND, RECT};
 use windows::Win32::System::Com::CoTaskMemFree;
 use windows::core::{Interface, PWSTR};
 use windows_strings::PCWSTR;
+
+use crate::storage;
 
 pub struct WebView {
     controller: ICoreWebView2Controller,
@@ -167,38 +170,139 @@ fn setup_webview(controller: ICoreWebView2Controller) -> Option<ICoreWebView2> {
 
 /// Handles messages from WebView and sends responses.
 fn handle_webview_message(webview: Option<&ICoreWebView2>, msg: &str) {
-    // Parse JSON message
-    if let Some(msg_type) = parse_message_type(msg) {
-        match msg_type {
-            "ready" => {
-                eprintln!("[Native] Received 'ready' from WebView");
-                // Respond with init message
-                if let Some(wv) = webview {
-                    let timestamp = std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map(|d| d.as_millis())
-                        .unwrap_or(0);
-                    let response = format!(r#"{{"type":"init","timestamp":{}}}"#, timestamp);
-                    let response_pwstr = pwstr_from_str(&response);
-                    let _ = unsafe { wv.PostWebMessageAsJson(response_pwstr) };
-                    eprintln!("[Native] Sent 'init' to WebView");
-                }
+    let Some(wv) = webview else { return };
+    let Some(msg_type) = parse_message_type(msg) else { return };
+
+    match msg_type {
+        "ready" => {
+            eprintln!("[Native] Received 'ready' from WebView");
+            send_init(wv);
+            send_keys(wv);
+        }
+        "select" => {
+            if let Some(key) = parse_message_key(msg) {
+                eprintln!("[Native] Selected key: {}", key);
+                send_value(wv, key);
             }
-            other => {
-                eprintln!("[Native] Received message type: {}", other);
-            }
+        }
+        other => {
+            eprintln!("[Native] Received message type: {}", other);
         }
     }
 }
 
+fn send_init(wv: &ICoreWebView2) {
+    let timestamp = SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let response = format!(r#"{{"type":"init","timestamp":{}}}"#, timestamp);
+    post_message(wv, &response);
+    eprintln!("[Native] Sent 'init' to WebView");
+}
+
+fn send_keys(wv: &ICoreWebView2) {
+    let keys = storage::with_keva(|keva| {
+        let active = keva.active_keys().unwrap_or_default();
+        let trashed = keva.trashed_keys().unwrap_or_default();
+        (active, trashed)
+    });
+
+    let active_json: Vec<String> = keys
+        .0
+        .iter()
+        .map(|k| format!(r#"{{"name":"{}","trashed":false}}"#, escape_json(k.as_str())))
+        .collect();
+    let trashed_json: Vec<String> = keys
+        .1
+        .iter()
+        .map(|k| format!(r#"{{"name":"{}","trashed":true}}"#, escape_json(k.as_str())))
+        .collect();
+
+    let all_keys: Vec<String> = active_json.into_iter().chain(trashed_json).collect();
+    let response = format!(r#"{{"type":"keys","keys":[{}]}}"#, all_keys.join(","));
+    post_message(wv, &response);
+    eprintln!("[Native] Sent {} keys to WebView", keys.0.len() + keys.1.len());
+}
+
+fn send_value(wv: &ICoreWebView2, key_str: &str) {
+    use keva_core::types::{ClipData, Key, TextContent};
+
+    let now = SystemTime::now();
+    let result = storage::with_keva(|keva| {
+        let key = Key::try_from(key_str).ok()?;
+        // Touch the key to update last_accessed
+        let _ = keva.touch(&key, now);
+        keva.get(&key).ok().flatten()
+    });
+
+    let response = match result {
+        Some(value) => match &value.clip_data {
+            ClipData::Text(TextContent::Inlined(s)) => {
+                format!(
+                    r#"{{"type":"value","value":{{"type":"text","content":"{}"}}}}"#,
+                    escape_json(s)
+                )
+            }
+            ClipData::Text(TextContent::BlobStored { path }) => {
+                let content = std::fs::read_to_string(path).unwrap_or_default();
+                format!(
+                    r#"{{"type":"value","value":{{"type":"text","content":"{}"}}}}"#,
+                    escape_json(&content)
+                )
+            }
+            ClipData::Files(files) => {
+                format!(
+                    r#"{{"type":"value","value":{{"type":"files","count":{}}}}}"#,
+                    files.len()
+                )
+            }
+        },
+        None => r#"{"type":"value","value":null}"#.to_string(),
+    };
+    post_message(wv, &response);
+}
+
+fn post_message(wv: &ICoreWebView2, json: &str) {
+    let msg = pwstr_from_str(json);
+    let _ = unsafe { wv.PostWebMessageAsJson(msg) };
+}
+
 /// Simple JSON parser to extract message type.
 fn parse_message_type(json: &str) -> Option<&str> {
-    // Look for "type":"<value>" pattern
-    let type_start = json.find(r#""type":""#)?;
-    let value_start = type_start + 8; // length of "type":"
+    parse_json_string_field(json, "type")
+}
+
+/// Simple JSON parser to extract key field.
+fn parse_message_key(json: &str) -> Option<&str> {
+    parse_json_string_field(json, "key")
+}
+
+fn parse_json_string_field<'a>(json: &'a str, field: &str) -> Option<&'a str> {
+    let pattern = format!(r#""{}":""#, field);
+    let field_start = json.find(&pattern)?;
+    let value_start = field_start + pattern.len();
     let remaining = &json[value_start..];
     let value_end = remaining.find('"')?;
     Some(&remaining[..value_end])
+}
+
+fn escape_json(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '"' => result.push_str(r#"\""#),
+            '\\' => result.push_str(r"\\"),
+            '\n' => result.push_str(r"\n"),
+            '\r' => result.push_str(r"\r"),
+            '\t' => result.push_str(r"\t"),
+            c if c.is_control() => {
+                result.push_str(&format!(r"\u{:04x}", c as u32));
+            }
+            c => result.push(c),
+        }
+    }
+    result
 }
 
 fn pwstr_to_string(pwstr: PWSTR) -> String {

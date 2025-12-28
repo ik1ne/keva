@@ -188,15 +188,15 @@ impl FileStorage {
         Ok(())
     }
 
-    /// Ensures that the file represented by `file` exists on disk, returning its path.
+    /// Ensures all files exist on disk, returning their paths.
     ///
-    /// If the file is inlined, it will be written to a temporary location under
-    /// [TEMP_INLINE_CACHE] within the `key_path` directory.
-    pub fn ensure_file_path(
+    /// Inlined files are written to a temporary location under [TEMP_INLINE_CACHE].
+    /// Clears the ensure cache once for all files (not per-file).
+    pub fn ensure_file_paths(
         &self,
         key_path: &Path,
-        file: &FileData,
-    ) -> Result<PathBuf, FileStorageError> {
+        files: &[FileData],
+    ) -> Result<Vec<PathBuf>, FileStorageError> {
         // Keep ensured cache for the current key only (clipboard viability + space optimization).
         //
         // Important: ensure is called from "copy" flows and users often press Ctrl+C repeatedly.
@@ -206,33 +206,36 @@ impl FileStorage {
         self.cleanup_ensure_cache(Some(key_path))?;
 
         let inline_dir = self.base_path.join(TEMP_INLINE_CACHE).join(key_path);
-        match file {
-            FileData::Inlined(InlineFileData { file_name, data }) => {
-                let mut hasher = <<Value as ValueVariant>::Hasher as FileHasher>::new();
-                FileHasher::update(&mut hasher, data);
-                let hash = FileHasher::finalize(&hasher);
-                let file_dir_path = inline_dir.join(hash.to_string());
-                std::fs::create_dir_all(file_dir_path.as_path())?;
-                let file_path = file_dir_path.join(file_name);
 
-                // Fast path: if already ensured, don't rewrite on repeated copy.
-                if file_path.exists() {
-                    return Ok(file_path);
+        files
+            .iter()
+            .map(|file| match file {
+                FileData::Inlined(InlineFileData { file_name, data }) => {
+                    let mut hasher = <<Value as ValueVariant>::Hasher as FileHasher>::new();
+                    FileHasher::update(&mut hasher, data);
+                    let hash = FileHasher::finalize(&hasher);
+                    let file_dir_path = inline_dir.join(hash.to_string());
+                    std::fs::create_dir_all(file_dir_path.as_path())?;
+                    let file_path = file_dir_path.join(file_name);
+
+                    // Fast path: if already ensured, don't rewrite on repeated copy.
+                    if !file_path.exists() {
+                        std::fs::write(file_path.as_path(), data)?;
+                    }
+
+                    Ok(file_path)
                 }
+                FileData::BlobStored(BlobStoredFileData { file_name, hash }) => {
+                    let file_path = self
+                        .base_path
+                        .join(key_path)
+                        .join(hash.to_string())
+                        .join(file_name);
 
-                std::fs::write(file_path.as_path(), data)?;
-                Ok(file_path)
-            }
-            FileData::BlobStored(BlobStoredFileData { file_name, hash }) => {
-                let file_path = self
-                    .base_path
-                    .join(key_path)
-                    .join(hash.to_string())
-                    .join(file_name);
-
-                Ok(file_path)
-            }
-        }
+                    Ok(file_path)
+                }
+            })
+            .collect()
     }
 
     /// Cleans up the inline file cache, optionally preserving one key's cache.

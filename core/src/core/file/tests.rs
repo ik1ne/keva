@@ -493,20 +493,18 @@ mod ensure_file_path {
         let inline_file_data =
             store_inline_file(&temp_dir, &storage, key_path, file_name, contents);
 
-        let result = storage
-            .ensure_file_path(key_path, &FileData::Inlined(inline_file_data))
+        let results = storage
+            .ensure_file_paths(key_path, &[FileData::Inlined(inline_file_data)])
             .unwrap();
 
-        assert_eq!(std::fs::read_to_string(&result).unwrap(), contents);
-        assert_eq!(
-            result,
-            temp_dir
-                .path()
-                .join(TEMP_INLINE_CACHE)
-                .join(key_path)
-                .join(hash.to_string())
-                .join(file_name)
-        );
+        let expected_path = temp_dir
+            .path()
+            .join(TEMP_INLINE_CACHE)
+            .join(key_path)
+            .join(hash.to_string())
+            .join(file_name);
+        assert_eq!(&results, &[expected_path]);
+        assert_eq!(std::fs::read_to_string(&results[0]).unwrap(), contents);
     }
 
     #[test]
@@ -525,37 +523,36 @@ mod ensure_file_path {
 
         let key_path = Path::new("key_hash");
 
+        let expected_path = temp_dir
+            .path()
+            .join(TEMP_INLINE_CACHE)
+            .join(key_path)
+            .join(hash.to_string())
+            .join(file_name);
+
         // First ensure: should materialize the file.
         let inline_file_data_1 =
             store_inline_file(&temp_dir, &storage, key_path, file_name, contents);
         let ensured_1 = storage
-            .ensure_file_path(key_path, &FileData::Inlined(inline_file_data_1))
+            .ensure_file_paths(key_path, &[FileData::Inlined(inline_file_data_1)])
             .unwrap();
 
-        assert!(ensured_1.exists());
+        assert_eq!(&ensured_1, std::slice::from_ref(&expected_path));
+        assert!(ensured_1[0].exists());
 
-        let metadata_1 = std::fs::metadata(&ensured_1).unwrap();
+        let metadata_1 = std::fs::metadata(&ensured_1[0]).unwrap();
         let modified_1 = metadata_1.modified().unwrap();
 
         // Second ensure with the same key and same content: should not rewrite.
         let inline_file_data_2 =
             store_inline_file(&temp_dir, &storage, key_path, file_name, contents);
         let ensured_2 = storage
-            .ensure_file_path(key_path, &FileData::Inlined(inline_file_data_2))
+            .ensure_file_paths(key_path, &[FileData::Inlined(inline_file_data_2)])
             .unwrap();
 
-        assert_eq!(ensured_2, ensured_1);
-        assert_eq!(
-            ensured_2,
-            temp_dir
-                .path()
-                .join(TEMP_INLINE_CACHE)
-                .join(key_path)
-                .join(hash.to_string())
-                .join(file_name)
-        );
+        assert_eq!(&ensured_2, &[expected_path]);
 
-        let metadata_2 = std::fs::metadata(&ensured_2).unwrap();
+        let metadata_2 = std::fs::metadata(&ensured_2[0]).unwrap();
         let modified_2 = metadata_2.modified().unwrap();
 
         // If we didn't rewrite, mtime should stay the same (or at least not go backwards).
@@ -584,34 +581,30 @@ mod ensure_file_path {
         let inline_b = store_inline_file(&temp_dir, &storage, key_b, file_name, contents);
 
         let ensured_a = storage
-            .ensure_file_path(key_a, &FileData::Inlined(inline_a))
+            .ensure_file_paths(key_a, &[FileData::Inlined(inline_a)])
             .unwrap();
 
-        assert!(ensured_a.exists());
-        assert_eq!(
-            ensured_a,
-            temp_dir
-                .path()
-                .join(TEMP_INLINE_CACHE)
-                .join(key_a)
-                .join(hash.to_string())
-                .join(file_name)
-        );
+        let expected_a = temp_dir
+            .path()
+            .join(TEMP_INLINE_CACHE)
+            .join(key_a)
+            .join(hash.to_string())
+            .join(file_name);
+        assert_eq!(&ensured_a, &[expected_a]);
+        assert!(ensured_a[0].exists());
 
         let ensured_b = storage
-            .ensure_file_path(key_b, &FileData::Inlined(inline_b))
+            .ensure_file_paths(key_b, &[FileData::Inlined(inline_b)])
             .unwrap();
 
-        assert!(ensured_b.exists());
-        assert_eq!(
-            ensured_b,
-            temp_dir
-                .path()
-                .join(TEMP_INLINE_CACHE)
-                .join(key_b)
-                .join(hash.to_string())
-                .join(file_name)
-        );
+        let expected_b = temp_dir
+            .path()
+            .join(TEMP_INLINE_CACHE)
+            .join(key_b)
+            .join(hash.to_string())
+            .join(file_name);
+        assert_eq!(&ensured_b, &[expected_b]);
+        assert!(ensured_b[0].exists());
 
         // Ensuring for key_b should clear ensured cache for key_a.
         let ensured_root = temp_dir.path().join(TEMP_INLINE_CACHE);
@@ -636,18 +629,16 @@ mod ensure_file_path {
         let key_path = Path::new("key_hash");
         let blob_file_data = store_blob_file(&temp_dir, &storage, key_path, file_name, contents);
 
-        let result = storage
-            .ensure_file_path(key_path, &FileData::BlobStored(blob_file_data))
+        let results = storage
+            .ensure_file_paths(key_path, &[FileData::BlobStored(blob_file_data)])
             .unwrap();
 
-        assert_eq!(std::fs::read_to_string(&result).unwrap(), contents);
-        assert_eq!(
-            result,
-            temp_dir
-                .path()
-                .join(key_path)
-                .join(hash.to_string())
-                .join(file_name)
-        );
+        let expected_path = temp_dir
+            .path()
+            .join(key_path)
+            .join(hash.to_string())
+            .join(file_name);
+        assert_eq!(&results, &[expected_path]);
+        assert_eq!(std::fs::read_to_string(&results[0]).unwrap(), contents);
     }
 }

@@ -1,11 +1,15 @@
 use super::*;
 use crate::types::config::SavedConfig;
+use crate::types::{
+    BlobStoredFile, ClipData, FileContent, InlinedFile, LifecycleState, TextContent,
+};
+use common::*;
+use std::io::Write;
 use std::time::Duration;
 use tempfile::TempDir;
 
 mod common {
     use super::*;
-    use std::io::Write;
 
     pub(super) fn create_test_storage() -> (KevaCore, TempDir) {
         let temp_dir = TempDir::new().unwrap();
@@ -36,9 +40,7 @@ mod common {
 }
 
 mod upsert_text {
-    use super::common::{create_test_storage, make_key};
     use super::*;
-    use crate::types::value::versioned_value::latest_value::TextData;
 
     #[test]
     fn test_upsert_creates_new_key() {
@@ -51,7 +53,7 @@ mod upsert_text {
         let value = storage.get(&key).unwrap().unwrap();
         assert_eq!(
             value.clip_data,
-            ClipData::Text(TextData::Inlined("hello world".to_string()))
+            ClipData::Text(TextContent::Inlined("hello world".to_string()))
         );
         assert_eq!(value.metadata.lifecycle_state, LifecycleState::Active);
     }
@@ -76,7 +78,7 @@ mod upsert_text {
         // Content should be updated
         assert_eq!(
             second_value.clip_data,
-            ClipData::Text(TextData::Inlined("second".to_string()))
+            ClipData::Text(TextContent::Inlined("second".to_string()))
         );
         // created_at should be preserved
         assert_eq!(second_value.metadata.created_at, created_at);
@@ -115,7 +117,7 @@ mod upsert_text {
         // Confirm it is blob-stored and the file exists on disk.
         let v1 = storage.get(&key).unwrap().unwrap();
         match v1.clip_data {
-            ClipData::Text(TextData::BlobStored) => {}
+            ClipData::Text(TextContent::BlobStored { .. }) => {}
             _ => panic!("expected blob-stored text after large upsert"),
         }
 
@@ -140,7 +142,7 @@ mod upsert_text {
         // Ensure it is now inlined.
         let v2 = storage.get(&key).unwrap().unwrap();
         match v2.clip_data {
-            ClipData::Text(TextData::Inlined(s)) => assert_eq!(s, small_text),
+            ClipData::Text(TextContent::Inlined(s)) => assert_eq!(s, small_text),
             _ => panic!("expected inlined text after shrinking"),
         }
 
@@ -150,9 +152,7 @@ mod upsert_text {
 }
 
 mod add_files {
-    use super::common::{create_test_file, create_test_storage, make_key};
     use super::*;
-    use crate::types::value::versioned_value::latest_value::{FileData, InlineFileData};
 
     #[test]
     fn test_add_files_creates_new_key() {
@@ -164,19 +164,13 @@ mod add_files {
         storage.add_files(&key, [&file_path], now).unwrap();
 
         let value = storage.get(&key).unwrap().unwrap();
-        match &value.clip_data {
-            ClipData::Files(files) => {
-                assert_eq!(files.len(), 1);
-                match &files[0] {
-                    FileData::Inlined(InlineFileData { file_name, data }) => {
-                        assert_eq!(file_name, "test.txt");
-                        assert_eq!(data, b"file content");
-                    }
-                    _ => panic!("Expected inlined file"),
-                }
-            }
-            _ => panic!("Expected Files variant"),
-        }
+        assert_eq!(
+            value.clip_data,
+            ClipData::Files(vec![FileContent::Inlined(InlinedFile {
+                file_name: "test.txt".to_string(),
+                data: b"file content".to_vec(),
+            })])
+        );
     }
 
     #[test]
@@ -192,9 +186,7 @@ mod add_files {
 
         let value = storage.get(&key).unwrap().unwrap();
         match &value.clip_data {
-            ClipData::Files(files) => {
-                assert_eq!(files.len(), 2);
-            }
+            ClipData::Files(files) => assert_eq!(files.len(), 2),
             _ => panic!("Expected Files variant"),
         }
     }
@@ -217,9 +209,7 @@ mod add_files {
 }
 
 mod remove_file_at {
-    use super::common::{create_test_file, create_test_storage, make_key};
     use super::*;
-    use crate::types::value::versioned_value::latest_value::{FileData, InlineFileData, TextData};
 
     #[test]
     fn test_remove_file_at_removes_selected_entry() {
@@ -237,19 +227,13 @@ mod remove_file_at {
         storage.remove_file_at(&key, 0, later).unwrap();
 
         let value = storage.get(&key).unwrap().unwrap();
-        match &value.clip_data {
-            ClipData::Files(files) => {
-                assert_eq!(files.len(), 1);
-                match &files[0] {
-                    FileData::Inlined(InlineFileData { file_name, data }) => {
-                        assert_eq!(file_name, "file2.txt");
-                        assert_eq!(data, b"content2");
-                    }
-                    _ => panic!("Expected remaining file to be inlined"),
-                }
-            }
-            _ => panic!("Expected Files variant after removing one file"),
-        }
+        assert_eq!(
+            value.clip_data,
+            ClipData::Files(vec![FileContent::Inlined(InlinedFile {
+                file_name: "file2.txt".to_string(),
+                data: b"content2".to_vec(),
+            })])
+        );
     }
 
     #[test]
@@ -266,25 +250,13 @@ mod remove_file_at {
 
         // Confirm it is blob-stored and the blob exists on disk at the expected path.
         let v1 = storage.get(&key).unwrap().unwrap();
-        let (file_name, hash) = match &v1.clip_data {
+        let blob_path = match &v1.clip_data {
             ClipData::Files(files) => match &files[0] {
-                FileData::BlobStored(b) => (b.file_name.clone(), b.hash),
+                FileContent::BlobStored(BlobStoredFile { path, .. }) => path.clone(),
                 _ => panic!("expected blob-stored file after adding > threshold"),
             },
             _ => panic!("expected Files variant"),
         };
-
-        let key_dir = {
-            let hash = blake3_v1::hash(key.as_str().as_bytes());
-            PathBuf::from(hash.to_hex().as_str())
-        };
-
-        let blob_path = temp
-            .path()
-            .join("blobs")
-            .join(&key_dir)
-            .join(hash.to_string())
-            .join(&file_name);
 
         assert!(blob_path.exists());
 
@@ -297,7 +269,7 @@ mod remove_file_at {
         // Value should become empty text.
         let v2 = storage.get(&key).unwrap().unwrap();
         match &v2.clip_data {
-            ClipData::Text(TextData::Inlined(s)) => assert_eq!(s, ""),
+            ClipData::Text(TextContent::Inlined(s)) => assert_eq!(s, ""),
             _ => panic!("expected empty inlined text after removing last file"),
         }
     }
@@ -316,8 +288,8 @@ mod remove_file_at {
 
         let value = storage.get(&key).unwrap().unwrap();
         match &value.clip_data {
-            ClipData::Text(TextData::Inlined(s)) => assert_eq!(s, ""),
-            ClipData::Text(TextData::BlobStored) => {
+            ClipData::Text(TextContent::Inlined(s)) => assert_eq!(s, ""),
+            ClipData::Text(TextContent::BlobStored { .. }) => {
                 panic!("Expected empty inlined text after removing last file")
             }
             _ => panic!("Expected Text variant after removing last file"),
@@ -357,7 +329,6 @@ mod remove_file_at {
 }
 
 mod trash {
-    use super::common::{create_test_storage, make_key};
     use super::*;
 
     #[test]
@@ -413,7 +384,6 @@ mod trash {
 mod rename {
     use super::common::{create_test_storage, make_key};
     use super::*;
-    use crate::types::value::versioned_value::latest_value::TextData;
 
     #[test]
     fn test_rename_key() {
@@ -429,7 +399,7 @@ mod rename {
         let value = storage.get(&new_key).unwrap().unwrap();
         assert_eq!(
             value.clip_data,
-            ClipData::Text(TextData::Inlined("content".to_string()))
+            ClipData::Text(TextContent::Inlined("content".to_string()))
         );
     }
 
@@ -448,7 +418,7 @@ mod rename {
         let value = storage.get(&key).unwrap().unwrap();
         assert_eq!(
             value.clip_data,
-            ClipData::Text(TextData::Inlined("content".to_string()))
+            ClipData::Text(TextContent::Inlined("content".to_string()))
         );
     }
 
@@ -486,13 +456,12 @@ mod rename {
         let value = storage.get(&new_key).unwrap().unwrap();
         assert_eq!(
             value.clip_data,
-            ClipData::Text(TextData::Inlined("old content".to_string()))
+            ClipData::Text(TextContent::Inlined("old content".to_string()))
         );
     }
 }
 
 mod keys {
-    use super::common::{create_test_storage, make_key};
     use super::*;
 
     #[test]
@@ -619,9 +588,7 @@ mod touch {
 }
 
 mod get {
-    use super::common::{create_test_storage, make_key};
     use super::*;
-    use crate::types::value::versioned_value::latest_value::TextData;
 
     #[test]
     fn test_get_active_key() {
@@ -634,7 +601,7 @@ mod get {
         let value = storage.get(&key).unwrap().unwrap();
         assert_eq!(
             value.clip_data,
-            ClipData::Text(TextData::Inlined("content".to_string()))
+            ClipData::Text(TextContent::Inlined("content".to_string()))
         );
         assert_eq!(value.metadata.lifecycle_state, LifecycleState::Active);
     }
@@ -664,7 +631,6 @@ mod get {
 }
 
 mod restore {
-    use super::common::{create_test_storage, make_key};
     use super::*;
 
     #[test]
@@ -758,7 +724,6 @@ mod purge {
 }
 
 mod maintenance {
-    use super::common::make_key;
     use super::*;
 
     fn create_storage_with_short_ttl() -> (KevaCore, TempDir) {

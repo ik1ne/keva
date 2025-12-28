@@ -4,6 +4,7 @@
 
 use keva_core::core::KevaCore;
 use keva_core::types::{Config, Key, SavedConfig};
+use std::io::Write;
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
@@ -12,7 +13,7 @@ fn main() {
     println!("Using data path: {}", base_path.display());
 
     let config = Config {
-        base_path,
+        base_path: base_path.clone(),
         saved: SavedConfig {
             trash_ttl: Duration::from_secs(30 * 24 * 60 * 60), // 30 days
             purge_ttl: Duration::from_secs(7 * 24 * 60 * 60),  // 7 days
@@ -23,8 +24,30 @@ fn main() {
     let mut keva = KevaCore::open(config).expect("Failed to open keva database");
     let now = SystemTime::now();
 
-    // Seed active text keys
-    let active_keys = [
+    println!("\n[Inlined Text Keys]");
+    seed_inlined_text(&mut keva, now);
+
+    println!("\n[Blob-Stored Text Keys]");
+    seed_blob_text(&mut keva, now);
+
+    println!("\n[File Keys]");
+    seed_files(&mut keva, now, &base_path);
+
+    println!("\n[Trashed Keys]");
+    seed_trashed(&mut keva, now);
+
+    // Summary
+    let active = keva.active_keys().unwrap_or_default();
+    let trashed = keva.trashed_keys().unwrap_or_default();
+    println!(
+        "\nDatabase now has {} active keys and {} trashed keys",
+        active.len(),
+        trashed.len()
+    );
+}
+
+fn seed_inlined_text(keva: &mut KevaCore, now: SystemTime) {
+    let keys = [
         (
             "todo",
             "- Buy groceries\n- Fix bug in login\n- Review PR #42",
@@ -44,23 +67,64 @@ fn main() {
         ),
     ];
 
-    for (key_str, content) in active_keys {
+    for (key_str, content) in keys {
         let key = Key::try_from(key_str).expect("Invalid key");
         match keva.upsert_text(&key, content, now) {
             Ok(()) => println!("  Created: {}", key_str),
             Err(e) => println!("  Skipped {} ({})", key_str, e),
         }
     }
+}
 
-    // Seed trashed keys
-    let trashed_keys = [
+fn seed_blob_text(keva: &mut KevaCore, now: SystemTime) {
+    // Create text larger than 1MB to trigger blob storage
+    let large_content = "x".repeat(1024 * 1024 + 100);
+    let key = Key::try_from("large-text").expect("Invalid key");
+    match keva.upsert_text(&key, &large_content, now) {
+        Ok(()) => println!("  Created: large-text ({}KB blob-stored)", large_content.len() / 1024),
+        Err(e) => println!("  Skipped large-text ({})", e),
+    }
+}
+
+fn seed_files(keva: &mut KevaCore, now: SystemTime, base_path: &PathBuf) {
+    let temp_dir = base_path.join("_seed_temp");
+    std::fs::create_dir_all(&temp_dir).ok();
+
+    // Create test files
+    let files = [
+        ("document.txt", b"This is a text document." as &[u8]),
+        ("notes.md", b"# Notes\n\n- Item 1\n- Item 2"),
+        ("data.json", b"{\"key\": \"value\", \"count\": 42}"),
+    ];
+
+    let mut file_paths = Vec::new();
+    for (name, content) in files {
+        let path = temp_dir.join(name);
+        if let Ok(mut f) = std::fs::File::create(&path) {
+            f.write_all(content).ok();
+            file_paths.push(path);
+        }
+    }
+
+    // Add files to keva
+    let key = Key::try_from("my-files").expect("Invalid key");
+    match keva.add_files(&key, &file_paths, now) {
+        Ok(()) => println!("  Created: my-files ({} files)", file_paths.len()),
+        Err(e) => println!("  Skipped my-files ({})", e),
+    }
+
+    // Clean up temp files
+    std::fs::remove_dir_all(&temp_dir).ok();
+}
+
+fn seed_trashed(keva: &mut KevaCore, now: SystemTime) {
+    let keys = [
         ("old-draft", "This is an old draft that was deleted"),
         ("deprecated/config", "old_setting=true"),
     ];
 
-    for (key_str, content) in trashed_keys {
+    for (key_str, content) in keys {
         let key = Key::try_from(key_str).expect("Invalid key");
-        // First create, then trash
         if keva.upsert_text(&key, content, now).is_ok() {
             match keva.trash(&key, now) {
                 Ok(()) => println!("  Trashed: {}", key_str),
@@ -68,15 +132,6 @@ fn main() {
             }
         }
     }
-
-    // Summary
-    let active = keva.active_keys().unwrap_or_default();
-    let trashed = keva.trashed_keys().unwrap_or_default();
-    println!(
-        "\nDatabase now has {} active keys and {} trashed keys",
-        active.len(),
-        trashed.len()
-    );
 }
 
 fn get_default_data_path() -> PathBuf {

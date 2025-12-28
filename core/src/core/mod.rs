@@ -8,10 +8,12 @@ use crate::core::db::GcResult;
 use crate::core::db::error::DatabaseError;
 use crate::core::file::FileStorage;
 use crate::core::file::error::FileStorageError;
+use crate::types::value::PublicValue;
 use crate::types::value::versioned_value::latest_value::{
-    BlobStoredFileData, ClipData, FileData, LifecycleState, TextData, Value,
+    BlobStoredFileData, ClipData, FileData, LifecycleState, TextData,
 };
 use crate::types::{Config, Key};
+use error::StorageError;
 use std::borrow::Cow;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -47,8 +49,6 @@ pub mod error {
     }
 }
 
-use error::StorageError;
-
 /// Converts a key to a filesystem-safe path by hashing it.
 ///
 /// Keys can be up to 256 characters and contain `/`, which would create
@@ -80,10 +80,19 @@ impl KevaCore {
 impl KevaCore {
     /// Retrieves a value by key.
     ///
-    /// Returns the raw value from the database. Stale entries (past TTL) are
-    /// still returned - only GC transitions lifecycle states.
-    pub fn get(&self, key: &Key) -> Result<Option<Value>, StorageError> {
-        Ok(self.db.get(key)?)
+    /// Returns the public value type with resolved paths for blob-stored data.
+    /// Stale entries (past TTL) are still returned - only GC transitions lifecycle states.
+    pub fn get(&self, key: &Key) -> Result<Option<PublicValue>, StorageError> {
+        let Some(value) = self.db.get(key)? else {
+            return Ok(None);
+        };
+
+        let key_path = key_to_path(key);
+        Ok(PublicValue::from_latest_value(
+            value,
+            &self.file.base_path,
+            &key_path,
+        ))
     }
 
     /// Returns all Active keys efficiently by iterating the TTL table.
@@ -130,7 +139,7 @@ impl KevaCore {
         // Determine whether we need to clean up an existing blob-stored text file.
         // If the previous value was blob-stored text and the new representation is inlined,
         // remove the old blob file to avoid leaving orphaned `text.txt` on disk.
-        let remove_old_blob_text = match self.get(key)? {
+        let remove_old_blob_text = match self.db.get(key)? {
             Some(v)
                 if v.metadata.lifecycle_state == LifecycleState::Active
                     && matches!(v.clip_data, ClipData::Text(TextData::BlobStored)) =>
@@ -147,7 +156,7 @@ impl KevaCore {
             self.file.remove_blob_stored_text(&key_path)?;
         }
 
-        match self.get(key)? {
+        match self.db.get(key)? {
             None => {
                 self.db.insert(key, now, ClipData::Text(text_data))?;
             }
@@ -184,7 +193,7 @@ impl KevaCore {
             return Ok(());
         }
 
-        match self.get(key)? {
+        match self.db.get(key)? {
             None => {
                 self.db.insert(key, now, ClipData::Files(files))?;
             }
@@ -244,7 +253,7 @@ impl KevaCore {
     ///
     /// Only works on Active keys. Returns error if key is already trashed.
     pub fn trash(&mut self, key: &Key, now: SystemTime) -> Result<(), StorageError> {
-        let value = self.get(key)?;
+        let value = self.db.get(key)?;
         match value {
             None => Err(DatabaseError::NotFound.into()),
             Some(v) if v.metadata.lifecycle_state == LifecycleState::Active => {
@@ -261,7 +270,7 @@ impl KevaCore {
     /// - If Active → no-op (idempotent)
     /// - If None → Error
     pub fn restore(&mut self, key: &Key, now: SystemTime) -> Result<(), StorageError> {
-        let value = self.get(key)?;
+        let value = self.db.get(key)?;
         match value {
             None => Err(DatabaseError::NotFound.into()),
             Some(v) if v.metadata.lifecycle_state == LifecycleState::Active => {
@@ -308,7 +317,7 @@ impl KevaCore {
         }
 
         // Check source key is Active
-        let value = self.get(old_key)?;
+        let value = self.db.get(old_key)?;
         match value {
             None => return Err(DatabaseError::NotFound.into()),
             Some(v) if v.metadata.lifecycle_state != LifecycleState::Active => {
@@ -318,7 +327,7 @@ impl KevaCore {
         }
 
         // Check destination doesn't exist (unless overwrite is true)
-        let destination_exists = self.get(new_key)?.is_some();
+        let destination_exists = self.db.get(new_key)?.is_some();
         if !overwrite && destination_exists {
             return Err(StorageError::DestinationExists);
         }
@@ -394,7 +403,7 @@ impl KevaCore {
 
     /// Copy key's value to clipboard and update access time.
     pub fn copy_to_clipboard(&mut self, key: &Key, now: SystemTime) -> Result<(), StorageError> {
-        let value = self.get(key)?.ok_or(DatabaseError::NotFound)?;
+        let value = self.db.get(key)?.ok_or(DatabaseError::NotFound)?;
 
         // Only copy Active keys
         if value.metadata.lifecycle_state != LifecycleState::Active {
@@ -408,10 +417,7 @@ impl KevaCore {
             }
             ClipData::Files(files) => {
                 let key_path = key_to_path(key);
-                let paths: Vec<PathBuf> = files
-                    .iter()
-                    .map(|f| self.file.ensure_file_path(&key_path, f))
-                    .collect::<Result<_, _>>()?;
+                let paths = self.file.ensure_file_paths(&key_path, files)?;
                 crate::clipboard::write_files(&paths)?;
             }
         }
