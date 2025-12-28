@@ -297,6 +297,12 @@ The left pane has a separate trash section at the bottom:
 - **Trash Handling:** Trash items shown in separate section at bottom with 🗑️ icon
 - **Stale Items:** Items past TTL remain visible until GC runs (GC is the single source of truth for state transitions)
 
+**Search Result Limits:**
+
+- Active keys: Maximum 100 results displayed
+- Trashed keys: Maximum 20 results displayed
+- Results update progressively as search refines
+
 ### Keyboard Navigation
 
 **Arrow Key Behavior:**
