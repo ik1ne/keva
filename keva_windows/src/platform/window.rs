@@ -23,6 +23,7 @@ use windows::{
         },
         System::LibraryLoader::GetModuleHandleW,
         UI::{
+            HiDpi::GetDpiForSystem,
             Input::KeyboardAndMouse::VK_ESCAPE,
             WindowsAndMessaging::{
                 CreateWindowExW, DefWindowProcW, DispatchMessageW, GWLP_USERDATA, GetMessageW,
@@ -30,17 +31,22 @@ use windows::{
                 LoadCursorW, MINMAXINFO, MSG, NCCALCSIZE_PARAMS, PostQuitMessage, RegisterClassW,
                 SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_SHOW, SWP_FRAMECHANGED, SWP_NOCOPYBITS,
                 SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, SetForegroundWindow,
-                SetWindowLongPtrW, SetWindowPos, ShowWindow, TranslateMessage, WINDOWPOS,
-                WM_ACTIVATE, WM_COMMAND, WM_CREATE, WM_DESTROY, WM_ERASEBKGND, WM_GETMINMAXINFO,
-                WM_KEYDOWN, WM_LBUTTONUP, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT,
-                WM_RBUTTONUP, WM_SIZE, WM_WINDOWPOSCHANGING, WNDCLASSW, WS_CLIPCHILDREN,
-                WS_EX_APPWINDOW, WS_EX_TOPMOST, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP,
-                WS_SIZEBOX, WS_SYSMENU, WVR_VALIDRECTS,
+                SetWindowLongPtrW, SetWindowPos, ShowWindow, TranslateMessage,
+                USER_DEFAULT_SCREEN_DPI, WINDOWPOS, WM_ACTIVATE, WM_COMMAND, WM_CREATE,
+                WM_DESTROY, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN, WM_LBUTTONUP,
+                WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT, WM_RBUTTONUP, WM_SIZE,
+                WM_WINDOWPOSCHANGING, WNDCLASSW, WS_CLIPCHILDREN, WS_EX_APPWINDOW, WS_EX_TOPMOST,
+                WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SIZEBOX, WS_SYSMENU, WVR_VALIDRECTS,
             },
         },
     },
     core::{Result, w},
 };
+
+/// Scales a logical pixel value to physical pixels based on system DPI.
+fn scale_for_dpi(logical: i32, dpi: u32) -> i32 {
+    (logical as i64 * dpi as i64 / USER_DEFAULT_SCREEN_DPI as i64) as i32
+}
 
 /// Stores the previously focused window to restore on Esc.
 static PREV_FOREGROUND: AtomicIsize = AtomicIsize::new(0);
@@ -73,11 +79,16 @@ pub fn run() -> Result<()> {
 
         let ex_style = WS_EX_APPWINDOW | WS_EX_TOPMOST;
 
+        // Scale window dimensions for DPI
+        let dpi = GetDpiForSystem();
+        let window_width = scale_for_dpi(WINDOW_WIDTH, dpi);
+        let window_height = scale_for_dpi(WINDOW_HEIGHT, dpi);
+
         // Center window on screen
         let screen_width = GetSystemMetrics(SM_CXSCREEN);
         let screen_height = GetSystemMetrics(SM_CYSCREEN);
-        let x = (screen_width - WINDOW_WIDTH) / 2;
-        let y = (screen_height - WINDOW_HEIGHT) / 2;
+        let x = (screen_width - window_width) / 2;
+        let y = (screen_height - window_height) / 2;
 
         let hwnd = CreateWindowExW(
             ex_style,
@@ -86,8 +97,8 @@ pub fn run() -> Result<()> {
             style,
             x,
             y,
-            WINDOW_WIDTH,
-            WINDOW_HEIGHT,
+            window_width,
+            window_height,
             None,
             None,
             Some(instance.into()),
@@ -100,10 +111,11 @@ pub fn run() -> Result<()> {
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, app_ptr as isize);
 
         // Create single WebView covering the entire window (with resize border insets on all sides)
-        let wv_x = RESIZE_BORDER;
-        let wv_y = RESIZE_BORDER;
-        let wv_width = WINDOW_WIDTH - 2 * RESIZE_BORDER;
-        let wv_height = WINDOW_HEIGHT - 2 * RESIZE_BORDER;
+        let resize_border = scale_for_dpi(RESIZE_BORDER, dpi);
+        let wv_x = resize_border;
+        let wv_y = resize_border;
+        let wv_width = window_width - 2 * resize_border;
+        let wv_height = window_height - 2 * resize_border;
 
         init_webview(hwnd, wv_x, wv_y, wv_width, wv_height, move |wv| {
             wv.navigate_html(APP_HTML_W);
@@ -170,11 +182,12 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
                 LRESULT(0)
             }
             WM_GETMINMAXINFO => {
-                // Enforce minimum window size
+                // Enforce minimum window size (scaled for DPI)
                 let info = lparam.0 as *mut MINMAXINFO;
                 if !info.is_null() {
-                    (*info).ptMinTrackSize.x = MIN_WINDOW_WIDTH;
-                    (*info).ptMinTrackSize.y = MIN_WINDOW_HEIGHT;
+                    let dpi = GetDpiForSystem();
+                    (*info).ptMinTrackSize.x = scale_for_dpi(MIN_WINDOW_WIDTH, dpi);
+                    (*info).ptMinTrackSize.y = scale_for_dpi(MIN_WINDOW_HEIGHT, dpi);
                 }
                 LRESULT(0)
             }
