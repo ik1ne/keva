@@ -102,11 +102,15 @@ fn setup_webview(
     unsafe {
         let webview = controller.CoreWebView2().ok()?;
 
-        // Enable CSS app-region: drag support for window dragging
-        if let Ok(settings) = webview.Settings()
-            && let Ok(settings9) = settings.cast::<ICoreWebView2Settings9>()
-        {
-            let _ = settings9.SetIsNonClientRegionSupportEnabled(true);
+        if let Ok(settings) = webview.Settings() {
+            // Disable DevTools in release builds
+            #[cfg(not(debug_assertions))]
+            let _ = settings.SetAreDevToolsEnabled(false);
+
+            // Enable CSS app-region: drag support for window dragging
+            if let Ok(settings9) = settings.cast::<ICoreWebView2Settings9>() {
+                let _ = settings9.SetIsNonClientRegionSupportEnabled(true);
+            }
         }
 
         let mut token = 0i64;
