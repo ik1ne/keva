@@ -1,9 +1,11 @@
-# Project Specification: Keva
+# Project Specification: Keva (v2)
 
 ## 1. Overview
 
-Keva is a local key-value store designed for clipboard-like data management. It provides fast storage and retrieval with
-fuzzy search capabilities.
+Keva is a local key-value store designed for knowledge management with Markdown support and file attachments. It
+provides fast storage and retrieval with fuzzy search capabilities.
+
+Inspired by Unclutter's notes+files workflow, but with multiple named keys and search.
 
 - **Name:** Keva
 - **Platform:** Windows (installer with uninstaller)
@@ -29,27 +31,29 @@ Examples of valid keys:
 
 ### Value Types
 
-Values are stored as one of two types:
+Each key stores a unified value containing:
 
-1. **Text:** Plain text content.
-2. **Files:** One or more files copied from file manager (hard copy of file contents).
+1. **Content:** Markdown text (always exists, may be empty)
+2. **Attachments:** Zero or more files (hard copy of file contents)
 
-| Copy Source               | Stored As                |
-|---------------------------|--------------------------|
-| Text from any application | Text                     |
-| File from Explorer        | Files (hard copy)        |
-| Multiple files            | Files (multiple entries) |
+### Attachment Link Format
 
-When clipboard contains both files and text, **files take priority** (text is discarded).
+Attachments are referenced in Markdown using filename-based links:
+
+```markdown
+[spec.pdf](att:spec.pdf)
+[image.png](att:image.png)
+```
+
+- Format: `[display text](att:filename)`
+- Filename must be unique per key (duplicates not allowed)
+- Links are human-readable and manually typeable
 
 ### Empty Values
 
-- Erasing all text from a Text value keeps the key with an empty string (key is not deleted).
-- Deleting all files from a Files value converts to an empty Text value.
-
-## 3. Architecture
-
-Single-process application containing GUI window and keva-core storage layer.
+- Empty Markdown content keeps the key with an empty file (key is not deleted).
+- Deleting all attachments keeps the key with Markdown only.
+- Attachments without Markdown references are allowed (file-only storage is valid use case).
 
 ### Process Behavior
 
@@ -69,12 +73,6 @@ Single-process application containing GUI window and keva-core storage layer.
 
 - Only one instance runs at a time
 - Relaunch app (double-click) → activates existing instance's window
-- Implementation: Named mutex + `WM_COPYDATA` message
-- If existing instance doesn't respond within 2 seconds: offer to force-quit and relaunch
-
-### In-Memory State
-
-- Search index built on launch, persists while process runs
 
 ### Windows Uninstaller
 
@@ -96,16 +94,24 @@ Single-process application containing GUI window and keva-core storage layer.
 **Window Controls:**
 
 - `Ctrl+Alt+K` → Show window (global shortcut, works when hidden)
-- `Esc` → Hide window (only when window is focused)
+- `Esc` → Dismiss modal if open, else hide window
 - `Alt+F4` → Quit app entirely (only when window is focused)
 - Window does NOT close on focus loss (supports drag/drop and copy/paste workflows)
 - Window stays on top of other windows (enables drag/drop from other apps)
 - Tray icon left-click also toggles visibility
 
+**Keyboard Handling:**
+
+- Global hotkey (Ctrl+Alt+K): Native intercepts
+- All other keys: WebView handles
+- Esc: WebView decides (dismiss modal or send "hide")
+- Alt+F4: WebView sends "quit"
+
 **Resize and Move:**
 
-- **Outer 5px border:** Resize handle (triggers OS-level resize)
-- **Search icon (🔍):** Drag handle for moving window (click does nothing, drag moves window)
+- **Outer border:** Resize handle (triggers OS-level resize), should behave like native window border
+- **Search icon (🔍):** Drag handle for moving window (click does nothing, drag moves window), should behave like native
+  title bar drag
 
 **Window Positioning:**
 
@@ -140,48 +146,76 @@ Single-process application containing GUI window and keva-core storage layer.
 
 ### Layout
 
-Split pane with three components:
+Four-pane layout:
 
-- **Top:** Search bar (key filter, fuzzy matching, plus button for key creation)
-- **Left:** Key list (filtered by search bar), trash section at bottom
-- **Right:** Inspector/Preview pane (view or edit value)
+```
+┌─────────────────────────────────────────────────────────────┐
+│ [🔍] Search bar                                    [✏️/➕]  │
+├──────────────┬──────────────────────────────────────────────┤
+│              │ Right Top: [Edit] [Preview]                  │
+│  Key List    │ ┌──────────────────────────────────────────┐ │
+│              │ │ # Notes                                  │ │
+│  key-1       │ │ See [spec.pdf](att:spec.pdf)             │ │
+│  key-2       │ │                                          │ │
+│  key-3       │ └──────────────────────────────────────────┘ │
+│              ├──────────────────────────────────────────────┤
+│  ─────────── │ Right Bottom: Attachments                    │
+│  Trash (N)   │ ┌──────────────────────────────────────────┐ │
+│              │ │ 📄 spec.pdf (1.2MB)                  [X] │ │
+│              │ │ [img] photo.png (340KB)              [X] │ │
+│              │ │            [+ Add files]                 │ │
+│              │ └──────────────────────────────────────────┘ │
+└──────────────┴──────────────────────────────────────────────┘
+```
 
-### Three-State Focus Model
+Components:
 
-The search bar, left pane, and right pane are mutually exclusive focus states. Only one can be active at a time.
+- **Search bar:** Key filter, fuzzy matching, action button
+- **Left pane:** Key list (filtered), trash section at bottom
+- **Right top pane:** Markdown editor (Monaco) with Edit/Preview toggle
+- **Right bottom pane:** Attachments list with delete buttons
 
-**Focus States:**
+### Four-State Focus Model
 
-| State              | Search Bar                 | Left Pane        | Right Pane                            |
-|--------------------|----------------------------|------------------|---------------------------------------|
-| Search bar focused | Focus highlight            | No selection     | Shows target based on search text     |
-| Left pane focused  | Dimmed text, button hidden | Key highlighted  | Shows selected key's value            |
-| Right pane focused | Dimmed text, button hidden | Dimmed highlight | Text cursor active / Files list shown |
+All four panes have mutually exclusive active state. Only one can be active at a time.
 
-**Focus Transitions:**
+**Active States:**
 
-| From       | Action                    | To                                         |
-|------------|---------------------------|--------------------------------------------|
-| Search bar | Down arrow                | Left pane (first key selected)             |
-| Search bar | Click key in list         | Left pane                                  |
-| Search bar | Enter                     | Right pane (editing)                       |
-| Search bar | Click right pane          | Right pane                                 |
-| Left pane  | Up arrow (from first key) | Search bar (cursor position restored)      |
-| Left pane  | Down/Up arrow             | Navigate within list                       |
-| Left pane  | Enter                     | Right pane (editing)                       |
-| Left pane  | Delete key                | Delete selected key (follows delete_style) |
-| Left pane  | Click search bar          | Search bar                                 |
-| Left pane  | Click right pane          | Right pane                                 |
-| Right pane | Esc                       | Hide window                                |
-| Right pane | Click search bar          | Search bar                                 |
-| Right pane | Click key in list         | Left pane                                  |
+| Active Pane  | Search Bar | Left Pane   | Right Top | Right Bottom |
+|--------------|------------|-------------|-----------|--------------|
+| Search bar   | Cursor     | Dimmed      | No cursor | Dimmed       |
+| Left pane    | No cursor  | Highlighted | No cursor | Dimmed       |
+| Right top    | No cursor  | Dimmed      | Cursor    | Dimmed       |
+| Right bottom | No cursor  | Dimmed      | No cursor | Highlighted  |
 
-**Cursor Position Memory:**
+**Visual Indicators:**
 
-When user navigates away from search bar (down arrow) and returns (up arrow from first key), cursor position is restored
-to where it was before leaving.
+| Pane         | Active                | Inactive               |
+|--------------|-----------------------|------------------------|
+| Search bar   | Text cursor, normal   | No cursor, dimmed text |
+| Left pane    | Key fully highlighted | Key dimmed highlight   |
+| Right top    | Text cursor visible   | No cursor, dimmed      |
+| Right bottom | Selection highlighted | Selection dimmed       |
 
-### Search Bar
+**Selection Persistence:**
+
+- Left pane: Selection persists when inactive (determines target key)
+- Right bottom: File selection persists when inactive (shown dimmed)
+
+### Target Key
+
+Target key determines which key's content is shown in right panes.
+
+```
+Target Key =
+    if (left pane has selection) → selected key
+    else if (search bar has exact match) → matched key
+    else → none
+```
+
+Left pane selection takes priority.
+
+### Search Bar Behavior
 
 **Components:**
 
@@ -189,79 +223,177 @@ to where it was before leaving.
 [🔍] [__search text__] [✏️/➕]
 ```
 
-- **Search icon (🔍):** Also acts as drag handle for moving window
-- **Search text:** Input field with placeholder text
-- **Action button:** Shows ✏️ (pen) when key exists, ➕ (plus) when key doesn't exist
-
-**Search Bar States:**
-
-| State                         | Text Style       | Button | Right Pane                                         |
-|-------------------------------|------------------|--------|----------------------------------------------------|
-| Empty                         | Gray placeholder | Hidden | "Type a key name in the search bar to get started" |
-| Text, key exists              | Normal           | ✏️ Pen | Existing key's value                               |
-| Text, key doesn't exist       | Normal           | ➕ Plus | "Press Enter to add {key}..."                      |
-| Inactive (left pane focused)  | Dimmed gray      | Hidden | Selected key's value                               |
-| Inactive (right pane focused) | Dimmed gray      | Hidden | Editing selected key                               |
-
-**Button Tooltips:**
-
-| Icon   | Tooltip                |
-|--------|------------------------|
-| ✏️ Pen | "Edit {key} (Enter)"   |
-| ➕ Plus | "Create {key} (Enter)" |
-
 **Behavior:**
 
-- On-demand search: each keystroke triggers search, results update as available
+- Each keystroke triggers search, results update progressively
+- **Typing clears left pane selection** (no stale state)
 - Empty search bar shows all keys
 - Plus button hidden when exact match exists
-- Enter with exact match → focus that key's editor
-- Enter without exact match → create key, focus editor (same as clicking plus button)
-- Clicking button performs same action as Enter
 
-### Search Bar and Left Pane Relationship
+**Enter Key:**
 
-Search bar and left pane selection are independent:
+| State              | Action                                           |
+|--------------------|--------------------------------------------------|
+| Exact match exists | Select key (dimmed), cursor to right top pane    |
+| No exact match     | Create key, select (dimmed), cursor to right top |
 
-- Search bar filters the left pane results AND serves as target key for right pane when nothing is selected.
-- Clicking a key in left pane does NOT update search bar.
-- Right pane shows: selected key's value (if selection exists) OR editor for search bar's key (if no selection).
+### Focus Transitions
 
-### Right Pane Behavior
+| From         | Action                    | To                                         |
+|--------------|---------------------------|--------------------------------------------|
+| Search bar   | Down arrow                | Left pane (first key selected)             |
+| Search bar   | Click key in list         | Left pane                                  |
+| Search bar   | Enter                     | Right top (select/create key)              |
+| Search bar   | Click right top           | Right top                                  |
+| Search bar   | Click right bottom        | Right bottom                               |
+| Left pane    | Up arrow (from first key) | Search bar                                 |
+| Left pane    | Down/Up arrow             | Navigate within list                       |
+| Left pane    | Enter                     | Right top pane                             |
+| Left pane    | Delete key                | Delete selected key (follows delete_style) |
+| Left pane    | Click search bar          | Search bar                                 |
+| Left pane    | Click right top           | Right top                                  |
+| Left pane    | Click right bottom        | Right bottom                               |
+| Right top    | Esc                       | Hide window (or dismiss modal if open)     |
+| Right top    | Click search bar          | Search bar                                 |
+| Right top    | Click key in list         | Left pane                                  |
+| Right top    | Click right bottom        | Right bottom                               |
+| Right bottom | Esc                       | Hide window (or dismiss modal if open)     |
+| Right bottom | Click search bar          | Search bar                                 |
+| Right bottom | Click key in list         | Left pane                                  |
+| Right bottom | Click right top           | Right top                                  |
 
-**Empty State (no value for target key):**
+### Keyboard Shortcuts
 
-- Shows text input with placeholder: `Write or paste value for "<key>"`
-- Accepts:
-    - Text input → stored as plain text
-    - Paste (`Ctrl+V`) with files → stored as files, shows file list
-    - Paste (`Ctrl+V`) with plain text → inserted at cursor
-    - Drag & drop file → stored as file contents, shows file list
+**Global:**
 
-**Text Editing State (plain text value exists):**
+| Key          | Action                          |
+|--------------|---------------------------------|
+| `Ctrl+Alt+K` | Show window (works when hidden) |
 
-- Standard text editor behavior
-- Arrow keys move cursor within text (do not navigate key list)
-- Paste (`Ctrl+V`):
-    - If clipboard contains plain text → insert at cursor
-    - If clipboard contains only files → show hint: "Press Ctrl+V again to overwrite" (2-second timeout)
-- Auto-save after 3 seconds of inactivity (since last keystroke)
-- Auto-save on focus loss (when editor loses focus to search bar or left pane)
-- Auto-save on window hide or app quit
+**Window Focused:**
 
-**Files Value State:**
+| Key      | Action                                  |
+|----------|-----------------------------------------|
+| `Esc`    | Dismiss modal if open, else hide window |
+| `Alt+F4` | Quit app entirely                       |
+| `Ctrl+S` | Focus search bar                        |
+| `Ctrl+,` | Open settings dialog                    |
 
-- Shows file list with filename and size for each file
-- Duplicate filenames allowed if content differs (size helps distinguish)
-- Delete button (X) on each file to remove individual files
-- Clear All button to remove all files
-- `Ctrl+Alt+C` copies files to clipboard and hides window
-- No inline preview (v1 limitation; user can copy and open externally)
+**Copy Shortcuts:**
 
-**Trashed Key State:**
+| Key          | Action                             | On Success  |
+|--------------|------------------------------------|-------------|
+| `Ctrl+C`     | Copy selection (context-dependent) | Stay open   |
+| `Ctrl+Alt+T` | Copy whole markdown as plain text  | Hide window |
+| `Ctrl+Alt+R` | Copy rendered preview as HTML      | Hide window |
+| `Ctrl+Alt+F` | Copy all attachments to clipboard  | Hide window |
 
-- Value shown read-only (cannot edit trashed key)
-- Must restore to edit
+**Copy Shortcut Logic (Ctrl+Alt+T/R/F):**
+
+```
+if (left pane has selection):
+    copy from right pane content
+    hide window
+else if (search bar has exact match):
+    load key content
+    copy
+    hide window
+else:
+    show popup "Nothing to copy"
+    stay open
+```
+
+**Context-Dependent Ctrl+C:**
+
+| Active Pane  | Selection        | Action                  |
+|--------------|------------------|-------------------------|
+| Search bar   | Text selected    | Copy as plain text      |
+| Right top    | Text selected    | Copy as plain text      |
+| Right bottom | File(s) selected | Copy files to clipboard |
+
+**Navigation:**
+
+| State                        | Key      | Action                         |
+|------------------------------|----------|--------------------------------|
+| Left pane focused            | `Enter`  | Focus right top pane           |
+| Left pane focused            | `Delete` | Delete selected key            |
+| Search bar focused, has text | `Enter`  | Select/create key, focus right |
+
+### Right Top Pane (Markdown Editor)
+
+**Edit/Preview Toggle:**
+
+```
+┌─────────────────────────────────────────────┐
+│ [Edit] [Preview]                            │
+├─────────────────────────────────────────────┤
+│  (Monaco or rendered HTML based on tab)     │
+└─────────────────────────────────────────────┘
+```
+
+| Mode    | Content                      | Editable |
+|---------|------------------------------|----------|
+| Edit    | Monaco editor (raw markdown) | Yes      |
+| Preview | Rendered HTML, images inline | No       |
+
+**Preview Rendering:**
+
+- `att:filename` links transformed to blob paths for image display
+- Clickable links for non-image attachments
+
+**Monaco Configuration:**
+
+- Language mode: Markdown
+- `pasteAs: { enabled: false }` (enables paste interception)
+- `dragAndDrop: true` (internal text drag)
+- `dropIntoEditor: { enabled: true }` (external drops)
+- `placeholder: "Type something, or drag files here..."` (shown when empty)
+
+**Auto-Save:**
+
+- Monaco writes directly to blob file via FileSystemHandle
+- Timestamps updated on key switch or window hide
+
+### Right Bottom Pane (Attachments)
+
+**Layout:**
+
+```
+┌─────────────────────────────────────────────┐
+│ 📄 document.pdf    1.2 MB              [X]  │
+│ [img] image.png    340 KB              [X]  │  ← thumbnail for images
+│                                             │
+│              [+ Add files]                  │
+└─────────────────────────────────────────────┘
+```
+
+**Features:**
+
+- File list with name, size, type icon
+- Thumbnail preview for images (png, jpg, jpeg, gif, webp, svg)
+- Multi-select with Shift/Ctrl click
+- [X] button: Remove attachment (with warning if referenced)
+- [+ Add files]: File picker or drop zone
+- Drag file to Monaco: Insert link at drop position
+
+**Thumbnail Generation:**
+
+- Generated on import
+- Lazy generation for app upgrades (new format support)
+- Fallback to icon while generating
+
+**Delete Referenced Attachment:**
+
+When deleting attachment that has `[file](att:file)` in Markdown:
+
+```
+┌─────────────────────────────────────────────┐
+│ "file.pdf" is referenced in your notes.     │
+│ Delete anyway?                              │
+│                                             │
+│ [Delete]  [Cancel]                          │
+└─────────────────────────────────────────────┘
+```
 
 ### Left Pane Controls
 
@@ -301,29 +433,110 @@ The left pane has a separate trash section at the bottom:
 
 - Active keys: Maximum 100 results displayed
 - Trashed keys: Maximum 20 results displayed
-- Results update progressively as search refines
 
-### Keyboard Navigation
+### Clipboard Handling
 
-**Arrow Key Behavior:**
+**Paste Behavior:**
 
-- Down arrow from search bar → selects first key in active list
-- Up arrow from search bar → no action (stays in search bar)
-- When left pane focused: arrows navigate key list
-- When right pane focused (text editing): arrows move cursor within text
+| Active Pane  | Clipboard | Action                                      |
+|--------------|-----------|---------------------------------------------|
+| Search bar   | Text      | Insert into search bar                      |
+| Search bar   | Files     | Do nothing; User must press enter first     |     
+| Right top    | Text      | Insert at cursor (Monaco)                   |
+| Right top    | Files     | Add to attachments + insert links at cursor |
+| Right bottom | Text      | Show confirmation dialog                    |
+| Right bottom | Files     | Add to attachments                          |
 
-### Keyboard Shortcuts
+**Link Insertion Format (multiple files):**
 
-| State                        | Key          | Action                                     |
-|------------------------------|--------------|--------------------------------------------|
-| Global (even when hidden)    | `Ctrl+Alt+K` | Show window                                |
-| Window focused               | `Esc`        | Hide window (process stays alive)          |
-| Window focused               | `Alt+F4`     | Quit app entirely                          |
-| Window focused               | `Ctrl+,`     | Open settings dialog                       |
-| Left pane focused            | `Enter`      | Focus right pane for editing               |
-| Left pane focused            | `Delete`     | Delete selected key (follows delete_style) |
-| Search bar focused, has text | `Enter`      | Focus right pane (creates key if new)      |
-| Right pane shown             | `Ctrl+Alt+C` | Copy value to clipboard, hide window       |
+```markdown
+[report.pdf](att:report.pdf), [data.xlsx](att:data.xlsx), [image.png](att:image.png)
+```
+
+Comma-separated inline. User can reformat as needed.
+
+**Overwrite Confirmation:**
+
+- Modal dialog with message and two buttons
+- [Yes] button focused by default (Enter confirms)
+- Keyboard shortcuts: Alt+Y (Yes), Alt+N (No)
+- Escape key dismisses (same as No)
+
+### Duplicate File Handling
+
+Duplicate filenames are not allowed within a key.
+
+**Single File Drop/Paste:**
+
+```
+┌─────────────────────────────────────────────┐
+│ "report.pdf" already exists.                │
+│                                             │
+│ [Overwrite]  [Rename]  [Cancel]             │
+└─────────────────────────────────────────────┘
+```
+
+- **Overwrite:** Replace existing file
+- **Rename:** Auto-generate "report (1).pdf"
+- **Cancel:** Skip this file
+
+**Multi-File Paste (with duplicates):**
+
+```
+┌─────────────────────────────────────────────┐
+│ "report.pdf" already exists.                │
+│                                             │
+│ ☐ Apply to all (3 remaining)                │
+│                                             │
+│ [Overwrite]  [Rename]  [Skip]  [Cancel All] │
+└─────────────────────────────────────────────┘
+```
+
+- **Overwrite:** Replace this one
+- **Rename:** Auto-rename this one
+- **Skip:** Skip this one, continue with others
+- **Cancel All:** Abort entire paste
+- **Apply to all:** Selected action applies to remaining conflicts
+
+**Apply to All Behavior:**
+
+| Checkbox | Button     | Effect                   |
+|----------|------------|--------------------------|
+| ☐        | Overwrite  | Overwrite this, ask next |
+| ☐        | Rename     | Rename this, ask next    |
+| ☐        | Skip       | Skip this, ask next      |
+| ☐        | Cancel All | Abort, nothing pasted    |
+| ☑        | Overwrite  | Overwrite all conflicts  |
+| ☑        | Rename     | Rename all conflicts     |
+| ☑        | Skip       | Skip all conflicts       |
+
+### Drag & Drop
+
+**Drop Targets:**
+
+| Target             | Text                    | Files                             |
+|--------------------|-------------------------|-----------------------------------|
+| Right top (Monaco) | Insert at drop position | Add to attachments + insert links |
+| Right bottom       | No action               | Add to attachments                |
+| Key in left pane   | N/A                     | Add to that key's attachments     |
+| Trashed key        | Rejected                | Rejected                          |
+| Search bar         | Not a drop target       | Not a drop target                 |
+
+**Drag from Attachments Panel:**
+
+- Drag file to Monaco → Insert `[filename](att:filename)` at drop position
+
+**Monaco Text Drop:**
+
+- Internal drag: Monaco built-in (`dragAndDrop: true`)
+- External text drop: DOM drop event → Monaco executeEdits
+
+**Large File Handling:**
+
+- Threshold applies **per file**, not total
+- Files exceeding threshold show confirmation: "File X is Y MB. Store anyway?"
+- **Hard maximum:** 1 GB per file (reject larger files with error message)
+- Multiple files: each checked individually against threshold
 
 ### First-Run Experience
 
@@ -331,7 +544,7 @@ On first launch (no config.toml exists):
 
 1. Show welcome dialog:
     - Title: "Welcome to Keva"
-    - Message: "Keva stores your clipboard snippets and files locally. Press Ctrl+Alt+K anytime to open this window."
+    - Message: "Keva stores your notes and files locally. Press Ctrl+Alt+K anytime to open this window."
     - Checkbox: "Launch Keva at login" (checked by default)
     - Button: "Get Started"
 2. If checkbox is checked, register login item
@@ -359,77 +572,6 @@ On first launch (no config.toml exists):
 | Lifecycle | Trash TTL            | Days before items auto-trash          |
 | Lifecycle | Purge TTL            | Days before trashed items are deleted |
 
-**Note:** If tray icon is hidden and window is also hidden, user can still access by double-clicking the .exe (which
-activates the existing instance's window) and pressing `Ctrl+,`.
-
-### Drag & Drop
-
-**Drop Targets:**
-
-- Right pane: stores to current target key
-- Key in left pane: stores to that specific key
-- Trashed key: rejected (cannot drop on trashed key)
-- Search bar: not a drop target
-
-**Drop Behavior Matrix:**
-
-| Existing Value | Drop Content | Behavior                                |
-|----------------|--------------|-----------------------------------------|
-| Empty          | Files        | Accept, store as Files                  |
-| Empty          | Text         | Accept, store as Text                   |
-| Text           | Files        | Confirm: "Replace text with N file(s)?" |
-| Text           | Text         | Confirm: "Replace existing text?"       |
-| Files          | Files        | Silent append (add to file list)        |
-| Files          | Text         | Confirm: "Replace N file(s) with text?" |
-
-**File Append Behavior:**
-
-- Duplicate filenames are allowed (display shows size to distinguish)
-
-**Large File Handling:**
-
-- Threshold applies **per file**, not total
-- Files exceeding threshold show confirmation: "File X is Y MB. Store anyway?"
-- **Hard maximum:** 1 GB per file (reject larger files with error message)
-- Multiple files: each checked individually against threshold
-- Applies to both drag & drop and clipboard paste
-
-### Clipboard Paste
-
-**Context-Aware Paste (`Ctrl+V`):**
-
-| Focus                    | Clipboard | Action                                                   |
-|--------------------------|-----------|----------------------------------------------------------|
-| Search bar               | Text      | Insert text into search bar (as query)                   |
-| Search bar               | Files     | Create/update key value; if search bar empty, show toast |
-| Right pane (text editor) | Text      | Insert at cursor                                         |
-| Right pane (text editor) | Files     | Show warning, Ctrl+V again to overwrite                  |
-| Right pane (files list)  | Text      | Show warning, Ctrl+V again to overwrite                  |
-| Right pane (files list)  | Files     | Silent append                                            |
-| Left pane (key selected) | Text      | Show warning if Files value; replace if Text value       |
-| Left pane (key selected) | Files     | Silent append if Files value; replace if Text/empty      |
-
-**Empty Search Bar + Paste Files:**
-
-- Toast message: "Enter a key name first"
-- No action taken (files not stored)
-
-**Overwrite Confirmation:**
-
-- Modal dialog with message and two buttons
-- [Yes] button focused by default (Enter confirms)
-- Keyboard shortcuts: Alt+Y (Yes), Alt+N (No)
-- Escape key dismisses (same as No)
-
-| Conflict            | Message                          |
-|---------------------|----------------------------------|
-| Files → Text editor | "Replace text with {n} file(s)?" |
-| Text → Files list   | "Replace {n} file(s) with text?" |
-
-**Large File Handling:**
-
-Same rules as drag & drop apply to pasted files.
-
 ## 5. Configuration
 
 ### Data Directory
@@ -437,61 +579,6 @@ Same rules as drag & drop apply to pasted files.
 Default location: `%LOCALAPPDATA%\keva`
 
 Override via environment variable: `KEVA_DATA_DIR`
-
-Directory structure:
-
-```
-{data_dir}/
-├── config.toml    # Adjustable settings
-├── keva.redb      # Database
-└── blobs/         # Large file storage
-```
-
-### Config File Format
-
-Location: `{data_dir}/config.toml`
-
-```toml
-# Config version for migration support
-config_version = 1
-
-# Appearance: "dark", "light", or "system"
-theme = "system"
-
-# Global shortcut to show window
-# Format: "Modifier+Key" (e.g., "Ctrl+Alt+K")
-global_shortcut = "Ctrl+Alt+K"
-
-# Start automatically at login
-launch_at_login = true
-
-# Show system tray icon
-show_tray_icon = true
-
-# Delete behavior: "soft" (to trash) or "immediate" (permanent)
-delete_style = "soft"
-
-# Files larger than this trigger confirmation prompt (bytes)
-large_file_threshold = 268435456  # 256 MB
-
-# Duration before active items move to trash (seconds)
-trash_ttl = 2592000  # 30 days
-
-# Duration before trashed items are purged (seconds)
-purge_ttl = 604800  # 7 days
-
-# Window position and size per monitor (managed automatically)
-# Key format: "monitor_<identifier>" where identifier is OS-provided
-[window.default]
-width = 800
-height = 600
-
-[window.monitors."monitor_12345"]  # Example: specific monitor
-x = 100
-y = 100
-width = 800
-height = 600
-```
 
 ### Config Validation
 
@@ -503,20 +590,6 @@ On launch, if config.toml contains invalid values:
 4. "Quit" exits without modifying config file
 
 If config.toml is missing: created with defaults, no popup.
-
-### Settings Reference
-
-| Setting                | Default             | Description                                                |
-|------------------------|---------------------|------------------------------------------------------------|
-| `config_version`       | `1`                 | Config format version for migrations                       |
-| `theme`                | `"system"`          | `"dark"`, `"light"`, or `"system"` (follow OS)             |
-| `global_shortcut`      | `"Ctrl+Alt+K"`      | Key combination to show window                             |
-| `launch_at_login`      | `true`              | Start automatically at system login                        |
-| `show_tray_icon`       | `true`              | Show system tray icon                                      |
-| `delete_style`         | `"soft"`            | `"soft"` = move to trash, `"immediate"` = permanent delete |
-| `large_file_threshold` | `268435456` (256MB) | Confirmation prompt for files exceeding this size (bytes)  |
-| `trash_ttl`            | `2592000` (30 days) | Seconds before inactive items move to trash                |
-| `purge_ttl`            | `604800` (7 days)   | Seconds before trashed items are permanently deleted       |
 
 ## 6. Lifecycle Management
 
@@ -559,16 +632,16 @@ are permanent with no restoration.
 - Moves items from Active to Trash based on TTL
 - Permanently removes items past purge TTL
 - Reclaims storage space from deleted blobs
-- May perform in-memory maintenance tasks (e.g., search index compaction) to avoid heavy work during active UI
-  interaction
+- May perform in-memory maintenance tasks (e.g., search index compaction)
 
-Triggers:
+**Triggers:**
 
 - Window hide
-- App quit
 - Periodically while running (fixed: 1 day)
 
-Note: Search results may be slightly outdated until maintenance runs.
+**NOT triggered on:**
+
+- App quit (for fast exit)
 
 ## 7. Error Handling
 
@@ -590,11 +663,9 @@ If the configured shortcut is already registered by another application:
 | File locked        | "Database is locked by another process."           | Offer to force-quit other instance |
 | Permission denied  | "Cannot access data directory. Check permissions." | Show path, suggest fix             |
 
-### Auto-Save Failure
+### Copy Failure
 
-If auto-save fails (disk full, permissions, etc.):
+If copy shortcut fails (no target key, no content):
 
-1. Show non-blocking notification: "Failed to save changes"
-2. Keep unsaved changes in memory
-3. Retry on next edit or explicit save
-4. On window hide: auto-save pending changes (if save fails, window still hides)
+- Show popup: "Nothing to copy"
+- Window stays open
