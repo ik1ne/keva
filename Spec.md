@@ -375,6 +375,10 @@ else:
 - [X] button: Remove attachment (with warning if referenced)
 - [+ Add files]: File picker or drop zone
 - Drag file to Monaco: Insert link at drop position
+- [✏️] button: Inline rename attachment
+    - Opens inline text input with current filename
+    - If new name exists: show duplicate dialog (Overwrite/Rename/Cancel)
+    - Invalid names (empty, too long) rejected with inline error
 
 **Thumbnail Generation:**
 
