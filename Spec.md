@@ -414,11 +414,17 @@ activates the existing instance's window) and pressing `Ctrl+,`.
 - Toast message: "Enter a key name first"
 - No action taken (files not stored)
 
-**Overwrite Warning:**
+**Overwrite Confirmation:**
 
-- Red text at bottom of right pane: "Press Ctrl+V again to overwrite"
-- Timeout: 2 seconds or any other action clears warning
-- Second Ctrl+V within timeout executes overwrite
+- Modal dialog with message and two buttons
+- [Yes] button focused by default (Enter confirms)
+- Keyboard shortcuts: Alt+Y (Yes), Alt+N (No)
+- Escape key dismisses (same as No)
+
+| Conflict            | Message                          |
+|---------------------|----------------------------------|
+| Files → Text editor | "Replace text with {n} file(s)?" |
+| Text → Files list   | "Replace {n} file(s) with text?" |
 
 **Large File Handling:**
 
