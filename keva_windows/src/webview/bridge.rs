@@ -25,8 +25,20 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
             eprintln!("[Native] Selected key: {}", key);
             let _ = request_tx.send(Request::GetValue { key });
         }
+        IncomingMessage::Save { key, content } => {
+            eprintln!("[Native] Saving key: {}", key);
+            let _ = request_tx.send(Request::Save { key, content });
+        }
+        IncomingMessage::Create { key } => {
+            eprintln!("[Native] Creating key: {}", key);
+            let _ = request_tx.send(Request::Create { key });
+        }
         IncomingMessage::Hide => {
             let _ = unsafe { ShowWindow(parent_hwnd, SW_HIDE) };
+        }
+        IncomingMessage::ShutdownAck => {
+            eprintln!("[Native] ShutdownAck received, sending shutdown to worker");
+            let _ = request_tx.send(Request::Shutdown);
         }
     }
 }

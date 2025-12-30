@@ -8,7 +8,10 @@ use serde::{Deserialize, Serialize};
 pub enum IncomingMessage {
     Ready,
     Select { key: String },
+    Save { key: String, content: String },
+    Create { key: String },
     Hide,
+    ShutdownAck,
 }
 
 /// Messages from native to WebView.
@@ -17,6 +20,7 @@ pub enum IncomingMessage {
 pub enum OutgoingMessage {
     Keys { keys: Vec<KeyInfo> },
     Value { value: Option<ValueInfo> },
+    Shutdown,
 }
 
 #[derive(Debug, Serialize)]

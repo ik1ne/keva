@@ -16,10 +16,11 @@ use windows::Win32::{
         Input::KeyboardAndMouse::VK_ESCAPE,
         WindowsAndMessaging::{
             GWLP_USERDATA, GetSystemMetrics, GetWindowLongPtrW, GetWindowRect, IsWindowVisible,
-            MINMAXINFO, NCCALCSIZE_PARAMS, PostQuitMessage, SM_CXPADDEDBORDER, SM_CXSIZEFRAME,
-            SM_CYSIZEFRAME, SW_HIDE, SW_SHOW, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOOWNERZORDER,
-            SWP_NOSIZE, SWP_NOZORDER, SetForegroundWindow, SetWindowPos, ShowWindow,
-            USER_DEFAULT_SCREEN_DPI, WM_LBUTTONUP, WM_RBUTTONUP, WVR_VALIDRECTS,
+            MINMAXINFO, NCCALCSIZE_PARAMS, PostMessageW, PostQuitMessage, SM_CXPADDEDBORDER,
+            SM_CXSIZEFRAME, SM_CYSIZEFRAME, SW_HIDE, SW_SHOW, SWP_FRAMECHANGED, SWP_NOMOVE,
+            SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, SetForegroundWindow, SetWindowPos,
+            ShowWindow, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_LBUTTONUP, WM_RBUTTONUP,
+            WVR_VALIDRECTS,
         },
     },
 };
@@ -184,8 +185,7 @@ pub fn on_command(hwnd: HWND, wparam: WPARAM) -> LRESULT {
                 // Non-functional until M20-win
             }
             IDM_QUIT => {
-                let _ = ShowWindow(hwnd, SW_HIDE);
-                PostQuitMessage(0);
+                let _ = PostMessageW(Some(hwnd), WM_CLOSE, WPARAM(0), LPARAM(0));
             }
             _ => {}
         }

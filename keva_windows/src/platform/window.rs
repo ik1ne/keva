@@ -1,7 +1,8 @@
 //! Window creation and message handling.
 
 use crate::app::App;
-use crate::keva_worker::{self, WM_KEVA_RESPONSE};
+use crate::keva_worker::{self, WM_KEVA_RESPONSE, WM_SHUTDOWN_COMPLETE};
+use crate::webview::{WEBVIEW, bridge::post_message, messages::OutgoingMessage};
 use crate::platform::{
     handlers::{
         get_resize_border, on_activate, on_command, on_create, on_destroy, on_getminmaxinfo,
@@ -22,13 +23,13 @@ use windows::{
             HiDpi::GetDpiForSystem,
             WindowsAndMessaging::{
                 CreateWindowExW, DefWindowProcW, DispatchMessageW, GWLP_USERDATA, GetMessageW,
-                GetSystemMetrics, IDC_ARROW, LoadCursorW, MSG, RegisterClassW, SM_CXSCREEN,
-                SM_CYSCREEN, SW_SHOW, SWP_NOCOPYBITS, SetForegroundWindow, SetWindowLongPtrW,
-                ShowWindow, TranslateMessage, WINDOWPOS, WM_ACTIVATE, WM_COMMAND, WM_CREATE,
-                WM_DESTROY, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN, WM_NCACTIVATE,
-                WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT, WM_SIZE, WM_WINDOWPOSCHANGING, WNDCLASSW,
-                WS_CLIPCHILDREN, WS_EX_APPWINDOW, WS_EX_TOPMOST, WS_MAXIMIZEBOX, WS_MINIMIZEBOX,
-                WS_POPUP, WS_SIZEBOX, WS_SYSMENU,
+                GetSystemMetrics, IDC_ARROW, LoadCursorW, MSG, PostQuitMessage, RegisterClassW,
+                SM_CXSCREEN, SM_CYSCREEN, SW_SHOW, SWP_NOCOPYBITS, SetForegroundWindow,
+                SetWindowLongPtrW, ShowWindow, TranslateMessage, WINDOWPOS, WM_ACTIVATE,
+                WM_COMMAND, WM_CREATE, WM_DESTROY, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN,
+                WM_CLOSE, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT, WM_SIZE,
+                WM_WINDOWPOSCHANGING, WNDCLASSW, WS_CLIPCHILDREN, WS_EX_APPWINDOW, WS_EX_TOPMOST,
+                WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SIZEBOX, WS_SYSMENU,
             },
         },
     },
@@ -158,6 +159,18 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
         WM_KEVA_RESPONSE =>
         // SAFETY: wndproc is single-threaded
         unsafe { on_keva_response(hwnd) },
+        WM_SHUTDOWN_COMPLETE => {
+            unsafe { PostQuitMessage(0) };
+            LRESULT(0)
+        }
+        WM_CLOSE => {
+            if let Some(wv) = WEBVIEW.get() {
+                post_message(&wv.webview, &OutgoingMessage::Shutdown);
+            } else {
+                unsafe { PostQuitMessage(0) };
+            }
+            LRESULT(0)
+        }
         WM_SIZE => on_size(wparam, lparam),
         WM_PAINT => {
             let _ = unsafe { ValidateRect(Some(hwnd), None) };

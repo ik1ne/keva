@@ -24,3 +24,12 @@ features = [
     "Win32_Graphics_Gdi",
     "Win32_Graphics_Dwm",
 ]
+
+[[example]]
+name = "test_shared_buffer"
+
+[[example]]
+name = "test_file_handle"
+
+[[example]]
+name = "test_monaco_paste"

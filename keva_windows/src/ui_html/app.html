@@ -70,6 +70,30 @@
             color: #808080;
         }
 
+        .search-action-btn {
+            width: 40px;
+            height: 40px;
+            background: #2d2d2d;
+            border: none;
+            border-radius: 4px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: #969696;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .search-action-btn:hover {
+            background: #3c3c3c;
+            color: #d4d4d4;
+        }
+
+        .search-action-btn.visible {
+            display: flex;
+        }
+
         /* Main content */
         .main-content {
             display: flex;
@@ -198,6 +222,7 @@
     <div class="search-bar">
         <div class="search-icon">&#128269;</div>
         <input type="text" class="search-input" id="search-input" placeholder="Search keys...">
+        <button class="search-action-btn" id="search-action-btn" title="Create or edit">&#43;</button>
     </div>
     <div class="main-content">
         <div class="left-pane">
@@ -219,12 +244,16 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
 <script>
     const searchInput = document.getElementById('search-input');
+    const searchActionBtn = document.getElementById('search-action-btn');
     let editor = null;
     let selectedKey = null;
+    let isSelectedTrashed = false;
     let keys = [];
     let trashedKeys = [];
     let isDirty = false;
     let saveTimer = null;
+    let isShuttingDown = false;
+    let pendingSelectKey = null;
 
     function sendToNative(msg) {
         window.chrome.webview.postMessage(JSON.stringify(msg));
@@ -237,14 +266,61 @@
     });
 
     searchInput.addEventListener('input', (e) => {
+        if (e.target.value && selectedKey) {
+            selectedKey = null;
+            updateSelection();
+        }
+        updateSearchButton();
         sendToNative({type: 'search', query: e.target.value});
+    });
+
+    function updateSearchButton() {
+        const query = searchInput.value.trim();
+        if (!query || selectedKey) {
+            searchActionBtn.classList.remove('visible');
+            return;
+        }
+
+        const existingKey = keys.find(k => k.name === query);
+        const existingTrashed = trashedKeys.find(k => k.name === query);
+
+        if (existingKey || existingTrashed) {
+            searchActionBtn.innerHTML = '&#9998;';
+            searchActionBtn.title = 'Edit key';
+        } else {
+            searchActionBtn.innerHTML = '&#43;';
+            searchActionBtn.title = 'Create key';
+        }
+        searchActionBtn.classList.add('visible');
+    }
+
+    searchActionBtn.addEventListener('click', () => {
+        const query = searchInput.value.trim();
+        if (!query) return;
+
+        const existingKey = keys.find(k => k.name === query);
+        const existingTrashed = trashedKeys.find(k => k.name === query);
+
+        if (existingKey || existingTrashed) {
+            selectKey(query);
+        } else {
+            sendToNative({type: 'create', key: query});
+        }
+        searchInput.value = '';
+        updateSearchButton();
     });
 
     searchInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             const query = searchInput.value.trim();
             if (query) {
-                sendToNative({type: 'create', key: query});
+                const exists = keys.some(k => k.name === query) || trashedKeys.some(k => k.name === query);
+                if (exists) {
+                    selectKey(query);
+                } else {
+                    pendingSelectKey = query;
+                    sendToNative({type: 'create', key: query});
+                }
             }
         } else if (e.key === 'ArrowDown') {
             e.preventDefault();
@@ -269,8 +345,14 @@
             minimap: {enabled: false},
             fontSize: 14,
             wordWrap: 'on',
-            scrollBeyondLastLine: false,
-            readOnly: true
+            scrollBeyondLastLine: false
+        });
+
+        editor.onDidChangeModelContent(() => {
+            if (selectedKey) {
+                isDirty = true;
+                scheduleSave();
+            }
         });
 
         sendToNative({type: 'ready'});
@@ -318,6 +400,11 @@
                 trashedKeys = msg.keys.filter(k => k.trashed);
                 renderKeyList();
                 renderTrashList();
+                updateSearchButton();
+                if (pendingSelectKey) {
+                    selectKey(pendingSelectKey);
+                    pendingSelectKey = null;
+                }
                 break;
 
             case 'value':
@@ -337,11 +424,18 @@
                 trashedKeys = msg.keys.filter(k => k.trashed);
                 renderKeyList();
                 renderTrashList();
+                updateSearchButton();
                 break;
 
-            case 'forceSave':
+            case 'shutdown':
+                if (isShuttingDown) {
+                    sendToNative({type: 'shutdownAck'});
+                    break;
+                }
+                isShuttingDown = true;
+                showShutdownOverlay();
                 forceSave();
-                sendToNative({type: 'saveComplete'});
+                sendToNative({type: 'shutdownAck'});
                 break;
 
             case 'focus':
@@ -389,7 +483,9 @@
             forceSave();
         }
         selectedKey = keyName;
+        isSelectedTrashed = trashedKeys.some(k => k.name === keyName);
         updateSelection();
+        updateSearchButton();
         sendToNative({type: 'select', key: keyName});
     }
 
@@ -409,7 +505,9 @@
         editorContainer.style.display = 'block';
         if (editor) {
             editor.setValue(content || '');
+            editor.updateOptions({ readOnly: isSelectedTrashed });
             isDirty = false;
+            editor.focus();
         }
     }
 
@@ -417,6 +515,12 @@
         emptyState.textContent = message || 'Select a key or type to search';
         emptyState.style.display = 'flex';
         editorContainer.style.display = 'none';
+    }
+
+    function showShutdownOverlay() {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.3);z-index:9999;';
+        document.body.appendChild(overlay);
     }
 
     function escapeHtml(str) {

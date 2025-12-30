@@ -14,11 +14,16 @@ use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_APP};
 
 /// Custom message ID for keva responses.
 pub const WM_KEVA_RESPONSE: u32 = WM_APP + 1;
+/// Custom message ID for shutdown complete signal.
+pub const WM_SHUTDOWN_COMPLETE: u32 = WM_APP + 2;
 
 /// Request types sent from UI thread to worker.
 pub enum Request {
     GetKeys,
     GetValue { key: String },
+    Save { key: String, content: String },
+    Create { key: String },
+    Shutdown,
 }
 
 /// Starts the worker thread and returns channels for communication.
@@ -45,35 +50,24 @@ fn worker_loop(requests: Receiver<Request>, responses: Sender<OutgoingMessage>, 
     eprintln!("[KevaWorker] Database at {}", get_data_path().display());
 
     for request in requests {
-        let response = handle_request(&mut keva, request);
-        if responses.send(response).is_ok() {
-            // Notify UI thread that a response is ready
+        if matches!(request, Request::Shutdown) {
+            eprintln!("[KevaWorker] Shutdown received, exiting");
+            let _ = unsafe { PostMessageW(Some(hwnd), WM_SHUTDOWN_COMPLETE, WPARAM(0), LPARAM(0)) };
+            break;
+        }
+
+        if let Some(response) = handle_request(&mut keva, request)
+            && responses.send(response).is_ok()
+        {
             let _ = unsafe { PostMessageW(Some(hwnd), WM_KEVA_RESPONSE, WPARAM(0), LPARAM(0)) };
         }
     }
 }
 
-fn handle_request(keva: &mut KevaCore, request: Request) -> OutgoingMessage {
+fn handle_request(keva: &mut KevaCore, request: Request) -> Option<OutgoingMessage> {
     match request {
         Request::GetKeys => {
-            let active = keva.active_keys().unwrap_or_default();
-            let trashed = keva.trashed_keys().unwrap_or_default();
-
-            let mut keys: Vec<KeyInfo> = active
-                .iter()
-                .map(|k| KeyInfo {
-                    name: k.as_str().to_string(),
-                    trashed: false,
-                })
-                .collect();
-
-            keys.extend(trashed.iter().map(|k| KeyInfo {
-                name: k.as_str().to_string(),
-                trashed: true,
-            }));
-
-            eprintln!("[KevaWorker] Fetched {} keys", keys.len());
-            OutgoingMessage::Keys { keys }
+            Some(get_keys_response(keva))
         }
         Request::GetValue { key: key_str } => {
             let now = SystemTime::now();
@@ -92,9 +86,48 @@ fn handle_request(keva: &mut KevaCore, request: Request) -> OutgoingMessage {
                 ClipData::Files(files) => ValueInfo::Files { count: files.len() },
             });
 
-            OutgoingMessage::Value { value }
+            Some(OutgoingMessage::Value { value })
         }
+        Request::Save { key: key_str, content } => {
+            let now = SystemTime::now();
+            if let Ok(key) = Key::try_from(key_str.as_str()) {
+                let _ = keva.upsert_text(&key, &content, now);
+                eprintln!("[KevaWorker] Saved key: {}", key_str);
+            }
+            None
+        }
+        Request::Create { key: key_str } => {
+            let now = SystemTime::now();
+            if let Ok(key) = Key::try_from(key_str.as_str()) {
+                let _ = keva.upsert_text(&key, "", now);
+                eprintln!("[KevaWorker] Created key: {}", key_str);
+            }
+            // Return updated key list
+            Some(get_keys_response(keva))
+        }
+        Request::Shutdown => unreachable!("Shutdown handled in worker_loop"),
     }
+}
+
+fn get_keys_response(keva: &mut KevaCore) -> OutgoingMessage {
+    let active = keva.active_keys().unwrap_or_default();
+    let trashed = keva.trashed_keys().unwrap_or_default();
+
+    let mut keys: Vec<KeyInfo> = active
+        .iter()
+        .map(|k| KeyInfo {
+            name: k.as_str().to_string(),
+            trashed: false,
+        })
+        .collect();
+
+    keys.extend(trashed.iter().map(|k| KeyInfo {
+        name: k.as_str().to_string(),
+        trashed: true,
+    }));
+
+    eprintln!("[KevaWorker] Fetched {} keys", keys.len());
+    OutgoingMessage::Keys { keys }
 }
 
 fn open_keva() -> KevaCore {
