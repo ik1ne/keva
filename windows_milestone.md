@@ -29,28 +29,61 @@ and includes test cases for verification.
 
 ---
 
-## M0: keva_core Verification
+## M0: Core Crates Verification
 
-**Goal:** Verify keva_core implementation matches keva_core.md specification.
+**Goal:** Verify keva_core and keva_search implementations match their specifications.
 
-**Description:** Review existing keva_core crate against the unified data model (markdown + attachments). Identify API
-changes needed: storage structure with separate content/, blobs/, thumbnails/ trees, attachment operations with conflict
-resolution, and thumbnail versioning. This milestone is complete when keva_core compiles with the new API surface and
-passes its own test suite.
+**Description:** Review existing crate implementations against their specification documents. For keva_core: verify the
+unified data model (markdown + attachments), storage structure with separate content/, blobs/, thumbnails/ trees,
+attachment operations with conflict resolution, and thumbnail versioning. For keva_search: verify the dual-index
+architecture, tombstone-based deletion, stop-at-threshold behavior, and maintenance compaction. This milestone is
+complete when both crates compile with the specified API surface and pass their test suites.
 
 **Dependencies:** None
 
-**Key APIs:**
+**keva_core Key APIs:**
 
-- `KevaCore::open(config)`
-- `create()`, `get()`, `touch()`, `rename()`
-- `get_content_path()`, `mark_content_modified()`
-- `add_attachments()`, `remove_attachment()`, `rename_attachment()`
-- `get_thumbnail_path()` with THUMB_VER check
-- `trash()`, `restore()`, `purge()`
-- `maintenance()`
+| Category    | APIs                                                                                       |
+|-------------|--------------------------------------------------------------------------------------------|
+| Lifecycle   | `open(config)`                                                                             |
+| Key Ops     | `get()`, `active_keys()`, `trashed_keys()`, `touch()`, `rename()`                          |
+| Content     | `get_content_path()`, `create()`, `mark_content_modified()`                                |
+| Attachments | `get_attachment_path()`, `add_attachments()`, `remove_attachment()`, `rename_attachment()` |
+| Thumbnails  | `get_thumbnail_path()` with `THUMB_VER` check                                              |
+| Trash       | `trash()`, `restore()`, `purge()`                                                          |
+| Clipboard   | `read_clipboard()`, `copy_text_to_clipboard()`, `copy_attachments_to_clipboard()`          |
+| Maintenance | `maintenance()`                                                                            |
 
-**Test Cases:** keva_core has its own test suite in the crate. Ensure all tests pass after modifications.
+**keva_search Key APIs:**
+
+| Category    | APIs                                                                          |
+|-------------|-------------------------------------------------------------------------------|
+| Constructor | `SearchEngine::new(active, trashed, config, notify)`                          |
+| Mutation    | `add_active()`, `trash()`, `restore()`, `remove()`, `rename()`                |
+| Search      | `set_query()`, `tick()`, `is_done()`, `active_results()`, `trashed_results()` |
+| Maintenance | `maintenance_compact()`                                                       |
+| Results     | `SearchResults::iter()`                                                       |
+
+**Test Cases:**
+
+| TC       | Description                                                              | Status |
+|----------|--------------------------------------------------------------------------|--------|
+| TC-M0-01 | keva_core compiles with specified API surface                            | ❌      |
+| TC-M0-02 | keva_core storage structure matches spec (content/, blobs/, thumbnails/) | ❌      |
+| TC-M0-03 | keva_core Key validation enforces constraints (1-256 chars, trimmed)     | ❌      |
+| TC-M0-04 | keva_core attachment conflict resolution works (Overwrite/Rename/Skip)   | ❌      |
+| TC-M0-05 | keva_core thumbnail versioning triggers regeneration                     | ❌      |
+| TC-M0-06 | keva_core 1GB file limit enforced                                        | ❌      |
+| TC-M0-07 | keva_core lifecycle transitions correct (Active→Trash→Purge)             | ❌      |
+| TC-M0-08 | keva_core timestamp updates match spec                                   | ❌      |
+| TC-M0-09 | keva_core test suite passes                                              | ❌      |
+| TC-M0-10 | keva_search compiles with specified API surface                          | ❌      |
+| TC-M0-11 | keva_search dual-index architecture (active/trashed)                     | ❌      |
+| TC-M0-12 | keva_search tombstone-based deletion works                               | ❌      |
+| TC-M0-13 | keva_search stop-at-threshold behavior (100 active, 20 trashed)          | ❌      |
+| TC-M0-14 | keva_search index compaction triggers at rebuild_threshold               | ❌      |
+| TC-M0-15 | keva_search smart case matching works                                    | ❌      |
+| TC-M0-16 | keva_search test suite passes                                            | ❌      |
 
 ---
 
@@ -120,16 +153,48 @@ communication. Apply dark theme to WebView. Load initial HTML shell with placeho
 
 ```typescript
 // Native → WebView
-{ type: "searchResults", keys: [...] }
-{ type: "clipboard", content: { text: "..." } | { files: [...] } }
-{ type: "fileHandle", handle: FileSystemFileHandle }
+{
+    type: "searchResults", keys
+:
+    [...]
+}
+{
+    type: "clipboard", content
+:
+    {
+        text: "..."
+    }
+|
+    {
+        files: [...]
+    }
+}
+{
+    type: "fileHandle", handle
+:
+    FileSystemFileHandle
+}
 
 // WebView → Native
-{ type: "search", query: "..." }
-{ type: "readClipboard" }
-{ type: "createKey", key: "..." }
-{ type: "hide" }
-{ type: "quit" }
+{
+    type: "search", query
+:
+    "..."
+}
+{
+    type: "readClipboard"
+}
+{
+    type: "createKey", key
+:
+    "..."
+}
+{
+    type: "hide"
+}
+{
+    type: "quit"
+}
 ```
 
 **Test Cases:**
