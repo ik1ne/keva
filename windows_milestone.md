@@ -91,9 +91,9 @@ complete when both crates compile with the specified API surface and pass their 
 
 **Goal:** Borderless window with system tray and basic window management.
 
-**Description:** Native Rust window using `windows` crate. No title bar, 5px outer resize zone, always on top. System
-tray icon with left-click toggle and right-click context menu. DPI-aware rendering. Esc hides window without destroying
-it. Window stays on top to enable drag/drop from other apps.
+**Description:** Native Rust window using `windows` crate. No title bar, system-metrics-based outer resize zone, always
+on top. System tray icon with left-click toggle and right-click context menu. DPI-aware rendering. Esc hides window
+without destroying it. Window stays on top to enable drag/drop from other apps.
 
 **Dependencies:** None
 
@@ -101,17 +101,20 @@ it. Window stays on top to enable drag/drop from other apps.
 
 - `WS_POPUP` style for borderless window
 - `WS_EX_TOPMOST` for always on top
-- `WM_NCHITTEST` handling for 5px resize border
-- Shell_NotifyIconW for tray icon
-- SetProcessDpiAwarenessContext for DPI awareness
-- Minimum window size: 400x300 (enforced via WM_GETMINMAXINFO)
+- `WM_NCHITTEST` handling for resize border:
+    - Border width: `GetSystemMetrics(SM_CXSIZEFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER)`
+    - Border height: `GetSystemMetrics(SM_CYSIZEFRAME) + GetSystemMetrics(SM_CYPADDEDBORDER)`
+- `Shell_NotifyIconW` for tray icon
+- `SetProcessDpiAwarenessContext` for DPI awareness
+- Minimum window size: 400×300 logical pixels (enforced via `WM_GETMINMAXINFO`)
+- Aero Snap support requires `WM_NCHITTEST` returning appropriate `HT*` values
 
 **Test Cases:**
 
 | TC       | Description                                | Status |
 |----------|--------------------------------------------|--------|
 | TC-M1-01 | Window appears centered on primary monitor | ✅      |
-| TC-M1-02 | Drag from outer 5px edge resizes window    | ✅      |
+| TC-M1-02 | Drag from outer edge resizes window        | ✅      |
 | TC-M1-03 | Tray icon visible with "Keva" tooltip      | ✅      |
 | TC-M1-04 | Tray left-click toggles window visibility  | ✅      |
 | TC-M1-05 | Tray right-click shows context menu        | ✅      |
@@ -126,6 +129,7 @@ it. Window stays on top to enable drag/drop from other apps.
 | TC-M1-14 | Aero Snap to top edge (maximize)           | ❌      |
 | TC-M1-15 | Aero Snap to corner (quarter-screen)       | ❌      |
 | TC-M1-16 | Drag from maximized restores window        | ❌      |
+| TC-M1-17 | Resize border scales correctly at 150% DPI | ❌      |
 
 ---
 
