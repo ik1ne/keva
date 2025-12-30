@@ -88,6 +88,11 @@ it. Window stays on top to enable drag/drop from other apps.
 | TC-M1-09 | Alt+F4 quits application entirely          | ❌      |
 | TC-M1-10 | Corner drag resizes diagonally             | ❌      |
 | TC-M1-11 | Window respects minimum size (400x300)     | ❌      |
+| TC-M1-12 | Aero Snap to left edge (half-screen)       | ❌      |
+| TC-M1-13 | Aero Snap to right edge (half-screen)      | ❌      |
+| TC-M1-14 | Aero Snap to top edge (maximize)           | ❌      |
+| TC-M1-15 | Aero Snap to corner (quarter-screen)       | ❌      |
+| TC-M1-16 | Drag from maximized restores window        | ❌      |
 
 ---
 
