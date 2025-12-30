@@ -124,7 +124,7 @@ Each Value stores `thumb_version`. On thumbnail access:
 ```rust
 fn get_thumbnail_path(key, filename) -> Option<PathBuf> {
     let value = get(key);
-    
+
     if value.thumb_version < THUMB_VER {
         // Regenerate all thumbnails for this key
         for attachment in &value.attachments {
@@ -136,7 +136,7 @@ fn get_thumbnail_path(key, filename) -> Option<PathBuf> {
         // Update version regardless of individual success/failure
         update_thumb_version(key, THUMB_VER);
     }
-    
+
     let thumb_path = thumbnails_dir / key_hash / format!("{}.thumb", filename);
     if thumb_path.exists() {
         Some(thumb_path)
@@ -179,21 +179,21 @@ impl KevaCore {
 impl KevaCore {
     /// Retrieve value by key (does NOT update last_accessed)
     fn get(&self, key: &Key) -> Result<Option<Value>, StorageError>;
-    
+
     /// List all Active keys
     fn active_keys(&self) -> Result<Vec<Key>, StorageError>;
-    
+
     /// List all Trash keys
     fn trashed_keys(&self) -> Result<Vec<Key>, StorageError>;
-    
+
     /// Update last_accessed timestamp
     fn touch(&mut self, key: &Key, now: SystemTime) -> Result<(), StorageError>;
-    
+
     /// Rename key (optionally overwrite existing)
     fn rename(
-        &mut self, 
-        old: &Key, 
-        new: &Key, 
+        &mut self,
+        old: &Key,
+        new: &Key,
         overwrite: bool,
         now: SystemTime,
     ) -> Result<(), StorageError>;
@@ -208,16 +208,16 @@ impl KevaCore {
     /// Path is derived: content/{key_hash}.md
     /// Requires Value to ensure key exists (file guaranteed to exist)
     fn get_content_path(&self, key: &Key, _value: &Value) -> PathBuf;
-    
+
     /// Create key with empty content.md
     /// Returns error if key already exists
     fn create(&mut self, key: &Key, now: SystemTime) -> Result<(), StorageError>;
-    
+
     /// Mark content as modified (updates updated_at and last_accessed)
-    /// Called by UI on key switch or window hide (not on every save)
+    /// Called by UI on debounced save, key switch, or app exit
     fn mark_content_modified(
-        &mut self, 
-        key: &Key, 
+        &mut self,
+        key: &Key,
         now: SystemTime
     ) -> Result<(), StorageError>;
 }
@@ -231,11 +231,11 @@ Note: To list attachments, use `get(key)?.attachments`.
 impl KevaCore {
     /// Get path to specific attachment
     fn get_attachment_path(
-        &self, 
-        key: &Key, 
+        &self,
+        key: &Key,
         filename: &str
     ) -> Result<PathBuf, StorageError>;
-    
+
     /// Add attachments with pre-resolved conflict decisions
     /// Rejects files > 1 GB
     fn add_attachments(
@@ -244,15 +244,15 @@ impl KevaCore {
         files: Vec<(PathBuf, ConflictResolution)>,
         now: SystemTime,
     ) -> Result<Vec<AddResult>, StorageError>;
-    
+
     /// Remove attachment by filename
     fn remove_attachment(
-        &mut self, 
-        key: &Key, 
-        filename: &str, 
+        &mut self,
+        key: &Key,
+        filename: &str,
         now: SystemTime
     ) -> Result<(), StorageError>;
-    
+
     /// Rename attachment
     fn rename_attachment(
         &mut self,
@@ -271,8 +271,8 @@ impl KevaCore {
     /// Get thumbnail path, regenerating if version outdated
     /// Returns None for unsupported formats or if generation failed
     fn get_thumbnail_path(
-        &mut self, 
-        key: &Key, 
+        &mut self,
+        key: &Key,
         filename: &str
     ) -> Result<Option<PathBuf>, StorageError>;
 }
@@ -284,41 +284,14 @@ impl KevaCore {
 impl KevaCore {
     /// Move key to Trash
     fn trash(&mut self, key: &Key, now: SystemTime) -> Result<(), StorageError>;
-    
+
     /// Restore key from Trash to Active
     fn restore(&mut self, key: &Key, now: SystemTime) -> Result<(), StorageError>;
-    
+
     /// Permanently delete key and all associated files
     fn purge(&mut self, key: &Key) -> Result<(), StorageError>;
 }
 ```
-
-### Clipboard Operations
-
-```rust
-impl KevaCore {
-    /// Read clipboard content (does not modify storage)
-    fn read_clipboard(&self) -> Result<ClipboardContent, ClipboardError>;
-    
-    /// Copy markdown content to clipboard as plain text
-    fn copy_text_to_clipboard(
-        &mut self, 
-        key: &Key, 
-        now: SystemTime
-    ) -> Result<(), StorageError>;
-    
-    /// Copy selected attachments to clipboard
-    fn copy_attachments_to_clipboard(
-        &mut self,
-        key: &Key,
-        filenames: &[&str],
-        now: SystemTime,
-    ) -> Result<(), StorageError>;
-}
-```
-
-Note: `Ctrl+Alt+R` (copy rendered HTML) is handled by UI layer. UI reads content, renders markdown to HTML, and copies
-to clipboard.
 
 ### Maintenance
 
@@ -328,21 +301,12 @@ impl KevaCore {
     /// - Moves Active → Trash based on trash_ttl
     /// - Purges Trash items based on purge_ttl
     /// - Cleans orphaned blob/thumbnail files
-    fn maintenance(&mut self, now: SystemTime) -> Result<MaintenanceStats, StorageError>;
+    /// Returns list of keys that were trashed (for UI to handle)
+    fn maintenance(&mut self, now: SystemTime) -> Result<MaintenanceState, StorageError>;
 }
 ```
 
 ## Types
-
-### ClipboardContent
-
-```rust
-enum ClipboardContent {
-    Text(String),
-    Files(Vec<PathBuf>),
-    Empty,
-}
-```
 
 ### ConflictResolution
 
@@ -366,11 +330,11 @@ enum AddResult {
 }
 ```
 
-### MaintenanceStats
+### MaintenanceState
 
 ```rust
-struct MaintenanceStats {
-    keys_trashed: usize,
+struct MaintenanceState {
+    keys_trashed: Vec<Key>,
     keys_purged: usize,
     orphaned_files_removed: usize,
 }
@@ -384,7 +348,6 @@ struct MaintenanceStats {
 enum StorageError {
     Database(DatabaseError),
     FileStorage(FileStorageError),
-    Clipboard(ClipboardError),
     KeyIsTrashed,           // Operation requires Active key
     KeyExists,              // create() called on existing key
     AlreadyTrashed,         // Key already in Trash
@@ -416,24 +379,13 @@ enum FileStorageError {
 }
 ```
 
-### ClipboardError
-
-```rust
-enum ClipboardError {
-    AccessDenied,
-    Empty,
-    UnsupportedFormat,
-    Internal(String),
-}
-```
-
 ## Lifecycle
 
 ### State Transitions
 
 ```
                  trash()
-    Active ─────────────────► Trash
+    Active ─────────────────────► Trash
        │                        │
        │                        │ restore()
        │                        ▼
@@ -442,7 +394,7 @@ enum ClipboardError {
        │  trash_ttl expires     │  purge_ttl expires
        │  (via maintenance)     │  (via maintenance)
        ▼                        ▼
-     Trash ──────────────────► Purged (deleted)
+     Trash ──────────────────────► Purged (deleted)
                 purge()
 ```
 
@@ -471,11 +423,9 @@ enum ClipboardError {
 
 Called by UI on:
 
-- Key switch (user selects different key)
-- Window hide
-
-NOT called on every Monaco save. FileSystemHandle writes directly to content file; timestamps updated when user
-navigates away.
+- Debounced save (500ms after edit)
+- Key switch (if dirty)
+- App exit (if dirty)
 
 ## Thread Safety
 
