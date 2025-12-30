@@ -39,8 +39,6 @@ attachment operations with conflict resolution, and thumbnail versioning. For ke
 architecture, tombstone-based deletion, stop-at-threshold behavior, and maintenance compaction. This milestone is
 complete when both crates compile with the specified API surface and pass their test suites.
 
-**Dependencies:** None
-
 **keva_core Key APIs:**
 
 | Category    | APIs                                                                                       |
@@ -95,8 +93,6 @@ complete when both crates compile with the specified API surface and pass their 
 on top. System tray icon with left-click toggle and right-click context menu. DPI-aware rendering. Esc hides window
 without destroying it. Window stays on top to enable drag/drop from other apps.
 
-**Dependencies:** None
-
 **Implementation Notes:**
 
 - `WS_POPUP` style for borderless window
@@ -139,8 +135,6 @@ without destroying it. Window stays on top to enable drag/drop from other apps.
 
 **Description:** WebView2 hosting is verified. This milestone defines the message categories and establishes the
 protocol conventions. Each subsequent milestone will specify its required messages in detail.
-
-**Dependencies:** M1
 
 **Implementation Notes:**
 
@@ -434,10 +428,8 @@ and remove attachments via inline controls.
 
 **Goal:** Native clipboard integration with paste interception.
 
-**Description:** Native reads clipboard via Win32 API (CF_HDROP for files). WebView intercepts paste and requests
-clipboard from native. Context-aware paste behavior. Copy shortcuts for markdown, HTML, and files.
-
-**Dependencies:** M6, M8
+**Description:** Native reads clipboard via Win32 API (CF_HDROP for files, CF_UNICODETEXT for text). WebView intercepts
+paste and requests clipboard from native. Context-aware paste behavior. Copy shortcuts for markdown, HTML, and files.
 
 **Implementation Notes:**
 
@@ -445,7 +437,7 @@ clipboard from native. Context-aware paste behavior. Copy shortcuts for markdown
 - `GetClipboardData(CF_UNICODETEXT)` for text
 - WebView: `addEventListener('paste', preventDefault)`
 - WebView sends `{ type: "readClipboard" }` to native
-- Text paste into attachments panel: confirmation dialog "Paste text as new file?"
+- Paste text into attachments panel: show confirmation dialog
 
 **Copy Shortcuts:**
 
@@ -458,20 +450,19 @@ clipboard from native. Context-aware paste behavior. Copy shortcuts for markdown
 
 **Test Cases:**
 
-| TC       | Description                                            | Status |
-|----------|--------------------------------------------------------|--------|
-| TC-M9-01 | Paste text into search bar                             | ❌      |
-| TC-M9-02 | Paste text into Monaco                                 | ❌      |
-| TC-M9-03 | Paste files adds attachments + inserts links           | ❌      |
-| TC-M9-04 | Ctrl+C in Monaco copies selected text                  | ❌      |
-| TC-M9-05 | Ctrl+C in attachments copies selected files            | ❌      |
-| TC-M9-06 | Ctrl+Alt+T copies markdown, hides window               | ❌      |
-| TC-M9-07 | Ctrl+Alt+R copies rendered HTML, hides window          | ❌      |
-| TC-M9-08 | Ctrl+Alt+F copies attachments, hides window            | ❌      |
-| TC-M9-09 | "Nothing to copy" shown when no target key             | ❌      |
-| TC-M9-10 | Paste files into search bar does nothing               | ❌      |
-| TC-M9-11 | Empty clipboard paste does nothing                     | ❌      |
-| TC-M9-12 | Paste text into right bottom shows confirmation dialog | ❌      |
+| TC       | Description                                          | Status |
+|----------|------------------------------------------------------|--------|
+| TC-M9-01 | Paste text into search bar                           | ❌      |
+| TC-M9-02 | Paste text into Monaco                               | ❌      |
+| TC-M9-03 | Paste files adds attachments + inserts links         | ❌      |
+| TC-M9-04 | Ctrl+C in Monaco copies selected text                | ❌      |
+| TC-M9-05 | Ctrl+C in attachments copies selected files          | ❌      |
+| TC-M9-06 | Ctrl+Alt+T copies markdown, hides window             | ❌      |
+| TC-M9-07 | Ctrl+Alt+R copies rendered HTML, hides window        | ❌      |
+| TC-M9-08 | Ctrl+Alt+F copies attachments, hides window          | ❌      |
+| TC-M9-09 | "Nothing to copy" shown when no target key           | ❌      |
+| TC-M9-10 | Paste files into search bar does nothing             | ❌      |
+| TC-M9-11 | Paste text into attachments panel shows confirmation | ❌      |
 
 ---
 
@@ -482,16 +473,14 @@ clipboard from native. Context-aware paste behavior. Copy shortcuts for markdown
 **Description:** Two-tab interface in right top pane: Edit and Preview. Edit mode shows Monaco editor. Preview mode
 shows rendered markdown with inline images. Attachment links (att:filename) transformed to blob paths for display.
 
-**Dependencies:** M6, M8
-
 **Implementation Notes:**
 
 - Markdown renderer: marked.js or markdown-it
 - `att:filename` → blob path transformation for images
-- Non-image att: links remain clickable
+- Non-image att: links remain clickable (open file)
 - Preview is read-only
-- Sanitization: DOMPurify to prevent XSS from malicious markdown
-- Broken att: link: show placeholder icon with "File not found" tooltip
+- Sanitization: DOMPurify to prevent XSS
+- Broken att: link: show placeholder icon with tooltip
 - External links (http://, https://): open in default browser
 
 **Link Transformation:**
@@ -506,17 +495,16 @@ shows rendered markdown with inline images. Attachment links (att:filename) tran
 
 **Test Cases:**
 
-| TC        | Description                                      | Status |
-|-----------|--------------------------------------------------|--------|
-| TC-M10-01 | Edit tab shows Monaco editor                     | ❌      |
-| TC-M10-02 | Preview tab shows rendered markdown              | ❌      |
-| TC-M10-03 | att: image links display inline                  | ❌      |
-| TC-M10-04 | att: non-image links are clickable               | ❌      |
-| TC-M10-05 | Preview updates when switching from Edit         | ❌      |
-| TC-M10-06 | Preview is read-only                             | ❌      |
-| TC-M10-07 | Broken att: link shows placeholder/error         | ❌      |
-| TC-M10-08 | Malicious markdown doesn't execute scripts (XSS) | ❌      |
-| TC-M10-09 | External links (http://) open in browser         | ❌      |
+| TC        | Description                                  | Status |
+|-----------|----------------------------------------------|--------|
+| TC-M10-01 | Edit tab shows Monaco editor                 | ❌      |
+| TC-M10-02 | Preview tab shows rendered markdown          | ❌      |
+| TC-M10-03 | att: image links display inline              | ❌      |
+| TC-M10-04 | att: non-image links are clickable           | ❌      |
+| TC-M10-05 | Preview updates when switching from Edit     | ❌      |
+| TC-M10-06 | Preview is read-only (no cursor, no editing) | ❌      |
+| TC-M10-07 | Broken att: link shows placeholder           | ❌      |
+| TC-M10-08 | External links open in default browser       | ❌      |
 
 ---
 
@@ -525,9 +513,7 @@ shows rendered markdown with inline images. Attachment links (att:filename) tran
 **Goal:** Trash section with restore and permanent delete.
 
 **Description:** Trash section in left pane shows trashed keys. Restore button moves key back to active. Permanent
-delete button removes key and files. GC runs on window hide and periodically (1 day interval).
-
-**Dependencies:** M5
+delete button removes key and files. GC runs on window hide and periodically.
 
 **Implementation Notes:**
 
@@ -535,29 +521,25 @@ delete button removes key and files. GC runs on window hide and periodically (1 
 - Click required to enter trash section from active keys
 - Arrow navigation within trash section (bounded)
 - Trashed keys are read-only (must restore to edit)
-- Timer: `SetTimer` with 24h interval for periodic GC
-- Alternative: check elapsed time on window show (simpler, saves timer resource)
+- Periodic GC: check elapsed time on window show (simpler than timer)
+- GC must handle currently selected key being trashed (clear selection, refresh UI)
 
 **GC Triggers:**
 
 - Window hide → `maintenance()`
-- Timer (every 24 hours) → `maintenance()`
+- Window show if >24h since last GC → `maintenance()`
 - NOT on app quit (fast exit)
-- (note) should take care of the case where we gc/purge selected key
 
 **Test Cases:**
 
-| TC        | Description                                                       | Status |
-|-----------|-------------------------------------------------------------------|--------|
-| TC-M11-01 | Trash section shows trashed keys                                  | ❌      |
-| TC-M11-02 | Restore button moves key to active                                | ❌      |
-| TC-M11-03 | Permanent delete removes key and files                            | ❌      |
-| TC-M11-04 | Trashed key is read-only                                          | ❌      |
-| TC-M11-05 | GC runs on window hide                                            | ❌      |
-| TC-M11-06 | GC moves expired active keys to trash                             | ❌      |
-| TC-M11-07 | GC purges expired trashed keys                                    | ❌      |
-| TC-M11-08 | Restore when active key with same name exists → conflict handling | ❌      |
-| TC-M11-09 | Drop onto trashed key rejected                                    | ❌      |
+| TC        | Description                               | Status |
+|-----------|-------------------------------------------|--------|
+| TC-M11-01 | Trash section shows trashed keys          | ❌      |
+| TC-M11-02 | Restore button moves key to active        | ❌      |
+| TC-M11-03 | Permanent delete removes key and files    | ❌      |
+| TC-M11-04 | Trashed key content is read-only          | ❌      |
+| TC-M11-05 | Drop onto trashed key rejected            | ❌      |
+| TC-M11-06 | GC trashing selected key clears selection | ❌      |
 
 ---
 
@@ -565,36 +547,30 @@ delete button removes key and files. GC runs on window hide and periodically (1 
 
 **Goal:** Settings dialog with persistent configuration.
 
-**Description:** Modal settings dialog opened via Ctrl+, or tray menu. Categories: General, Shortcuts, Data, Lifecycle.
-Changes saved to config.toml on dialog close. Applied immediately to running app.
-
-**Dependencies:** M1
+**Description:** Modal settings dialog opened via Ctrl+, or tray menu. Changes saved to config.toml on dialog close.
+Applied immediately to running app.
 
 **Settings:**
 
-| Category  | Setting              | Type                  | Default    |
-|-----------|----------------------|-----------------------|------------|
-| General   | Theme                | Dark / Light / System | System     |
-| General   | Launch at Login      | Toggle                | false      |
-| General   | Show Tray Icon       | Toggle                | true       |
-| Shortcuts | Global Shortcut      | Key capture           | Ctrl+Alt+K |
-| Data      | Delete Style         | Soft / Immediate      | Soft       |
-| Data      | Large File Threshold | Size (1MB-1GB)        | 50 MB      |
-| Lifecycle | Trash TTL            | Days (1-365)          | 30 days    |
-| Lifecycle | Purge TTL            | Days (1-365)          | 7 days     |
+| Category  | Setting         | Type                  | Default    |
+|-----------|-----------------|-----------------------|------------|
+| General   | Theme           | Dark / Light / System | System     |
+| General   | Launch at Login | Toggle                | false      |
+| General   | Show Tray Icon  | Toggle                | true       |
+| Shortcuts | Global Shortcut | Key capture           | Ctrl+Alt+K |
+| Lifecycle | Trash TTL       | Days (1-365)          | 30 days    |
+| Lifecycle | Purge TTL       | Days (1-365)          | 7 days     |
 
 **Test Cases:**
 
-| TC        | Description                                     | Status |
-|-----------|-------------------------------------------------|--------|
-| TC-M12-01 | Ctrl+, opens settings dialog                    | ❌      |
-| TC-M12-02 | Tray menu opens settings                        | ❌      |
-| TC-M12-03 | Theme change applies immediately                | ❌      |
-| TC-M12-04 | Settings saved to config.toml                   | ❌      |
-| TC-M12-05 | Invalid config shows validation popup           | ❌      |
-| TC-M12-06 | Esc closes settings dialog                      | ❌      |
-| TC-M12-07 | TTL values have min/max validation (1-365 days) | ❌      |
-| TC-M12-08 | Large File Threshold has min/max (1MB-1GB)      | ❌      |
+| TC        | Description                          | Status |
+|-----------|--------------------------------------|--------|
+| TC-M12-01 | Ctrl+, opens settings dialog         | ❌      |
+| TC-M12-02 | Tray menu opens settings             | ❌      |
+| TC-M12-03 | Theme change applies immediately     | ❌      |
+| TC-M12-04 | Settings saved to config.toml        | ❌      |
+| TC-M12-05 | Invalid config on launch shows popup | ❌      |
+| TC-M12-06 | Esc closes settings dialog           | ❌      |
 
 ---
 
@@ -605,12 +581,10 @@ Changes saved to config.toml on dialog close. Applied immediately to running app
 **Description:** Register global hotkey on startup. Show window when pressed (even from background). Detect conflicts
 with other applications. Fallback: double-click exe to show window.
 
-**Dependencies:** M1, M12
-
 **Implementation Notes:**
 
-- `RegisterHotKey(hwnd, id, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 0x4B)` (0x4B = 'K')
-- MOD_NOREPEAT prevents repeated WM_HOTKEY when key is held
+- `RegisterHotKey(hwnd, id, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 0x4B)`
+- MOD_NOREPEAT prevents repeated WM_HOTKEY when held
 - Configurable via settings (key capture dialog)
 - Conflict detection: RegisterHotKey failure
 - `UnregisterHotKey` on WM_DESTROY and when changing hotkey
@@ -623,15 +597,13 @@ with other applications. Fallback: double-click exe to show window.
 
 **Test Cases:**
 
-| TC        | Description                                          | Status |
-|-----------|------------------------------------------------------|--------|
-| TC-M13-01 | Ctrl+Alt+K shows window from any app                 | ❌      |
-| TC-M13-02 | Hotkey works when window already visible             | ❌      |
-| TC-M13-03 | Custom hotkey can be configured                      | ❌      |
-| TC-M13-04 | Conflict shows notification                          | ❌      |
-| TC-M13-05 | Double-click exe shows window as fallback            | ❌      |
-| TC-M13-06 | Hotkey unregistered on app exit                      | ❌      |
-| TC-M13-07 | Changing hotkey in settings re-registers immediately | ❌      |
+| TC        | Description                                    | Status |
+|-----------|------------------------------------------------|--------|
+| TC-M13-01 | Ctrl+Alt+K shows window from any app           | ❌      |
+| TC-M13-02 | Hotkey works when window already visible       | ❌      |
+| TC-M13-03 | Custom hotkey can be configured                | ❌      |
+| TC-M13-04 | Conflict shows notification and opens settings | ❌      |
+| TC-M13-05 | Double-click exe shows window as fallback      | ❌      |
 
 ---
 
@@ -640,13 +612,11 @@ with other applications. Fallback: double-click exe to show window.
 **Goal:** Ensure only one instance runs at a time.
 
 **Description:** Use named mutex to detect existing instance. If already running, activate existing window instead of
-launching new. Use WM_COPYDATA to signal existing instance.
-
-**Dependencies:** M1
+launching new.
 
 **Implementation Notes:**
 
-- `CreateMutexW` with name `"Local\\Keva_SingleInstance"` (Local\\ = per-session)
+- `CreateMutexW` with name `"Local\\Keva_SingleInstance"`
 - If mutex exists: `FindWindowW(class_name, None)` to locate existing window
 - Send WM_COPYDATA to signal existing instance
 - Existing instance handles WM_COPYDATA by showing window
@@ -654,14 +624,11 @@ launching new. Use WM_COPYDATA to signal existing instance.
 
 **Test Cases:**
 
-| TC        | Description                                       | Status |
-|-----------|---------------------------------------------------|--------|
-| TC-M14-01 | First launch creates mutex                        | ❌      |
-| TC-M14-02 | Second launch detects existing instance           | ❌      |
-| TC-M14-03 | Second launch activates existing window           | ❌      |
-| TC-M14-04 | Second launch exits after activation              | ❌      |
-| TC-M14-05 | Simultaneous double-launch race condition handled | ❌      |
-| TC-M14-06 | Activate works when existing window is minimized  | ❌      |
+| TC        | Description                             | Status |
+|-----------|-----------------------------------------|--------|
+| TC-M14-01 | Second launch activates existing window | ❌      |
+| TC-M14-02 | Second launch exits after activation    | ❌      |
+| TC-M14-03 | Works when existing window is hidden    | ❌      |
 
 ---
 
@@ -672,26 +639,20 @@ launching new. Use WM_COPYDATA to signal existing instance.
 **Description:** Store window position and size in config.toml keyed by monitor identifier. Restore position on
 subsequent launches. Handle monitor configuration changes gracefully.
 
-**Dependencies:** M1, M12
-
 **Implementation Notes:**
 
-- Monitor ID via `MONITORINFOEXW::szDevice` (device name like `\\.\DISPLAY1`)
-- HMONITOR is a runtime handle, not stable across reboots
+- Monitor ID via `MONITORINFOEXW::szDevice` (e.g., `\\.\DISPLAY1`)
 - Position stored in `[window.monitors."DISPLAY1"]` section
 - Off-screen check: if position outside current monitors, center on cursor's monitor
 - First launch: center on primary monitor
 
 **Test Cases:**
 
-| TC        | Description                                         | Status |
-|-----------|-----------------------------------------------------|--------|
-| TC-M15-01 | Position saved on window move                       | ❌      |
-| TC-M15-02 | Position restored on next launch                    | ❌      |
-| TC-M15-03 | Different position per monitor                      | ❌      |
-| TC-M15-04 | Off-screen position → center on cursor monitor      | ❌      |
-| TC-M15-05 | New monitor config → center on primary              | ❌      |
-| TC-M15-06 | Window size respects minimum constraints on restore | ❌      |
+| TC        | Description                                   | Status |
+|-----------|-----------------------------------------------|--------|
+| TC-M15-01 | Position restored on next launch              | ❌      |
+| TC-M15-02 | Different position per monitor                | ❌      |
+| TC-M15-03 | Off-screen position centers on cursor monitor | ❌      |
 
 ---
 
@@ -700,9 +661,7 @@ subsequent launches. Handle monitor configuration changes gracefully.
 **Goal:** Welcome experience on first launch.
 
 **Description:** Detect first launch (no config.toml). Show welcome dialog with launch-at-login checkbox. Create
-config.toml with user preferences. Register login item if checkbox checked.
-
-**Dependencies:** M12
+config.toml with user preferences.
 
 **Dialog Content:**
 
@@ -713,7 +672,7 @@ config.toml with user preferences. Register login item if checkbox checked.
 │ Keva stores your notes and files locally.       │
 │ Press Ctrl+Alt+K anytime to open this window.   │
 │                                                 │
-│ ☑ Launch Keva at login                         │
+│ ☑ Launch Keva at login                          │
 │                                                 │
 │                              [Get Started]      │
 └─────────────────────────────────────────────────┘
@@ -721,15 +680,12 @@ config.toml with user preferences. Register login item if checkbox checked.
 
 **Test Cases:**
 
-| TC        | Description                                     | Status |
-|-----------|-------------------------------------------------|--------|
-| TC-M16-01 | First launch shows welcome dialog               | ❌      |
-| TC-M16-02 | Checkbox checked registers login item           | ❌      |
-| TC-M16-03 | Checkbox unchecked skips login item             | ❌      |
-| TC-M16-04 | Config.toml created after dialog                | ❌      |
-| TC-M16-05 | Subsequent launches skip dialog                 | ❌      |
-| TC-M16-06 | Enter key activates "Get Started" button        | ❌      |
-| TC-M16-07 | Dialog has no X button (must click Get Started) | ❌      |
+| TC        | Description                           | Status |
+|-----------|---------------------------------------|--------|
+| TC-M16-01 | First launch shows welcome dialog     | ❌      |
+| TC-M16-02 | Checkbox checked registers login item | ❌      |
+| TC-M16-03 | Checkbox unchecked skips login item   | ❌      |
+| TC-M16-04 | Subsequent launches skip dialog       | ❌      |
 
 ---
 
@@ -737,28 +693,22 @@ config.toml with user preferences. Register login item if checkbox checked.
 
 **Goal:** Embed Monaco and resources in single executable.
 
-**Description:** Bundle Monaco editor files, HTML, CSS, JS into the executable. Extract to temp or serve from memory.
-Ensure offline operation without external dependencies.
-
-**Dependencies:** M6
+**Description:** Bundle Monaco editor files, HTML, CSS, JS into the executable. Serve via custom protocol or virtual
+host mapping. Ensure offline operation.
 
 **Implementation Notes:**
 
 - `include_bytes!` or `rust-embed` crate
 - Monaco files: editor.main.js, editor.main.css, etc.
-- Options: extract to %TEMP% on launch, or serve via custom protocol
-- Custom WebView2 scheme: `keva://resources/`
-- Alternative: `SetVirtualHostNameToFolderMapping` (simpler, maps hostname to folder)
+- Option A: `SetVirtualHostNameToFolderMapping` (simpler)
+- Option B: Custom WebView2 scheme `keva://resources/`
 
 **Test Cases:**
 
-| TC        | Description                                | Status |
-|-----------|--------------------------------------------|--------|
-| TC-M17-01 | App runs without network                   | ❌      |
-| TC-M17-02 | Monaco loads from bundled resources        | ❌      |
-| TC-M17-03 | No external file dependencies              | ❌      |
-| TC-M17-04 | Resources load quickly (< 500ms)           | ❌      |
-| TC-M17-05 | Custom protocol keva:// resolves resources | ❌      |
+| TC        | Description                         | Status |
+|-----------|-------------------------------------|--------|
+| TC-M17-01 | App runs without network            | ❌      |
+| TC-M17-02 | Monaco loads from bundled resources | ❌      |
 
 ---
 
@@ -769,128 +719,32 @@ Ensure offline operation without external dependencies.
 **Description:** Create Windows installer (WiX or MSIX). Install to Program Files. Register in Add/Remove Programs.
 Uninstaller removes files and optionally data.
 
-**Dependencies:** All previous milestones
-
 **Installation:**
 
 - Install to `%ProgramFiles%\Keva`
 - Add to Start Menu
 - Register uninstaller in registry
-- Optionally register login item
 
 **Uninstallation:**
 
 1. Remove startup registry entry
 2. Remove application files
 3. Prompt: "Delete all Keva data?"
-    - Yes: Remove `%LOCALAPPDATA%\keva`
-    - No: Leave data intact
+
+- Yes: Remove `%LOCALAPPDATA%\keva`
+- No: Leave data intact
 
 **Test Cases:**
 
-| TC        | Description                             | Status |
-|-----------|-----------------------------------------|--------|
-| TC-M18-01 | Installer completes without error       | ❌      |
-| TC-M18-02 | App appears in Start Menu               | ❌      |
-| TC-M18-03 | App appears in Add/Remove Programs      | ❌      |
-| TC-M18-04 | Uninstaller removes application files   | ❌      |
-| TC-M18-05 | Uninstaller prompts for data deletion   | ❌      |
-| TC-M18-06 | "Yes" deletes data directory            | ❌      |
-| TC-M18-07 | "No" preserves data directory           | ❌      |
-| TC-M18-08 | App visible in Task Manager Startup tab | ❌      |
-| TC-M18-09 | Upgrade install preserves user data     | ❌      |
-| TC-M18-10 | Silent install (/quiet) works           | ❌      |
-| TC-M18-11 | Installer requests UAC elevation        | ❌      |
-| TC-M18-12 | Running app is closed before upgrade    | ❌      |
+| TC        | Description                           | Status |
+|-----------|---------------------------------------|--------|
+| TC-M18-01 | Installer completes without error     | ❌      |
+| TC-M18-02 | App appears in Start Menu             | ❌      |
+| TC-M18-03 | App appears in Add/Remove Programs    | ❌      |
+| TC-M18-04 | Uninstaller removes application files | ❌      |
+| TC-M18-05 | Uninstaller prompts for data deletion | ❌      |
+| TC-M18-06 | "Yes" deletes data directory          | ❌      |
+| TC-M18-07 | "No" preserves data directory         | ❌      |
+| TC-M18-08 | Upgrade install preserves user data   | ❌      |
 
 ---
-
-## Cross-Cutting Concerns
-
-| Area             | Notes                                                |
-|------------------|------------------------------------------------------|
-| WebView2 Runtime | M2: Download prompt if runtime missing               |
-| Logging          | Consider: Debug logging to %LOCALAPPDATA%\keva\logs\ |
-| Accessibility    | Consider: High contrast mode support                 |
-
-## Dependency Graph
-
-```
-M0 (keva_core) ─────────────────────────────────────────┐
-                                                        │
-M1 (Window) ──► M2 (WebView) ──► M3 (Worker) ──────────┤
-     │              │                 │                 │
-     │              │                 ▼                 │
-     │              │            M4 (Search) ──────────►│
-     │              │                 │                 │
-     │              │                 ▼                 │
-     │              │            M5 (Key List) ────────►│
-     │              │                 │                 │
-     │              │                 ▼                 │
-     │              └───────────► M6 (Monaco) ─────────►│
-     │                               │                  │
-     │                               ▼                  │
-     │                          M7 (Focus) ────────────►│
-     │                               │                  │
-     │                               ▼                  │
-     │                          M8 (Attachments) ──────►│
-     │                               │                  │
-     │                               ▼                  │
-     │                          M9 (Clipboard) ────────►│
-     │                               │                  │
-     │                               ▼                  │
-     │                          M10 (Preview) ─────────►│
-     │                                                  │
-     ├──► M11 (Trash) ─────────────────────────────────►│
-     │                                                  │
-     ├──► M12 (Settings) ──► M13 (Hotkey) ─────────────►│
-     │         │                                        │
-     │         └──────────► M15 (Position) ────────────►│
-     │                                                  │
-     │                      M16 (First-Run) ───────────►│
-     │                                                  │
-     ├──► M14 (Single Instance) ───────────────────────►│
-     │                                                  │
-     └──► M6 ──► M17 (Bundling) ───────────────────────►│
-                                                        │
-                                                        ▼
-                                                   M18 (Installer)
-```
-
----
-
-## Implementation Order (Recommended)
-
-**Phase 1: Foundation**
-
-1. M0 - keva_core (storage layer must be solid first)
-2. M1 - Window Skeleton (already complete)
-3. M2 - WebView + Bridge (already complete)
-4. M3 - Worker Thread
-
-**Phase 2: Core Features**
-
-5. M4 - Search Engine
-6. M5 - Key List
-7. M6 - Monaco Editor
-8. M7 - Four-State Focus
-
-**Phase 3: Content Management**
-
-9. M8 - Attachments Panel
-10. M9 - Clipboard
-11. M10 - Edit/Preview Toggle
-12. M11 - Trash
-
-**Phase 4: Polish**
-
-13. M12 - Settings
-14. M13 - Global Hotkey
-15. M14 - Single Instance
-16. M15 - Window Position Memory
-17. M16 - First-Run Dialog
-
-**Phase 5: Distribution**
-
-18. M17 - Monaco Bundling
-19. M18 - Installer
