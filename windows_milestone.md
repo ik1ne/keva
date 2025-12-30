@@ -285,13 +285,11 @@ bottom shows trashed keys separately.
 
 ## M6: Monaco Editor
 
-**Goal:** Markdown editor with direct file access.
+**Goal:** Markdown editor with direct file access and autosave.
 
-**Description:** Embed Monaco editor in right top pane. Use FileSystemHandle API for direct blob file read/write.
-Markdown language mode with syntax highlighting. Placeholder text when empty. Auto-save via FileSystemHandle (no
-postMessage serialization).
-
-**Dependencies:** M3, M5
+**Description:** Embed Monaco editor in right top pane. Use FileSystemHandle API for direct file read/write. Markdown
+language mode with syntax highlighting. Placeholder text when empty. Autosave via debounced writes; forced save on key
+switch and app exit.
 
 **Implementation Notes:**
 
@@ -299,9 +297,24 @@ postMessage serialization).
 - `PostWebMessageAsJsonWithAdditionalObjects` for FileSystemHandle
 - Monaco config: `pasteAs: { enabled: false }`, `dragAndDrop: true`
 - Placeholder: "Type something, or drag files here..."
-- `mark_content_modified()` called on key switch and window hide
-- Error UI: Toast notification for FileSystemHandle failures (permission denied, locked)
-- Debounce: 100ms delay before loading content on rapid key switching
+
+**Save Behavior:**
+
+| Trigger                | File Write | mark_content_modified() |
+|------------------------|------------|-------------------------|
+| Debounced (500ms idle) | ✓          | ✓                       |
+| Key switch (if dirty)  | ✓          | ✓                       |
+| App exit (if dirty)    | ✓          | ✓                       |
+
+**Exit Flow:**
+
+```
+1. Exit triggered (Alt+F4, tray quit, WM_ENDSESSION)
+2. Native → WebView: { type: "prepareExit" }
+3. WebView: flush dirty content via FileSystemHandle
+4. WebView → Native: { type: "readyToExit" }
+5. Native: destroy window, exit process
+```
 
 **FileSystemHandle Flow:**
 
@@ -310,25 +323,21 @@ postMessage serialization).
 2. Native: get_content_path() → path
 3. Native: create FileSystemHandle for path
 4. Native: PostWebMessageAsJsonWithAdditionalObjects(handle)
-5. WebView: Monaco reads/writes via handle
-6. User switches key or hides window
-7. Native: mark_content_modified()
+5. WebView: Monaco reads via handle
+6. User edits → debounced save → Monaco writes via handle
+7. User switches key → forced save if dirty
 ```
 
 **Test Cases:**
 
-| TC       | Description                                    | Status |
-|----------|------------------------------------------------|--------|
-| TC-M6-01 | Monaco editor loads                            | ❌      |
-| TC-M6-02 | Content loads from file on key select          | ❌      |
-| TC-M6-03 | Edits save directly to file                    | ❌      |
-| TC-M6-04 | Markdown syntax highlighting works             | ❌      |
-| TC-M6-05 | Placeholder shows when content empty           | ❌      |
-| TC-M6-06 | Large file (10MB) loads without hang           | ❌      |
-| TC-M6-07 | mark_content_modified called on key switch     | ❌      |
-| TC-M6-08 | Permission denied shows error message          | ❌      |
-| TC-M6-09 | File locked by another process shows error     | ❌      |
-| TC-M6-10 | Switching keys rapidly doesn't corrupt content | ❌      |
+| TC       | Description                                     | Status |
+|----------|-------------------------------------------------|--------|
+| TC-M6-01 | Monaco editor loads with markdown highlighting  | ❌      |
+| TC-M6-02 | Selecting key loads content into editor         | ❌      |
+| TC-M6-03 | Edits persist after switching away and back     | ❌      |
+| TC-M6-04 | Placeholder shows when content empty            | ❌      |
+| TC-M6-05 | Rapid key switching does not lose unsaved edits | ❌      |
+| TC-M6-06 | Quitting app does not lose unsaved edits        | ❌      |
 
 ---
 
@@ -535,6 +544,7 @@ delete button removes key and files. GC runs on window hide and periodically (1 
 - Window hide → `maintenance()`
 - Timer (every 24 hours) → `maintenance()`
 - NOT on app quit (fast exit)
+- (note) should take care of the case where we gc/purge selected key
 
 **Test Cases:**
 
