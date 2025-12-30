@@ -348,8 +348,6 @@ switch and app exit.
 **Description:** Implement four-state focus model: search bar, left pane, right top, right bottom. Only one pane active
 at a time. Visual indicators for active/inactive state. Keyboard navigation between panes.
 
-**Dependencies:** M5, M6
-
 **Implementation Notes:**
 
 - Active pane: cursor visible, full highlight
@@ -378,7 +376,7 @@ at a time. Visual indicators for active/inactive state. Keyboard navigation betw
 | TC-M7-06 | Left pane selection persists when inactive | ❌      |
 | TC-M7-07 | Tab key cycles through panes               | ❌      |
 | TC-M7-08 | Shift+Tab reverse cycles                   | ❌      |
-| TC-M7-09 | Ctrl+L focuses search bar from any pane    | ❌      |
+| TC-M7-09 | Ctrl+S focuses search bar from any pane    | ❌      |
 
 ---
 
