@@ -185,18 +185,13 @@ protocol conventions. Each subsequent milestone will specify its required messag
 **Goal:** Background thread for keva_core operations.
 
 **Description:** Spawn worker thread on startup. Main thread sends requests via mpsc channel. Worker executes keva_core
-operations and posts results back. Main thread receives results via custom window message.
-
-**Dependencies:** M0, M2
+operations and posts results back via custom window message. Worker owns `KevaCore` instance exclusively.
 
 **Implementation Notes:**
 
 - `std::sync::mpsc::channel` for Main→Worker
 - `PostMessageW(WM_WORKER_RESULT)` for Worker→Main
-- Worker owns `KevaCore` instance exclusively
 - Request/Response enums for type-safe messaging
-- Error handling: Response enum includes Result variants for error propagation
-- Panic handling: `catch_unwind` in worker loop to prevent main thread crash
 
 **Threading Model:**
 
@@ -211,15 +206,9 @@ Main Thread                     Worker Thread
 
 **Test Cases:**
 
-| TC       | Description                              | Status |
-|----------|------------------------------------------|--------|
-| TC-M3-01 | Worker thread starts on app launch       | ❌      |
-| TC-M3-02 | Request sent from main reaches worker    | ❌      |
-| TC-M3-03 | Response posted back to main thread      | ❌      |
-| TC-M3-04 | Multiple rapid requests handled in order | ❌      |
-| TC-M3-05 | Worker thread exits cleanly on app quit  | ❌      |
-| TC-M3-06 | Worker error propagates to main thread   | ❌      |
-| TC-M3-07 | Worker panic doesn't crash main thread   | ❌      |
+| TC       | Description                 | Status |
+|----------|-----------------------------|--------|
+| TC-M3-01 | App quits cleanly (no hang) | ❌      |
 
 ---
 
