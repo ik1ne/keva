@@ -246,19 +246,16 @@ updates.
 **Goal:** Left pane with key display and management.
 
 **Description:** Render filtered key list in left pane. Support single selection with keyboard and mouse. Create new
-keys via search bar Enter. Rename and delete keys with inline controls. Visual distinction between active and trashed
-keys.
-
-**Dependencies:** M4
+keys via search bar Enter. Rename and delete keys with inline controls. Delete always moves to trash. Trash section at
+bottom shows trashed keys separately.
 
 **Implementation Notes:**
 
 - Virtual scrolling for large key lists
 - Inline rename editor on pen icon click
-- Delete follows configured delete_style (soft/immediate)
 - Trash section at bottom with fixed height (~2.5 rows)
-- Long key names: truncate with ellipsis (max display width = pane width - padding)
-- Inline error message: red text below input field
+- Long key names: truncate with ellipsis
+- Inline error message for invalid rename (empty, >256 chars)
 
 **Key Interactions:**
 
@@ -266,27 +263,23 @@ keys.
 - Down arrow from search → focus first key
 - Up arrow from first key → focus search bar
 - Enter on selected key → focus right top pane
-- Delete key → trash or immediate delete
+- Delete key → move to trash
 
 **Test Cases:**
 
 | TC       | Description                                         | Status |
 |----------|-----------------------------------------------------|--------|
 | TC-M5-01 | Keys display in left pane                           | ❌      |
-| TC-M5-02 | Click key selects it                                | ❌      |
+| TC-M5-02 | Click key selects it, content shown in right pane   | ❌      |
 | TC-M5-03 | Arrow keys navigate key list                        | ❌      |
-| TC-M5-04 | Enter in search bar creates new key                 | ❌      |
-| TC-M5-05 | Enter in search bar selects existing key            | ❌      |
+| TC-M5-04 | Enter in search bar with no match creates new key   | ❌      |
+| TC-M5-05 | Enter in search bar with exact match selects key    | ❌      |
 | TC-M5-06 | Rename key via inline editor                        | ❌      |
-| TC-M5-07 | Delete key moves to trash (soft mode)               | ❌      |
-| TC-M5-08 | Delete key permanently removes (immediate mode)     | ❌      |
-| TC-M5-09 | Trash section shows at bottom                       | ❌      |
-| TC-M5-10 | Trashed keys show 🗑️ icon                          | ❌      |
-| TC-M5-11 | Long key name shows ellipsis                        | ❌      |
-| TC-M5-12 | Rename to empty string rejected                     | ❌      |
-| TC-M5-13 | Rename to >256 chars rejected with inline error     | ❌      |
-| TC-M5-14 | Rename to existing key shows overwrite confirmation | ❌      |
-| TC-M5-15 | Keys with / display correctly (flat, no hierarchy)  | ❌      |
+| TC-M5-07 | Rename to existing key shows overwrite confirmation | ❌      |
+| TC-M5-08 | Rename validation rejects empty or >256 chars       | ❌      |
+| TC-M5-09 | Delete key moves to trash                           | ❌      |
+| TC-M5-10 | Trash section shows at bottom with trashed keys     | ❌      |
+| TC-M5-11 | Long key name truncates with ellipsis               | ❌      |
 
 ---
 
