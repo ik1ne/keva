@@ -385,9 +385,8 @@ at a time. Visual indicators for active/inactive state. Keyboard navigation betw
 **Goal:** Right bottom pane for file attachments.
 
 **Description:** Display attachment list with filename, size, type icon. Generate and display thumbnails for images.
-Support multi-select with Shift/Ctrl click. Add files via button or drop. Drag attachment to Monaco inserts link.
-
-**Dependencies:** M6, M7
+Support multi-select with Shift/Ctrl click. Add files via button or drop. Drag attachment to Monaco inserts link. Rename
+and remove attachments via inline controls.
 
 **Implementation Notes:**
 
@@ -395,10 +394,11 @@ Support multi-select with Shift/Ctrl click. Add files via button or drop. Drag a
 - Supported thumbnail formats: png, jpg, jpeg, gif, webp, svg
 - Thumbnail stored as {filename}.thumb
 - [X] button per attachment for removal
+- [✏️] button for inline rename
 - Warning dialog if removing referenced attachment
 - Empty state: show only [+ Add files] button centered
 - Duplicate dialog: "'{filename}' already exists." with [Overwrite] [Rename] [Skip] [Cancel]
-- Multi-file duplicate: adds "☐ Apply to all (N remaining)" checkbox
+- Multi-file drop: adds "☐ Apply to all (N remaining)" checkbox
 
 **Drag to Monaco:**
 
@@ -410,22 +410,23 @@ Support multi-select with Shift/Ctrl click. Add files via button or drop. Drag a
 
 **Test Cases:**
 
-| TC       | Description                                           | Status |
-|----------|-------------------------------------------------------|--------|
-| TC-M8-01 | Attachments list displays files                       | ❌      |
-| TC-M8-02 | File size shown in human-readable format              | ❌      |
-| TC-M8-03 | Image attachments show thumbnail                      | ❌      |
-| TC-M8-04 | Non-image attachments show type icon                  | ❌      |
-| TC-M8-05 | Click [+ Add files] opens file picker                 | ❌      |
-| TC-M8-06 | Multi-select with Ctrl+click                          | ❌      |
-| TC-M8-07 | Drag attachment to Monaco inserts link                | ❌      |
-| TC-M8-08 | [X] button removes attachment                         | ❌      |
-| TC-M8-09 | Warning shown when removing referenced attachment     | ❌      |
-| TC-M8-10 | Duplicate filename shows Overwrite/Rename/Skip dialog | ❌      |
-| TC-M8-11 | File >1GB rejected with error message                 | ❌      |
-| TC-M8-12 | Directory drop rejected                               | ❌      |
-| TC-M8-13 | Empty panel shows [+ Add files] centered              | ❌      |
-| TC-M8-14 | Multi-file paste with "Apply to all" checkbox works   | ❌      |
+| TC       | Description                                        | Status |
+|----------|----------------------------------------------------|--------|
+| TC-M8-01 | Attachments list displays files                    | ❌      |
+| TC-M8-02 | File size shown in human-readable format           | ❌      |
+| TC-M8-03 | Image attachments show thumbnail                   | ❌      |
+| TC-M8-04 | Non-image attachments show type icon               | ❌      |
+| TC-M8-05 | Click [+ Add files] opens file picker              | ❌      |
+| TC-M8-06 | Multi-select with Ctrl+click                       | ❌      |
+| TC-M8-07 | Drag attachment to Monaco inserts link             | ❌      |
+| TC-M8-08 | [X] button removes attachment                      | ❌      |
+| TC-M8-09 | Warning shown when removing referenced attachment  | ❌      |
+| TC-M8-10 | Rename attachment via inline editor                | ❌      |
+| TC-M8-11 | Rename to existing filename shows conflict dialog  | ❌      |
+| TC-M8-12 | Duplicate filename on drop shows conflict dialog   | ❌      |
+| TC-M8-13 | File >1GB rejected with error message              | ❌      |
+| TC-M8-14 | Multi-file drop with "Apply to all" checkbox works | ❌      |
+| TC-M8-15 | Empty panel shows [+ Add files] centered           | ❌      |
 
 ---
 
