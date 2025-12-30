@@ -133,86 +133,50 @@ without destroying it. Window stays on top to enable drag/drop from other apps.
 
 ---
 
-## M2: WebView + Bridge
+## M2: WebView + Message Protocol
 
-**Goal:** WebView2 hosting with bidirectional message passing.
+**Goal:** Define Native↔WebView message protocol structure.
 
-**Description:** Embed WebView2 control in the native window. Establish postMessage bridge for Native↔WebView
-communication. Apply dark theme to WebView. Load initial HTML shell with placeholder content.
+**Description:** WebView2 hosting is verified. This milestone defines the message categories and establishes the
+protocol conventions. Each subsequent milestone will specify its required messages in detail.
 
 **Dependencies:** M1
 
 **Implementation Notes:**
 
 - WebView2 SDK 1.0.2470+ required for FileSystemHandle
-    - Check `ICoreWebView2Environment14` availability at runtime for graceful fallback
-- `CreateCoreWebView2EnvironmentWithOptions`
-- `add_WebMessageReceived` for JS→Native
-- `PostWebMessageAsJson` for Native→JS
-- Dark background via `ICoreWebView2Controller2::SetDefaultBackgroundColor()`
+    - Check `ICoreWebView2Environment14` availability at runtime
+- `PostWebMessageAsJson` for standard messages
+- `PostWebMessageAsJsonWithAdditionalObjects` for FileSystemHandle transfer
 - Runtime detection: `GetAvailableCoreWebView2BrowserVersionString`
     - If missing: show download prompt with link to WebView2 installer
 
-**Message Protocol:**
+**Message Categories:**
 
-```typescript
-// Native → WebView
-{
-    type: "searchResults", keys
-:
-    [...]
-}
-{
-    type: "clipboard", content
-:
-    {
-        text: "..."
-    }
-|
-    {
-        files: [...]
-    }
-}
-{
-    type: "fileHandle", handle
-:
-    FileSystemFileHandle
-}
+| Category    | Direction      | Purpose                                      |
+|-------------|----------------|----------------------------------------------|
+| Search      | Bidirectional  | Query and results                            |
+| Key Ops     | WebView→Native | Create, rename, delete, trash, restore       |
+| Content     | Native→WebView | FileSystemHandle transfer, modification flag |
+| Attachments | Bidirectional  | Add, remove, rename, thumbnails              |
+| Clipboard   | Bidirectional  | Read request, content response, copy ops     |
+| Window      | WebView→Native | Hide, quit, drag, settings                   |
+| State       | Native→WebView | Theme, visibility, operation results         |
 
-// WebView → Native
-{
-    type: "search", query
-:
-    "..."
-}
-{
-    type: "readClipboard"
-}
-{
-    type: "createKey", key
-:
-    "..."
-}
-{
-    type: "hide"
-}
-{
-    type: "quit"
-}
-```
+**Protocol Conventions:**
+
+- All messages are JSON with `type` discriminator
+- Native→WebView: state pushes, responses to requests
+- WebView→Native: operation requests, UI events
+- Errors returned via `operationResult` message with `success: false`
 
 **Test Cases:**
 
 | TC       | Description                                       | Status |
 |----------|---------------------------------------------------|--------|
-| TC-M2-01 | WebView2 loads without error                      | ✅      |
-| TC-M2-02 | HTML content renders in WebView                   | ✅      |
-| TC-M2-03 | JS postMessage reaches Native handler             | ✅      |
-| TC-M2-04 | Native PostWebMessageAsJson reaches JS            | ✅      |
-| TC-M2-05 | Dark theme applied (no white flash)               | ✅      |
-| TC-M2-06 | DevTools accessible via F12 (debug builds)        | ✅      |
-| TC-M2-07 | App shows error if WebView2 runtime not installed | ❌      |
-| TC-M2-08 | Large message (>1MB) transfers correctly          | ❌      |
+| TC-M2-01 | App shows error if WebView2 runtime not installed | ❌      |
+| TC-M2-02 | Large message (>1MB) transfers correctly          | ❌      |
+| TC-M2-03 | Invalid message type logged and ignored           | ❌      |
 
 ---
 
