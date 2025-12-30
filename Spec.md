@@ -239,28 +239,28 @@ Left pane selection takes priority.
 
 ### Focus Transitions
 
-| From         | Action                    | To                                         |
-|--------------|---------------------------|--------------------------------------------|
-| Search bar   | Down arrow                | Left pane (first key selected)             |
-| Search bar   | Click key in list         | Left pane                                  |
-| Search bar   | Enter                     | Right top (select/create key)              |
-| Search bar   | Click right top           | Right top                                  |
-| Search bar   | Click right bottom        | Right bottom                               |
-| Left pane    | Up arrow (from first key) | Search bar                                 |
-| Left pane    | Down/Up arrow             | Navigate within list                       |
-| Left pane    | Enter                     | Right top pane                             |
-| Left pane    | Delete key                | Delete selected key (follows delete_style) |
-| Left pane    | Click search bar          | Search bar                                 |
-| Left pane    | Click right top           | Right top                                  |
-| Left pane    | Click right bottom        | Right bottom                               |
-| Right top    | Esc                       | Hide window (or dismiss modal if open)     |
-| Right top    | Click search bar          | Search bar                                 |
-| Right top    | Click key in list         | Left pane                                  |
-| Right top    | Click right bottom        | Right bottom                               |
-| Right bottom | Esc                       | Hide window (or dismiss modal if open)     |
-| Right bottom | Click search bar          | Search bar                                 |
-| Right bottom | Click key in list         | Left pane                                  |
-| Right bottom | Click right top           | Right top                                  |
+| From         | Action                    | To                                     |
+|--------------|---------------------------|----------------------------------------|
+| Search bar   | Down arrow                | Left pane (first key selected)         |
+| Search bar   | Click key in list         | Left pane                              |
+| Search bar   | Enter                     | Right top (select/create key)          |
+| Search bar   | Click right top           | Right top                              |
+| Search bar   | Click right bottom        | Right bottom                           |
+| Left pane    | Up arrow (from first key) | Search bar                             |
+| Left pane    | Down/Up arrow             | Navigate within list                   |
+| Left pane    | Enter                     | Right top pane                         |
+| Left pane    | Delete key                | Delete selected key                    |
+| Left pane    | Click search bar          | Search bar                             |
+| Left pane    | Click right top           | Right top                              |
+| Left pane    | Click right bottom        | Right bottom                           |
+| Right top    | Esc                       | Hide window (or dismiss modal if open) |
+| Right top    | Click search bar          | Search bar                             |
+| Right top    | Click key in list         | Left pane                              |
+| Right top    | Click right bottom        | Right bottom                           |
+| Right bottom | Esc                       | Hide window (or dismiss modal if open) |
+| Right bottom | Click search bar          | Search bar                             |
+| Right bottom | Click key in list         | Left pane                              |
+| Right bottom | Click right top           | Right top                              |
 
 ### Keyboard Shortcuts
 
@@ -406,7 +406,7 @@ Each active key displays on hover/selection:
 - **Rename button (pen icon):** Opens inline editor to modify key.
     - If rename target exists: confirmation prompt, target key is permanently overwritten (no restoration)
     - Invalid key names (empty, >256 chars) rejected with inline error message
-- **Delete button (trash icon):** Deletes the key (follows configured delete style).
+- **Delete button (trash icon):** Deletes the key
 
 **Trashed Key Controls:**
 
@@ -538,7 +538,6 @@ Duplicate filenames are not allowed within a key.
 **Large File Handling:**
 
 - Threshold applies **per file**, not total
-- Files exceeding threshold show confirmation: "File X is Y MB. Store anyway?"
 - **Hard maximum:** 1 GB per file (reject larger files with error message)
 - Multiple files: each checked individually against threshold
 
@@ -565,16 +564,14 @@ On first launch (no config.toml exists):
 
 **Settings Categories:**
 
-| Category  | Setting              | Description                           |
-|-----------|----------------------|---------------------------------------|
-| General   | Theme                | Dark / Light / Follow System          |
-| General   | Launch at Login      | Toggle auto-start                     |
-| General   | Show Tray Icon       | Toggle tray icon visibility           |
-| Shortcuts | Global Shortcut      | Key combination to show window        |
-| Data      | Delete Style         | Soft (to trash) / Immediate           |
-| Data      | Large File Threshold | Size limit before confirmation prompt |
-| Lifecycle | Trash TTL            | Days before items auto-trash          |
-| Lifecycle | Purge TTL            | Days before trashed items are deleted |
+| Category  | Setting         | Description                           |
+|-----------|-----------------|---------------------------------------|
+| General   | Theme           | Dark / Light / Follow System          |
+| General   | Launch at Login | Toggle auto-start                     |
+| General   | Show Tray Icon  | Toggle tray icon visibility           |
+| Shortcuts | Global Shortcut | Key combination to show window        |
+| Lifecycle | Trash TTL       | Days before items auto-trash          |
+| Lifecycle | Purge TTL       | Days before trashed items are deleted |
 
 ## 5. Configuration
 
@@ -619,7 +616,6 @@ TTL expiration is based on `last_accessed`. Operations that update `last_accesse
 1. **Active:** Normal visibility. Transitions to Trash when `last_accessed + trash_ttl` expires.
 
 2. **Trash:** Soft-deleted, shown in trash section.
-    - Skipped if delete style is Immediate.
     - Searchable (shown in trash section with 🗑️ icon).
     - Read-only (must restore to edit).
     - Transitions to Purge when `trashed_at + purge_ttl` expires.
