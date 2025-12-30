@@ -214,47 +214,30 @@ Main Thread                     Worker Thread
 
 ## M4: Search Engine
 
-**Goal:** Fuzzy search with progressive results.
+**Goal:** Fuzzy search with progressive, stable results.
 
-**Description:** Integrate Nucleo for fuzzy matching on main thread. SearchEngine wrapper provides
-set_query/tick/results API. Nucleo's notify callback triggers WM_SEARCH_READY. Results capped at 100 active + 20 trashed
-keys.
-
-**Dependencies:** M3
+**Description:** Integrate keva_search on main thread. SearchEngine wraps Nucleo with dual indexes (active/trashed),
+tombstone-based deletion, and stop-at-threshold behavior. Nucleo's notify callback posts `WM_SEARCH_READY` to trigger UI
+updates.
 
 **Implementation Notes:**
 
-- `nucleo` crate for fuzzy matching
-- SearchEngine runs on main thread (Nucleo spawns internal threadpool)
-- `notify` callback → `PostMessageW(WM_SEARCH_READY)`
-- Smart case: case-insensitive unless query has uppercase
-- Active keys always ranked before trashed keys
-
-**API:**
-
-```rust
-impl SearchEngine {
-    fn new(notify: impl Fn() + Send + Sync) -> Self;
-    fn set_items(&mut self, active: Vec<Key>, trashed: Vec<Key>);
-    fn set_query(&mut self, query: &str);
-    fn tick(&mut self) -> bool;  // true if results changed
-    fn results(&self) -> (&[Key], &[Key]);  // (active, trashed)
-}
-```
+- SearchEngine lives on main thread; Nucleo spawns internal worker pool
+- `notify` callback: `PostMessageW(hwnd, WM_SEARCH_READY, ...)`
+- On `WM_SEARCH_READY`: call `tick()`, update UI if results changed
+- Threshold stops result changes (100 active, 20 trashed)
+- Key mutations (create/rename/delete) update indexes via `add_active()`, `trash()`, `remove()`, `rename()`
+- `maintenance_compact()` called during `keva_core::maintenance()`
 
 **Test Cases:**
 
-| TC       | Description                                       | Status |
-|----------|---------------------------------------------------|--------|
-| TC-M4-01 | Empty query returns all keys                      | ❌      |
-| TC-M4-02 | Query filters keys by fuzzy match                 | ❌      |
-| TC-M4-03 | Results update progressively (not blocked)        | ❌      |
-| TC-M4-04 | Active keys appear before trashed keys            | ❌      |
-| TC-M4-05 | Maximum 100 active results returned               | ❌      |
-| TC-M4-06 | Maximum 20 trashed results returned               | ❌      |
-| TC-M4-07 | Smart case: "abc" matches "ABC", "Abc" doesn't    | ❌      |
-| TC-M4-08 | Special characters in query don't crash (*, [, \) | ❌      |
-| TC-M4-09 | Unicode query matches unicode keys                | ❌      |
+| TC       | Description                                     | Status |
+|----------|-------------------------------------------------|--------|
+| TC-M4-01 | Type in search bar, matching keys appear        | ❌      |
+| TC-M4-02 | Empty search shows all keys                     | ❌      |
+| TC-M4-03 | Results stop changing after threshold reached   | ❌      |
+| TC-M4-04 | "abc" matches "ABC"; "Abc" does not match "abc" | ❌      |
+| TC-M4-05 | Trashed keys appear in separate section         | ❌      |
 
 ---
 
