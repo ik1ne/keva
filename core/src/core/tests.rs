@@ -1,8 +1,7 @@
 use super::*;
+use crate::core::file_storage::FileStorage;
 use crate::types::config::SavedConfig;
-use crate::types::{
-    BlobStoredFile, ClipData, FileContent, InlinedFile, LifecycleState, TextContent,
-};
+use crate::types::value::LifecycleState;
 use common::*;
 use std::io::Write;
 use std::time::Duration;
@@ -18,7 +17,6 @@ mod common {
             saved: SavedConfig {
                 trash_ttl: Duration::from_secs(30 * 24 * 60 * 60), // 30 days
                 purge_ttl: Duration::from_secs(7 * 24 * 60 * 60),  // 7 days
-                inline_threshold_bytes: 1024 * 1024,               // 1MB
             },
         };
 
@@ -39,292 +37,467 @@ mod common {
     }
 }
 
-mod upsert_text {
+mod create {
     use super::*;
 
     #[test]
-    fn test_upsert_creates_new_key() {
+    fn test_create_new_key() {
         let (mut storage, _temp) = create_test_storage();
         let key = make_key("test/key");
         let now = SystemTime::now();
 
-        storage.upsert_text(&key, "hello world", now).unwrap();
+        storage.create(&key, now).unwrap();
 
         let value = storage.get(&key).unwrap().unwrap();
         assert_eq!(
-            value.clip_data,
-            ClipData::Text(TextContent::Inlined("hello world".to_string()))
+            value.metadata.lifecycle_state,
+            LifecycleState::Active { last_accessed: now }
         );
-        assert_eq!(value.metadata.lifecycle_state, LifecycleState::Active);
+        assert!(value.attachments.is_empty());
     }
 
     #[test]
-    fn test_upsert_updates_existing_key() {
+    fn test_create_creates_content_file() {
+        let (mut storage, temp) = create_test_storage();
+        let key = make_key("test/key");
+        let now = SystemTime::now();
+
+        storage.create(&key, now).unwrap();
+
+        let content_path = storage.content_path(&key);
+        assert!(content_path.exists());
+
+        // Content should be empty
+        let content = std::fs::read_to_string(&content_path).unwrap();
+        assert_eq!(content, "");
+
+        // Path should be in content directory
+        assert!(content_path.starts_with(temp.path().join("content")));
+    }
+
+    #[test]
+    fn test_create_existing_key_fails() {
         let (mut storage, _temp) = create_test_storage();
         let key = make_key("test/key");
         let now = SystemTime::now();
 
-        storage.upsert_text(&key, "first", now).unwrap();
-        let first_value = storage.get(&key).unwrap().unwrap();
-        let created_at = first_value.metadata.created_at;
+        storage.create(&key, now).unwrap();
 
-        // Small delay to ensure different timestamps
-        std::thread::sleep(Duration::from_millis(10));
-        let later = SystemTime::now();
-
-        storage.upsert_text(&key, "second", later).unwrap();
-        let second_value = storage.get(&key).unwrap().unwrap();
-
-        // Content should be updated
-        assert_eq!(
-            second_value.clip_data,
-            ClipData::Text(TextContent::Inlined("second".to_string()))
-        );
-        // created_at should be preserved
-        assert_eq!(second_value.metadata.created_at, created_at);
-        // updated_at should be different
-        assert!(second_value.metadata.updated_at > created_at);
+        let result = storage.create(&key, now);
+        assert!(matches!(
+            result,
+            Err(KevaError::Database(DatabaseError::AlreadyExists))
+        ));
     }
 
     #[test]
-    fn test_upsert_fails_on_trashed_key() {
+    fn test_create_trashed_key_fails() {
         let (mut storage, _temp) = create_test_storage();
         let key = make_key("test/key");
         let now = SystemTime::now();
 
-        storage.upsert_text(&key, "first", now).unwrap();
+        storage.create(&key, now).unwrap();
         storage.trash(&key, now).unwrap();
 
-        // Key should be visible as Trash
-        let value = storage.get(&key).unwrap().unwrap();
-        assert_eq!(value.metadata.lifecycle_state, LifecycleState::Trash);
-
-        // Upsert should fail - must restore first
-        let result = storage.upsert_text(&key, "second", now);
-        assert!(matches!(result, Err(StorageError::KeyIsTrashed)));
-    }
-
-    #[test]
-    fn test_upsert_blob_text_then_inline_removes_old_blob_file() {
-        let (mut storage, temp) = create_test_storage();
-        let key = make_key("test/blob_to_inline");
-        let now = SystemTime::now();
-
-        // Force blob storage by exceeding the inline threshold.
-        let large_text = "x".repeat(1024 * 1024 + 1);
-        storage.upsert_text(&key, &large_text, now).unwrap();
-
-        // Confirm it is blob-stored and the file exists on disk.
-        let v1 = storage.get(&key).unwrap().unwrap();
-        match v1.clip_data {
-            ClipData::Text(TextContent::BlobStored { .. }) => {}
-            _ => panic!("expected blob-stored text after large upsert"),
-        }
-
-        // This matches the on-disk path used by keva_core for blob-stored text.
-        let key_path = {
-            let hash = blake3_v1::hash(key.as_str().as_bytes());
-            PathBuf::from(hash.to_hex().as_str())
-        };
-        let blob_text_path = temp
-            .path()
-            .join("blobs")
-            .join(key_path)
-            .join(file::TEXT_FILE_NAME);
-
-        assert!(blob_text_path.exists());
-
-        // Now shrink it below the inline threshold.
-        let small_text = "small";
-        let later = now + Duration::from_secs(1);
-        storage.upsert_text(&key, small_text, later).unwrap();
-
-        // Ensure it is now inlined.
-        let v2 = storage.get(&key).unwrap().unwrap();
-        match v2.clip_data {
-            ClipData::Text(TextContent::Inlined(s)) => assert_eq!(s, small_text),
-            _ => panic!("expected inlined text after shrinking"),
-        }
-
-        // Old blob file should be removed.
-        assert!(!blob_text_path.exists());
+        let result = storage.create(&key, now);
+        assert!(matches!(
+            result,
+            Err(KevaError::Database(DatabaseError::AlreadyExists))
+        ));
     }
 }
 
-mod add_files {
+mod get {
     use super::*;
 
     #[test]
-    fn test_add_files_creates_new_key() {
+    fn test_get_active_key() {
+        let (mut storage, _temp) = create_test_storage();
+        let key = make_key("test/key");
+        let now = SystemTime::now();
+
+        storage.create(&key, now).unwrap();
+
+        let value = storage.get(&key).unwrap().unwrap();
+        assert!(matches!(
+            value.metadata.lifecycle_state,
+            LifecycleState::Active { .. }
+        ));
+    }
+
+    #[test]
+    fn test_get_trashed_key() {
+        let (mut storage, _temp) = create_test_storage();
+        let key = make_key("test/key");
+        let now = SystemTime::now();
+
+        storage.create(&key, now).unwrap();
+        storage.trash(&key, now).unwrap();
+
+        let value = storage.get(&key).unwrap().unwrap();
+        assert!(matches!(
+            value.metadata.lifecycle_state,
+            LifecycleState::Trash { .. }
+        ));
+    }
+
+    #[test]
+    fn test_get_nonexistent_key() {
+        let (storage, _temp) = create_test_storage();
+        let key = make_key("nonexistent");
+
+        let result = storage.get(&key).unwrap();
+        assert!(result.is_none());
+    }
+}
+
+mod touch {
+    use super::*;
+
+    #[test]
+    fn test_touch_updates_last_accessed() {
+        let (mut storage, _temp) = create_test_storage();
+        let key = make_key("test/key");
+        let now = SystemTime::now();
+
+        storage.create(&key, now).unwrap();
+
+        let later = now + Duration::from_secs(10);
+        storage.touch(&key, later).unwrap();
+
+        let value = storage.get(&key).unwrap().unwrap();
+        assert_eq!(
+            value.metadata.lifecycle_state,
+            LifecycleState::Active {
+                last_accessed: later
+            }
+        );
+    }
+
+    #[test]
+    fn test_touch_nonexistent_key_fails() {
+        let (mut storage, _temp) = create_test_storage();
+        let now = SystemTime::now();
+
+        let result = storage.touch(&make_key("missing"), now);
+        assert!(matches!(
+            result,
+            Err(KevaError::Database(db::error::DatabaseError::NotFound))
+        ));
+    }
+
+    #[test]
+    fn test_touch_trashed_key_fails() {
+        let (mut storage, _temp) = create_test_storage();
+        let key = make_key("test/key");
+        let now = SystemTime::now();
+
+        storage.create(&key, now).unwrap();
+        storage.trash(&key, now).unwrap();
+
+        let result = storage.touch(&key, now);
+        assert!(matches!(
+            result,
+            Err(KevaError::Database(db::error::DatabaseError::Trashed))
+        ));
+    }
+}
+
+mod add_attachments {
+    use super::*;
+
+    #[test]
+    fn test_add_attachment_to_key() {
         let (mut storage, temp) = create_test_storage();
-        let key = make_key("test/files");
+        let key = make_key("test/key");
         let file_path = create_test_file(&temp, "test.txt", b"file content");
         let now = SystemTime::now();
 
-        storage.add_files(&key, [&file_path], now).unwrap();
+        storage.create(&key, now).unwrap();
+        let value = storage
+            .add_attachments(&key, &[(file_path, None)], now)
+            .unwrap();
 
-        let value = storage.get(&key).unwrap().unwrap();
-        assert_eq!(
-            value.clip_data,
-            ClipData::Files(vec![FileContent::Inlined(InlinedFile {
-                file_name: "test.txt".to_string(),
-                data: b"file content".to_vec(),
-            })])
-        );
+        assert_eq!(value.attachments.len(), 1);
+        assert_eq!(value.attachments[0].filename, "test.txt");
+        assert_eq!(value.attachments[0].size, 12); // "file content".len()
     }
 
     #[test]
-    fn test_add_files_appends_to_existing() {
+    fn test_add_multiple_attachments() {
         let (mut storage, temp) = create_test_storage();
-        let key = make_key("test/files");
+        let key = make_key("test/key");
         let file1 = create_test_file(&temp, "file1.txt", b"content1");
         let file2 = create_test_file(&temp, "file2.txt", b"content2");
         let now = SystemTime::now();
 
-        storage.add_files(&key, [&file1], now).unwrap();
-        storage.add_files(&key, [&file2], now).unwrap();
+        storage.create(&key, now).unwrap();
+        let value = storage
+            .add_attachments(&key, &[(file1, None), (file2, None)], now)
+            .unwrap();
 
-        let value = storage.get(&key).unwrap().unwrap();
-        match &value.clip_data {
-            ClipData::Files(files) => assert_eq!(files.len(), 2),
-            _ => panic!("Expected Files variant"),
-        }
+        assert_eq!(value.attachments.len(), 2);
     }
 
     #[test]
-    fn test_add_files_to_text_fails() {
+    fn test_add_attachment_to_nonexistent_key_fails() {
         let (mut storage, temp) = create_test_storage();
-        let key = make_key("test/text");
+        let key = make_key("nonexistent");
         let file_path = create_test_file(&temp, "test.txt", b"content");
         let now = SystemTime::now();
 
-        storage.upsert_text(&key, "text content", now).unwrap();
-
-        let result = storage.add_files(&key, [&file_path], now);
+        let result = storage.add_attachments(&key, &[(file_path, None)], now);
         assert!(matches!(
             result,
-            Err(StorageError::Database(DatabaseError::TypeMismatch))
+            Err(KevaError::Database(DatabaseError::NotFound))
+        ));
+    }
+
+    #[test]
+    fn test_add_attachment_skip_conflict() {
+        let (mut storage, temp) = create_test_storage();
+        let key = make_key("test/key");
+        let now = SystemTime::now();
+
+        storage.create(&key, now).unwrap();
+
+        let file1 = create_test_file(&temp, "same.txt", b"first");
+        storage
+            .add_attachments(&key, &[(file1, None)], now)
+            .unwrap();
+
+        let file2 = create_test_file(&temp, "same.txt", b"second");
+        let value = storage
+            .add_attachments(
+                &key,
+                &[(file2, Some(AttachmentConflictResolution::Skip))],
+                now,
+            )
+            .unwrap();
+
+        // Still only 1 attachment (skipped)
+        assert_eq!(value.attachments.len(), 1);
+        assert_eq!(value.attachments[0].size, 5); // "first".len() - original preserved
+    }
+
+    #[test]
+    fn test_add_attachment_rename_conflict() {
+        let (mut storage, temp) = create_test_storage();
+        let key = make_key("test/key");
+        let now = SystemTime::now();
+
+        storage.create(&key, now).unwrap();
+
+        let file1 = create_test_file(&temp, "same.txt", b"first");
+        storage
+            .add_attachments(&key, &[(file1, None)], now)
+            .unwrap();
+
+        let file2 = create_test_file(&temp, "same.txt", b"second");
+        let value = storage
+            .add_attachments(
+                &key,
+                &[(file2, Some(AttachmentConflictResolution::Rename))],
+                now,
+            )
+            .unwrap();
+
+        assert_eq!(value.attachments.len(), 2);
+        let filenames: Vec<_> = value.attachments.iter().map(|a| &a.filename).collect();
+        assert!(filenames.contains(&&"same.txt".to_string()));
+        assert!(filenames.contains(&&"same (1).txt".to_string()));
+    }
+
+    #[test]
+    fn test_add_attachment_overwrite_conflict() {
+        let (mut storage, temp) = create_test_storage();
+        let key = make_key("test/key");
+        let now = SystemTime::now();
+
+        storage.create(&key, now).unwrap();
+
+        let file1 = create_test_file(&temp, "same.txt", b"first");
+        storage
+            .add_attachments(&key, &[(file1, None)], now)
+            .unwrap();
+
+        let file2 = create_test_file(&temp, "same.txt", b"second content");
+        let value = storage
+            .add_attachments(
+                &key,
+                &[(file2, Some(AttachmentConflictResolution::Overwrite))],
+                now,
+            )
+            .unwrap();
+
+        assert_eq!(value.attachments.len(), 1);
+        assert_eq!(value.attachments[0].size, 14); // "second content".len()
+    }
+
+    #[test]
+    fn test_attachment_file_exists_on_disk() {
+        let (mut storage, temp) = create_test_storage();
+        let key = make_key("test/key");
+        let file_path = create_test_file(&temp, "test.txt", b"file content");
+        let now = SystemTime::now();
+
+        storage.create(&key, now).unwrap();
+        storage
+            .add_attachments(&key, &[(file_path, None)], now)
+            .unwrap();
+
+        let attachment_path = storage.attachment_path(&key, "test.txt");
+        assert!(attachment_path.exists());
+        assert_eq!(
+            std::fs::read_to_string(&attachment_path).unwrap(),
+            "file content"
+        );
+    }
+}
+
+mod remove_attachment {
+    use super::*;
+
+    #[test]
+    fn test_remove_attachment() {
+        let (mut storage, temp) = create_test_storage();
+        let key = make_key("test/key");
+        let file_path = create_test_file(&temp, "test.txt", b"content");
+        let now = SystemTime::now();
+
+        storage.create(&key, now).unwrap();
+        storage
+            .add_attachments(&key, &[(file_path, None)], now)
+            .unwrap();
+
+        let later = now + Duration::from_secs(1);
+        storage.remove_attachment(&key, "test.txt", later).unwrap();
+
+        let value = storage.get(&key).unwrap().unwrap();
+        assert!(value.attachments.is_empty());
+    }
+
+    #[test]
+    fn test_remove_attachment_removes_file_from_disk() {
+        let (mut storage, temp) = create_test_storage();
+        let key = make_key("test/key");
+        let file_path = create_test_file(&temp, "test.txt", b"content");
+        let now = SystemTime::now();
+
+        storage.create(&key, now).unwrap();
+        storage
+            .add_attachments(&key, &[(file_path, None)], now)
+            .unwrap();
+
+        let attachment_path = storage.attachment_path(&key, "test.txt");
+        assert!(attachment_path.exists());
+
+        storage.remove_attachment(&key, "test.txt", now).unwrap();
+        assert!(!attachment_path.exists());
+    }
+
+    #[test]
+    fn test_remove_nonexistent_attachment_fails() {
+        let (mut storage, _temp) = create_test_storage();
+        let key = make_key("test/key");
+        let now = SystemTime::now();
+
+        storage.create(&key, now).unwrap();
+
+        let result = storage.remove_attachment(&key, "nonexistent.txt", now);
+        assert!(matches!(
+            result,
+            Err(KevaError::Database(DatabaseError::AttachmentNotFound(_)))
         ));
     }
 }
 
-mod remove_file_at {
+mod rename_attachment {
     use super::*;
 
     #[test]
-    fn test_remove_file_at_removes_selected_entry() {
+    fn test_rename_attachment() {
         let (mut storage, temp) = create_test_storage();
-        let key = make_key("test/remove_file_at");
+        let key = make_key("test/key");
+        let file_path = create_test_file(&temp, "old.txt", b"content");
         let now = SystemTime::now();
 
-        let file1 = create_test_file(&temp, "file1.txt", b"content1");
-        let file2 = create_test_file(&temp, "file2.txt", b"content2");
+        storage.create(&key, now).unwrap();
+        storage
+            .add_attachments(&key, &[(file_path, None)], now)
+            .unwrap();
 
-        storage.add_files(&key, [&file1, &file2], now).unwrap();
-
-        // Remove the first entry (file1).
-        let later = now + Duration::from_secs(1);
-        storage.remove_file_at(&key, 0, later).unwrap();
+        storage
+            .rename_attachment(&key, "old.txt", "new.txt", now)
+            .unwrap();
 
         let value = storage.get(&key).unwrap().unwrap();
-        assert_eq!(
-            value.clip_data,
-            ClipData::Files(vec![FileContent::Inlined(InlinedFile {
-                file_name: "file2.txt".to_string(),
-                data: b"content2".to_vec(),
-            })])
-        );
+        assert_eq!(value.attachments.len(), 1);
+        assert_eq!(value.attachments[0].filename, "new.txt");
+
+        // Old path should not exist, new path should
+        let old_path = storage.attachment_path(&key, "old.txt");
+        let new_path = storage.attachment_path(&key, "new.txt");
+        assert!(!old_path.exists());
+        assert!(new_path.exists());
     }
 
     #[test]
-    fn test_remove_file_at_removes_blob_stored_file_from_disk() {
-        let (mut storage, temp) = create_test_storage();
-        let key = make_key("test/remove_file_at_blob");
-        let now = SystemTime::now();
-
-        // Force blob storage by exceeding the inline threshold (1MB in create_test_storage()).
-        let big = vec![b'x'; 1024 * 1024 + 1];
-        let big_path = create_test_file(&temp, "big.bin", &big);
-
-        storage.add_files(&key, [&big_path], now).unwrap();
-
-        // Confirm it is blob-stored and the blob exists on disk at the expected path.
-        let v1 = storage.get(&key).unwrap().unwrap();
-        let blob_path = match &v1.clip_data {
-            ClipData::Files(files) => match &files[0] {
-                FileContent::BlobStored(BlobStoredFile { path, .. }) => path.clone(),
-                _ => panic!("expected blob-stored file after adding > threshold"),
-            },
-            _ => panic!("expected Files variant"),
-        };
-
-        assert!(blob_path.exists());
-
-        // Remove the only file entry; core should remove the blob file from disk.
-        let later = now + Duration::from_secs(1);
-        storage.remove_file_at(&key, 0, later).unwrap();
-
-        assert!(!blob_path.exists());
-
-        // Value should become empty text.
-        let v2 = storage.get(&key).unwrap().unwrap();
-        match &v2.clip_data {
-            ClipData::Text(TextContent::Inlined(s)) => assert_eq!(s, ""),
-            _ => panic!("expected empty inlined text after removing last file"),
-        }
-    }
-
-    #[test]
-    fn test_remove_file_at_last_file_becomes_empty_text() {
-        let (mut storage, temp) = create_test_storage();
-        let key = make_key("test/remove_file_at_last");
-        let now = SystemTime::now();
-
-        let file1 = create_test_file(&temp, "file1.txt", b"content1");
-        storage.add_files(&key, [&file1], now).unwrap();
-
-        let later = now + Duration::from_secs(1);
-        storage.remove_file_at(&key, 0, later).unwrap();
-
-        let value = storage.get(&key).unwrap().unwrap();
-        match &value.clip_data {
-            ClipData::Text(TextContent::Inlined(s)) => assert_eq!(s, ""),
-            ClipData::Text(TextContent::BlobStored { .. }) => {
-                panic!("Expected empty inlined text after removing last file")
-            }
-            _ => panic!("Expected Text variant after removing last file"),
-        }
-    }
-
-    #[test]
-    fn test_remove_file_at_on_text_fails() {
+    fn test_rename_nonexistent_attachment_fails() {
         let (mut storage, _temp) = create_test_storage();
-        let key = make_key("test/remove_file_at_text");
+        let key = make_key("test/key");
         let now = SystemTime::now();
 
-        storage.upsert_text(&key, "text content", now).unwrap();
+        storage.create(&key, now).unwrap();
 
-        let result = storage.remove_file_at(&key, 0, now);
+        let result = storage.rename_attachment(&key, "nonexistent.txt", "new.txt", now);
         assert!(matches!(
             result,
-            Err(StorageError::Database(DatabaseError::TypeMismatch))
+            Err(KevaError::Database(DatabaseError::AttachmentNotFound(_)))
         ));
     }
 
     #[test]
-    fn test_remove_file_at_out_of_bounds_fails() {
+    fn test_rename_to_existing_fails() {
         let (mut storage, temp) = create_test_storage();
-        let key = make_key("test/remove_file_at_oob");
+        let key = make_key("test/key");
+        let file_a = create_test_file(&temp, "a.txt", b"content A");
+        let file_b = create_test_file(&temp, "b.txt", b"content B");
         let now = SystemTime::now();
 
-        let file1 = create_test_file(&temp, "file1.txt", b"content1");
-        storage.add_files(&key, [&file1], now).unwrap();
+        storage.create(&key, now).unwrap();
+        storage
+            .add_attachments(&key, &[(file_a, None), (file_b, None)], now)
+            .unwrap();
 
-        let result = storage.remove_file_at(&key, 1, now);
-        assert!(matches!(
-            result,
-            Err(StorageError::Database(DatabaseError::NotFound))
-        ));
+        // Rename a.txt -> b.txt should fail (destination exists)
+        let result = storage.rename_attachment(&key, "a.txt", "b.txt", now);
+        assert!(matches!(result, Err(KevaError::DestinationExists)));
+
+        // Both files should still exist unchanged
+        let value = storage.get(&key).unwrap().unwrap();
+        assert_eq!(value.attachments.len(), 2);
+    }
+
+    #[test]
+    fn test_rename_to_same_name_is_noop() {
+        let (mut storage, temp) = create_test_storage();
+        let key = make_key("test/key");
+        let file_path = create_test_file(&temp, "a.txt", b"content");
+        let now = SystemTime::now();
+
+        storage.create(&key, now).unwrap();
+        storage
+            .add_attachments(&key, &[(file_path, None)], now)
+            .unwrap();
+
+        storage
+            .rename_attachment(&key, "a.txt", "a.txt", now)
+            .unwrap();
+
+        let value = storage.get(&key).unwrap().unwrap();
+        assert_eq!(value.attachments.len(), 1);
+        assert_eq!(value.attachments[0].filename, "a.txt");
     }
 }
 
@@ -337,21 +510,14 @@ mod trash {
         let key = make_key("test/key");
         let now = SystemTime::now();
 
-        storage.upsert_text(&key, "content", now).unwrap();
-        let active_value = storage.get(&key).unwrap().unwrap();
-        assert_eq!(
-            active_value.metadata.lifecycle_state,
-            LifecycleState::Active
-        );
-
+        storage.create(&key, now).unwrap();
         storage.trash(&key, now).unwrap();
 
-        // Key should still be visible, but with Trash state
-        let trashed_value = storage.get(&key).unwrap().unwrap();
-        assert_eq!(
-            trashed_value.metadata.lifecycle_state,
-            LifecycleState::Trash
-        );
+        let value = storage.get(&key).unwrap().unwrap();
+        assert!(matches!(
+            value.metadata.lifecycle_state,
+            LifecycleState::Trash { .. }
+        ));
     }
 
     #[test]
@@ -363,7 +529,7 @@ mod trash {
         let result = storage.trash(&key, now);
         assert!(matches!(
             result,
-            Err(StorageError::Database(DatabaseError::NotFound))
+            Err(KevaError::Database(db::error::DatabaseError::NotFound))
         ));
     }
 
@@ -373,11 +539,14 @@ mod trash {
         let key = make_key("test/key");
         let now = SystemTime::now();
 
-        storage.upsert_text(&key, "content", now).unwrap();
+        storage.create(&key, now).unwrap();
         storage.trash(&key, now).unwrap();
 
         let result = storage.trash(&key, now);
-        assert!(matches!(result, Err(StorageError::AlreadyTrashed)));
+        assert!(matches!(
+            result,
+            Err(KevaError::Database(DatabaseError::Trashed))
+        ));
     }
 }
 
@@ -391,15 +560,60 @@ mod rename {
         let new_key = make_key("new/key");
         let now = SystemTime::now();
 
-        storage.upsert_text(&old_key, "content", now).unwrap();
-        storage.rename(&old_key, &new_key, false).unwrap();
+        storage.create(&old_key, now).unwrap();
+        storage.rename(&old_key, &new_key, now).unwrap();
 
         assert!(storage.get(&old_key).unwrap().is_none());
-        let value = storage.get(&new_key).unwrap().unwrap();
+        assert!(storage.get(&new_key).unwrap().is_some());
+    }
+
+    #[test]
+    fn test_rename_moves_content_file() {
+        let (mut storage, _temp) = create_test_storage();
+        let old_key = make_key("old/key");
+        let new_key = make_key("new/key");
+        let now = SystemTime::now();
+
+        storage.create(&old_key, now).unwrap();
+
+        let old_content_path = storage.content_path(&old_key);
+
+        // Write some content
+        std::fs::write(&old_content_path, "test content").unwrap();
+
+        storage.rename(&old_key, &new_key, now).unwrap();
+
+        assert!(!old_content_path.exists());
+
+        let new_content_path = storage.content_path(&new_key);
+        assert!(new_content_path.exists());
         assert_eq!(
-            value.clip_data,
-            ClipData::Text(TextContent::Inlined("content".to_string()))
+            std::fs::read_to_string(&new_content_path).unwrap(),
+            "test content"
         );
+    }
+
+    #[test]
+    fn test_rename_moves_attachments() {
+        let (mut storage, temp) = create_test_storage();
+        let old_key = make_key("old/key");
+        let new_key = make_key("new/key");
+        let file_path = create_test_file(&temp, "test.txt", b"attachment");
+        let now = SystemTime::now();
+
+        storage.create(&old_key, now).unwrap();
+        storage
+            .add_attachments(&old_key, &[(file_path, None)], now)
+            .unwrap();
+
+        let old_attachment_path = storage.attachment_path(&old_key, "test.txt");
+        assert!(old_attachment_path.exists());
+
+        storage.rename(&old_key, &new_key, now).unwrap();
+
+        assert!(!old_attachment_path.exists());
+        let new_attachment_path = storage.attachment_path(&new_key, "test.txt");
+        assert!(new_attachment_path.exists());
     }
 
     #[test]
@@ -408,17 +622,10 @@ mod rename {
         let key = make_key("same/key");
         let now = SystemTime::now();
 
-        storage.upsert_text(&key, "content", now).unwrap();
+        storage.create(&key, now).unwrap();
+        storage.rename(&key, &key, now).unwrap();
 
-        // Should be a no-op and not error.
-        storage.rename(&key, &key, false).unwrap();
-
-        // Value should remain intact.
-        let value = storage.get(&key).unwrap().unwrap();
-        assert_eq!(
-            value.clip_data,
-            ClipData::Text(TextContent::Inlined("content".to_string()))
-        );
+        assert!(storage.get(&key).unwrap().is_some());
     }
 
     #[test]
@@ -428,35 +635,11 @@ mod rename {
         let new_key = make_key("new/key");
         let now = SystemTime::now();
 
-        storage.upsert_text(&old_key, "old content", now).unwrap();
-        storage.upsert_text(&new_key, "new content", now).unwrap();
+        storage.create(&old_key, now).unwrap();
+        storage.create(&new_key, now).unwrap();
 
-        let result = storage.rename(&old_key, &new_key, false);
-        assert!(matches!(result, Err(StorageError::DestinationExists)));
-
-        // Both keys should still exist with original content
-        assert!(storage.get(&old_key).unwrap().is_some());
-        assert!(storage.get(&new_key).unwrap().is_some());
-    }
-
-    #[test]
-    fn test_rename_with_overwrite() {
-        let (mut storage, _temp) = create_test_storage();
-        let old_key = make_key("old/key");
-        let new_key = make_key("new/key");
-        let now = SystemTime::now();
-
-        storage.upsert_text(&old_key, "old content", now).unwrap();
-        storage.upsert_text(&new_key, "new content", now).unwrap();
-
-        storage.rename(&old_key, &new_key, true).unwrap();
-
-        assert!(storage.get(&old_key).unwrap().is_none());
-        let value = storage.get(&new_key).unwrap().unwrap();
-        assert_eq!(
-            value.clip_data,
-            ClipData::Text(TextContent::Inlined("old content".to_string()))
-        );
+        let result = storage.rename(&old_key, &new_key, now);
+        assert!(matches!(result, Err(KevaError::DestinationExists)));
     }
 }
 
@@ -468,15 +651,9 @@ mod keys {
         let (mut storage, _temp) = create_test_storage();
         let now = SystemTime::now();
 
-        storage
-            .upsert_text(&make_key("active1"), "content", now)
-            .unwrap();
-        storage
-            .upsert_text(&make_key("active2"), "content", now)
-            .unwrap();
-        storage
-            .upsert_text(&make_key("trashed"), "content", now)
-            .unwrap();
+        storage.create(&make_key("active1"), now).unwrap();
+        storage.create(&make_key("active2"), now).unwrap();
+        storage.create(&make_key("trashed"), now).unwrap();
         storage.trash(&make_key("trashed"), now).unwrap();
 
         let keys = storage.active_keys().unwrap();
@@ -493,15 +670,9 @@ mod keys {
         let (mut storage, _temp) = create_test_storage();
         let now = SystemTime::now();
 
-        storage
-            .upsert_text(&make_key("active"), "content", now)
-            .unwrap();
-        storage
-            .upsert_text(&make_key("trashed1"), "content", now)
-            .unwrap();
-        storage
-            .upsert_text(&make_key("trashed2"), "content", now)
-            .unwrap();
+        storage.create(&make_key("active"), now).unwrap();
+        storage.create(&make_key("trashed1"), now).unwrap();
+        storage.create(&make_key("trashed2"), now).unwrap();
         storage.trash(&make_key("trashed1"), now).unwrap();
         storage.trash(&make_key("trashed2"), now).unwrap();
 
@@ -515,119 +686,6 @@ mod keys {
     }
 }
 
-mod touch {
-    use super::*;
-
-    #[test]
-    fn test_touch_updates_last_accessed() {
-        let (mut storage, _temp) = create_test_storage();
-
-        let key = make_key("k");
-        let t1 = SystemTime::now();
-        storage.upsert_text(&key, "content", t1).unwrap();
-
-        let v1 = storage.get(&key).unwrap().unwrap();
-        let last_accessed_1 = v1.metadata.last_accessed;
-
-        // Ensure a strictly later time so the assertion is deterministic
-        let t2 = t1 + Duration::from_secs(1);
-
-        storage.touch(&key, t2).unwrap();
-
-        let v2 = storage.get(&key).unwrap().unwrap();
-        assert!(v2.metadata.last_accessed >= t2);
-        assert!(v2.metadata.last_accessed > last_accessed_1);
-    }
-
-    #[test]
-    fn test_touch_nonexistent_key_fails() {
-        let (mut storage, _temp) = create_test_storage();
-        let now = SystemTime::now();
-
-        let result = storage.touch(&make_key("missing"), now);
-        assert!(matches!(
-            result,
-            Err(StorageError::Database(DatabaseError::NotFound))
-        ));
-    }
-
-    #[test]
-    fn test_touch_trashed_key_fails() {
-        let (mut storage, _temp) = create_test_storage();
-        let now = SystemTime::now();
-        let key = make_key("k");
-
-        storage.upsert_text(&key, "content", now).unwrap();
-        storage.trash(&key, now).unwrap();
-
-        let result = storage.touch(&key, now);
-        assert!(matches!(
-            result,
-            Err(StorageError::Database(DatabaseError::Trashed))
-        ));
-    }
-
-    #[test]
-    fn test_get_does_not_update_last_accessed() {
-        let (mut storage, _temp) = create_test_storage();
-
-        let key = make_key("k");
-        let t1 = SystemTime::now();
-        storage.upsert_text(&key, "content", t1).unwrap();
-
-        let v1 = storage.get(&key).unwrap().unwrap();
-        let last_accessed_1 = v1.metadata.last_accessed;
-
-        // Read again. Contract: get() is a pure read and does not touch.
-        let v2 = storage.get(&key).unwrap().unwrap();
-
-        assert_eq!(v2.metadata.last_accessed, last_accessed_1);
-    }
-}
-
-mod get {
-    use super::*;
-
-    #[test]
-    fn test_get_active_key() {
-        let (mut storage, _temp) = create_test_storage();
-        let key = make_key("test/key");
-        let now = SystemTime::now();
-
-        storage.upsert_text(&key, "content", now).unwrap();
-
-        let value = storage.get(&key).unwrap().unwrap();
-        assert_eq!(
-            value.clip_data,
-            ClipData::Text(TextContent::Inlined("content".to_string()))
-        );
-        assert_eq!(value.metadata.lifecycle_state, LifecycleState::Active);
-    }
-
-    #[test]
-    fn test_get_trashed_key() {
-        let (mut storage, _temp) = create_test_storage();
-        let key = make_key("test/key");
-        let now = SystemTime::now();
-
-        storage.upsert_text(&key, "content", now).unwrap();
-        storage.trash(&key, now).unwrap();
-
-        // Get should still work for trashed keys
-        let value = storage.get(&key).unwrap().unwrap();
-        assert_eq!(value.metadata.lifecycle_state, LifecycleState::Trash);
-    }
-
-    #[test]
-    fn test_get_nonexistent_key() {
-        let (storage, _temp) = create_test_storage();
-        let key = make_key("nonexistent");
-
-        let result = storage.get(&key).unwrap();
-        assert!(result.is_none());
-    }
-}
-
 mod restore {
     use super::*;
 
@@ -637,16 +695,22 @@ mod restore {
         let key = make_key("test/key");
         let now = SystemTime::now();
 
-        storage.upsert_text(&key, "content", now).unwrap();
+        storage.create(&key, now).unwrap();
         storage.trash(&key, now).unwrap();
 
         let value = storage.get(&key).unwrap().unwrap();
-        assert_eq!(value.metadata.lifecycle_state, LifecycleState::Trash);
+        assert!(matches!(
+            value.metadata.lifecycle_state,
+            LifecycleState::Trash { .. }
+        ));
 
         storage.restore(&key, now).unwrap();
 
         let restored = storage.get(&key).unwrap().unwrap();
-        assert_eq!(restored.metadata.lifecycle_state, LifecycleState::Active);
+        assert!(matches!(
+            restored.metadata.lifecycle_state,
+            LifecycleState::Active { .. }
+        ));
     }
 
     #[test]
@@ -658,24 +722,8 @@ mod restore {
         let result = storage.restore(&key, now);
         assert!(matches!(
             result,
-            Err(StorageError::Database(DatabaseError::NotFound))
+            Err(KevaError::Database(db::error::DatabaseError::NotFound))
         ));
-    }
-
-    #[test]
-    fn test_restore_active_key_is_noop() {
-        let (mut storage, _temp) = create_test_storage();
-        let key = make_key("test/key");
-        let now = SystemTime::now();
-
-        storage.upsert_text(&key, "content", now).unwrap();
-
-        // Restoring an active key is a no-op (succeeds silently)
-        storage.restore(&key, now).unwrap();
-
-        // Key should still be active
-        let value = storage.get(&key).unwrap().unwrap();
-        assert_eq!(value.metadata.lifecycle_state, LifecycleState::Active);
     }
 }
 
@@ -688,7 +736,7 @@ mod purge {
         let key = make_key("test/key");
         let now = SystemTime::now();
 
-        storage.upsert_text(&key, "content", now).unwrap();
+        storage.create(&key, now).unwrap();
         storage.purge(&key).unwrap();
 
         assert!(storage.get(&key).unwrap().is_none());
@@ -700,11 +748,45 @@ mod purge {
         let key = make_key("test/key");
         let now = SystemTime::now();
 
-        storage.upsert_text(&key, "content", now).unwrap();
+        storage.create(&key, now).unwrap();
         storage.trash(&key, now).unwrap();
         storage.purge(&key).unwrap();
 
         assert!(storage.get(&key).unwrap().is_none());
+    }
+
+    #[test]
+    fn test_purge_removes_content_file() {
+        let (mut storage, _temp) = create_test_storage();
+        let key = make_key("test/key");
+        let now = SystemTime::now();
+
+        storage.create(&key, now).unwrap();
+
+        let content_path = storage.content_path(&key);
+        assert!(content_path.exists());
+
+        storage.purge(&key).unwrap();
+        assert!(!content_path.exists());
+    }
+
+    #[test]
+    fn test_purge_removes_attachments() {
+        let (mut storage, temp) = create_test_storage();
+        let key = make_key("test/key");
+        let file_path = create_test_file(&temp, "test.txt", b"content");
+        let now = SystemTime::now();
+
+        storage.create(&key, now).unwrap();
+        storage
+            .add_attachments(&key, &[(file_path, None)], now)
+            .unwrap();
+
+        let attachment_path = storage.attachment_path(&key, "test.txt");
+        assert!(attachment_path.exists());
+
+        storage.purge(&key).unwrap();
+        assert!(!attachment_path.exists());
     }
 
     #[test]
@@ -715,7 +797,7 @@ mod purge {
         let result = storage.purge(&key);
         assert!(matches!(
             result,
-            Err(StorageError::Database(DatabaseError::NotFound))
+            Err(KevaError::Database(DatabaseError::NotFound))
         ));
     }
 }
@@ -730,7 +812,6 @@ mod maintenance {
             saved: SavedConfig {
                 trash_ttl: Duration::from_secs(10),
                 purge_ttl: Duration::from_secs(5),
-                inline_threshold_bytes: 1024 * 1024,
             },
         };
         let storage = KevaCore::open(config).unwrap();
@@ -743,16 +824,14 @@ mod maintenance {
         let key = make_key("key");
         let now = SystemTime::now();
 
-        storage.upsert_text(&key, "content", now).unwrap();
+        storage.create(&key, now).unwrap();
         storage.trash(&key, now).unwrap();
 
-        // Run maintenance after purge_ttl expires
         let after_ttl = now + Duration::from_secs(6);
         let result = storage.maintenance(after_ttl).unwrap();
 
-        // Key should be in purged list
-        assert!(result.purged.contains(&key));
-        assert!(result.trashed.is_empty());
+        assert!(result.keys_purged.contains(&key));
+        assert!(result.keys_trashed.is_empty());
     }
 
     #[test]
@@ -761,45 +840,41 @@ mod maintenance {
         let key = make_key("key");
         let now = SystemTime::now();
 
-        storage.upsert_text(&key, "content", now).unwrap();
+        storage.create(&key, now).unwrap();
 
-        // Run maintenance after trash_ttl expires
         let after_ttl = now + Duration::from_secs(11);
         let result = storage.maintenance(after_ttl).unwrap();
 
-        // Key should be in trashed list
-        assert!(result.trashed.contains(&key));
-        assert!(result.purged.is_empty());
+        assert!(result.keys_trashed.contains(&key));
+        assert!(result.keys_purged.is_empty());
 
-        // Key should now be in trash state in DB
         let keys = storage.trashed_keys().unwrap();
         assert!(keys.contains(&key));
     }
 
     #[test]
-    fn test_maintenance_cleans_up_blob_files() {
+    fn test_maintenance_cleans_up_files() {
         let (mut storage, temp) = create_storage_with_short_ttl();
         let key = make_key("key");
+        let file_path = create_test_file(&temp, "test.txt", b"content");
         let now = SystemTime::now();
 
-        // Create blob-stored text
-        let large_text = "x".repeat(1024 * 1024 + 1);
-        storage.upsert_text(&key, &large_text, now).unwrap();
+        storage.create(&key, now).unwrap();
+        storage
+            .add_attachments(&key, &[(file_path, None)], now)
+            .unwrap();
 
-        let key_path = {
-            let hash = blake3_v1::hash(key.as_str().as_bytes());
-            PathBuf::from(hash.to_hex().as_str())
-        };
-        let blob_dir = temp.path().join("blobs").join(&key_path);
-        assert!(blob_dir.exists());
+        let content_path = storage.content_path(&key);
+        let attachment_path = storage.attachment_path(&key, "test.txt");
+        assert!(content_path.exists());
+        assert!(attachment_path.exists());
 
-        // Trash and wait for purge TTL
         storage.trash(&key, now).unwrap();
         let after_ttl = now + Duration::from_secs(6);
         storage.maintenance(after_ttl).unwrap();
 
-        // Blob directory should be cleaned up
-        assert!(!blob_dir.exists());
+        assert!(!content_path.exists());
+        assert!(!attachment_path.exists());
     }
 
     #[test]
@@ -808,44 +883,118 @@ mod maintenance {
         let key = make_key("key");
         let now = SystemTime::now();
 
-        storage.upsert_text(&key, "content", now).unwrap();
+        storage.create(&key, now).unwrap();
 
-        // Run maintenance immediately (no TTL expired)
         let result = storage.maintenance(now).unwrap();
 
-        assert!(result.trashed.is_empty());
-        assert!(result.purged.is_empty());
+        assert!(result.keys_trashed.is_empty());
+        assert!(result.keys_purged.is_empty());
 
-        // Key should still be active
         let value = storage.get(&key).unwrap().unwrap();
-        assert_eq!(value.metadata.lifecycle_state, LifecycleState::Active);
+        assert!(matches!(
+            value.metadata.lifecycle_state,
+            LifecycleState::Active { .. }
+        ));
     }
 
     #[test]
     fn test_maintenance_cleans_orphan_blobs() {
         let (mut storage, temp) = create_storage_with_short_ttl();
         let key = make_key("key");
+        let file_path = create_test_file(&temp, "test.txt", b"content");
         let now = SystemTime::now();
 
-        // Create a key with blob storage
-        let large_text = "x".repeat(1024 * 1024 + 1);
-        storage.upsert_text(&key, &large_text, now).unwrap();
+        storage.create(&key, now).unwrap();
+        storage
+            .add_attachments(&key, &[(file_path, None)], now)
+            .unwrap();
 
-        let key_path = {
-            let hash = blake3_v1::hash(key.as_str().as_bytes());
-            PathBuf::from(hash.to_hex().as_str())
-        };
-        let blob_dir = temp.path().join("blobs").join(&key_path);
+        let key_hash = key_to_path(&key);
+        let blob_dir = temp.path().join("blobs").join(&key_hash);
         assert!(blob_dir.exists());
 
-        // Simulate orphan by directly purging from DB without cleanup
+        // Simulate orphan by directly purging from DB without file cleanup
         storage.db.purge(&key).unwrap();
 
         // Blob still exists (orphaned)
         assert!(blob_dir.exists());
 
         // Maintenance should clean it up
-        storage.maintenance(now).unwrap();
+        let result = storage.maintenance(now).unwrap();
         assert!(!blob_dir.exists());
+        assert!(result.orphaned_files_removed > 0);
+    }
+
+    #[test]
+    fn test_maintenance_cleans_orphan_content() {
+        let (mut storage, temp) = create_storage_with_short_ttl();
+        let key = make_key("key");
+        let now = SystemTime::now();
+
+        storage.create(&key, now).unwrap();
+
+        let key_hash = key_to_path(&key);
+        let content_file = temp
+            .path()
+            .join("content")
+            .join(format!("{}.md", key_hash.display()));
+        assert!(content_file.exists());
+
+        // Simulate orphan by directly purging from DB without file cleanup
+        storage.db.purge(&key).unwrap();
+
+        // Content still exists (orphaned)
+        assert!(content_file.exists());
+
+        // Maintenance should clean it up
+        let result = storage.maintenance(now).unwrap();
+        assert!(!content_file.exists());
+        assert!(result.orphaned_files_removed > 0);
+    }
+}
+
+mod thumbnail {
+    use super::*;
+
+    #[test]
+    fn test_thumbnail_paths_excludes_unsupported_formats() {
+        let (mut storage, temp) = create_test_storage();
+        let key = make_key("test/key");
+        let pdf_path = create_test_file(&temp, "document.pdf", b"pdf content");
+        let now = SystemTime::now();
+
+        storage.create(&key, now).unwrap();
+        storage
+            .add_attachments(&key, &[(pdf_path, None)], now)
+            .unwrap();
+
+        let paths = storage.thumbnail_paths(&key).unwrap();
+        // PDF is not a supported image format, so no thumbnail
+        assert!(paths.is_empty());
+    }
+
+    #[test]
+    fn test_thumbnail_paths_empty_for_no_attachments() {
+        let (mut storage, _temp) = create_test_storage();
+        let key = make_key("test/key");
+        let now = SystemTime::now();
+
+        storage.create(&key, now).unwrap();
+
+        let paths = storage.thumbnail_paths(&key).unwrap();
+        assert!(paths.is_empty());
+    }
+
+    #[test]
+    fn test_new_key_starts_with_current_thumb_version() {
+        let (mut storage, _temp) = create_test_storage();
+        let key = make_key("test/key");
+        let now = SystemTime::now();
+
+        storage.create(&key, now).unwrap();
+
+        // New keys start with current THUMB_VER (no regeneration needed)
+        let value = storage.get(&key).unwrap().unwrap();
+        assert_eq!(value.thumb_version, FileStorage::THUMB_VER);
     }
 }

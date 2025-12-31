@@ -6,8 +6,6 @@ fn value_v1_empty_attachments_serialization() {
     let now = SystemTime::now();
     let original_value = v1::Value {
         metadata: v1::Metadata {
-            created_at: now,
-            updated_at: now,
             lifecycle_state: v1::LifecycleState::Active { last_accessed: now },
         },
         attachments: vec![],
@@ -32,8 +30,6 @@ fn value_v1_with_attachments_serialization() {
     let now = SystemTime::now();
     let original_value = v1::Value {
         metadata: v1::Metadata {
-            created_at: now,
-            updated_at: now,
             lifecycle_state: v1::LifecycleState::Active { last_accessed: now },
         },
         attachments: vec![
@@ -67,8 +63,6 @@ fn value_v1_trashed_serialization() {
     let now = SystemTime::now();
     let original_value = v1::Value {
         metadata: v1::Metadata {
-            created_at: now,
-            updated_at: now,
             lifecycle_state: v1::LifecycleState::Trash { trashed_at: now },
         },
         attachments: vec![],

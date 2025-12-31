@@ -18,8 +18,6 @@ impl ValueVariant for Value {
 #[cfg_attr(test, derive(Eq, PartialEq))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Metadata {
-    pub created_at: SystemTime,
-    pub updated_at: SystemTime,
     pub lifecycle_state: LifecycleState,
 }
 

@@ -1,5 +1,4 @@
 use super::*;
-use crate::core::KevaCore;
 use crate::types::TtlKey;
 use crate::types::config::SavedConfig;
 use common::{create_test_db, make_key};
@@ -56,12 +55,10 @@ mod create {
 
         let value = db.get(&key).unwrap().unwrap();
         assert!(value.attachments.is_empty());
-        assert_eq!(value.thumb_version, KevaCore::THUMB_VER);
+        assert_eq!(value.thumb_version, FileStorage::THUMB_VER);
         assert_eq!(
             value.metadata,
             Metadata {
-                created_at: now,
-                updated_at: now,
                 lifecycle_state: LifecycleState::Active { last_accessed: now },
             }
         )
@@ -125,8 +122,6 @@ mod get {
         assert_eq!(
             value.metadata,
             Metadata {
-                created_at: now,
-                updated_at: now,
                 lifecycle_state: LifecycleState::Active { last_accessed: now },
             }
         );
@@ -156,8 +151,6 @@ mod get {
         assert_eq!(
             value.metadata,
             Metadata {
-                created_at: now,
-                updated_at: now,
                 lifecycle_state: LifecycleState::Trash {
                     trashed_at: trash_time
                 },
@@ -184,8 +177,6 @@ mod touch {
         assert_eq!(
             value.metadata,
             Metadata {
-                created_at: create_time,
-                updated_at: create_time,
                 lifecycle_state: LifecycleState::Active {
                     last_accessed: touch_time
                 },
@@ -212,56 +203,6 @@ mod touch {
         db.trash(&key, now).unwrap();
 
         let result = db.touch(&key, now);
-        assert!(matches!(result, Err(DatabaseError::Trashed)));
-    }
-}
-
-mod mark_content_modified {
-    use super::*;
-
-    #[test]
-    fn test_mark_content_modified_updates_timestamps() {
-        let (mut db, _temp) = create_test_db();
-        let key = make_key("test/key");
-        let create_time = SystemTime::now();
-
-        db.create(&key, create_time).unwrap();
-
-        let modify_time = create_time + Duration::from_secs(50);
-        db.mark_content_modified(&key, modify_time).unwrap();
-
-        let value = db.get(&key).unwrap().unwrap();
-        assert_eq!(
-            value.metadata,
-            Metadata {
-                created_at: create_time,
-                updated_at: modify_time,
-                lifecycle_state: LifecycleState::Active {
-                    last_accessed: modify_time
-                },
-            }
-        );
-    }
-
-    #[test]
-    fn test_mark_content_modified_nonexistent_key() {
-        let (mut db, _temp) = create_test_db();
-        let key = make_key("nonexistent");
-
-        let result = db.mark_content_modified(&key, SystemTime::now());
-        assert!(matches!(result, Err(DatabaseError::NotFound)));
-    }
-
-    #[test]
-    fn test_mark_content_modified_trashed_key_fails() {
-        let (mut db, _temp) = create_test_db();
-        let key = make_key("test/trashed");
-        let now = SystemTime::now();
-
-        db.create(&key, now).unwrap();
-        db.trash(&key, now).unwrap();
-
-        let result = db.mark_content_modified(&key, now);
         assert!(matches!(result, Err(DatabaseError::Trashed)));
     }
 }
@@ -295,8 +236,6 @@ mod add_attachment {
         assert_eq!(
             value.metadata,
             Metadata {
-                created_at: create_time,
-                updated_at: add_time,
                 lifecycle_state: LifecycleState::Active {
                     last_accessed: add_time
                 },
@@ -431,8 +370,6 @@ mod remove_attachment {
         assert_eq!(
             value.metadata,
             Metadata {
-                created_at: create_time,
-                updated_at: remove_time,
                 lifecycle_state: LifecycleState::Active {
                     last_accessed: remove_time
                 },
@@ -548,8 +485,6 @@ mod rename_attachment {
         assert_eq!(
             value.metadata,
             Metadata {
-                created_at: create_time,
-                updated_at: rename_time,
                 lifecycle_state: LifecycleState::Active {
                     last_accessed: rename_time
                 },
@@ -657,8 +592,6 @@ mod rename {
         assert_eq!(
             value.metadata,
             Metadata {
-                created_at: now,
-                updated_at: now,
                 lifecycle_state: LifecycleState::Active { last_accessed: now },
             }
         );
@@ -682,8 +615,6 @@ mod rename {
         assert_eq!(
             value.metadata,
             Metadata {
-                created_at: now,
-                updated_at: now,
                 lifecycle_state: LifecycleState::Trash {
                     trashed_at: trash_time
                 },
@@ -780,13 +711,13 @@ mod update_thumb_version {
         db.create(&key, now).unwrap();
 
         let value = db.get(&key).unwrap().unwrap();
-        assert_eq!(value.thumb_version, KevaCore::THUMB_VER);
+        assert_eq!(value.thumb_version, FileStorage::THUMB_VER);
 
-        db.update_thumb_version(&key, KevaCore::THUMB_VER + 1)
+        db.update_thumb_version(&key, FileStorage::THUMB_VER + 1)
             .unwrap();
 
         let value = db.get(&key).unwrap().unwrap();
-        assert_eq!(value.thumb_version, KevaCore::THUMB_VER + 1);
+        assert_eq!(value.thumb_version, FileStorage::THUMB_VER + 1);
     }
 
     #[test]
@@ -817,8 +748,6 @@ mod trash {
         assert_eq!(
             value.metadata,
             Metadata {
-                created_at: create_time,
-                updated_at: create_time,
                 lifecycle_state: LifecycleState::Trash {
                     trashed_at: trash_time
                 },
@@ -879,13 +808,9 @@ mod restore {
         db.restore(&key, restore_time).unwrap();
 
         let value = db.get(&key).unwrap().unwrap();
-        // Note: restore only updates last_accessed, not updated_at
-        // (restore is not a content modification)
         assert_eq!(
             value.metadata,
             Metadata {
-                created_at: create_time,
-                updated_at: create_time,
                 lifecycle_state: LifecycleState::Active {
                     last_accessed: restore_time
                 },
@@ -995,8 +920,6 @@ mod gc {
         assert_eq!(
             value.metadata,
             Metadata {
-                created_at: create_time,
-                updated_at: create_time,
                 lifecycle_state: LifecycleState::Trash {
                     trashed_at: gc_time
                 },
@@ -1050,8 +973,6 @@ mod gc {
         assert_eq!(
             value.metadata,
             Metadata {
-                created_at: create_time,
-                updated_at: create_time,
                 lifecycle_state: LifecycleState::Trash { trashed_at: t2 },
             }
         );
@@ -1168,8 +1089,6 @@ mod edge_cases {
         assert_eq!(
             value.metadata,
             Metadata {
-                created_at: create_time,
-                updated_at: create_time,
                 lifecycle_state: LifecycleState::Active {
                     last_accessed: stale_time
                 },
@@ -1196,12 +1115,9 @@ mod edge_cases {
         db.restore(&key, stale_time).unwrap();
 
         let value = db.get(&key).unwrap().unwrap();
-        // Note: restore only updates last_accessed, not updated_at
         assert_eq!(
             value.metadata,
             Metadata {
-                created_at: create_time,
-                updated_at: create_time,
                 lifecycle_state: LifecycleState::Active {
                     last_accessed: stale_time
                 },

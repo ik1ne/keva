@@ -4,9 +4,9 @@
 //! - Main key-value storage (Key → VersionedValue)
 //! - TTL tracking tables for garbage collection
 
-use crate::core::KevaCore;
 use crate::core::db::error::DatabaseError;
 use crate::core::db::ttl_table::TtlTable;
+use crate::core::file_storage::FileStorage;
 use crate::types::value::versioned_value::VersionedValue;
 use crate::types::value::versioned_value::latest_value::{
     Attachment, LifecycleState, Metadata, Value,
@@ -52,6 +52,9 @@ pub mod error {
 
         #[error("Attachment not found: {0}")]
         AttachmentNotFound(String),
+
+        #[error("Attachment already exists: {0}")]
+        AttachmentExists(String),
     }
 }
 
@@ -106,8 +109,16 @@ impl Database {
     /// Creates a new key with empty attachments.
     ///
     /// Returns `Err(AlreadyExists)` if the key already exists.
-    pub fn create(&mut self, key: &Key, now: SystemTime) -> Result<(), DatabaseError> {
+    pub fn create(&mut self, key: &Key, now: SystemTime) -> Result<Value, DatabaseError> {
         let write_txn = self.db.begin_write()?;
+
+        let new_value = Value {
+            metadata: Metadata {
+                lifecycle_state: LifecycleState::Active { last_accessed: now },
+            },
+            attachments: vec![],
+            thumb_version: FileStorage::THUMB_VER,
+        };
 
         {
             let mut main_table = write_txn.open_table(MAIN_TABLE)?;
@@ -116,22 +127,12 @@ impl Database {
                 return Err(DatabaseError::AlreadyExists);
             }
 
-            let new_value = Value {
-                metadata: Metadata {
-                    created_at: now,
-                    updated_at: now,
-                    lifecycle_state: LifecycleState::Active { last_accessed: now },
-                },
-                attachments: vec![],
-                thumb_version: KevaCore::THUMB_VER,
-            };
-
             Self::insert_active_ttl(&write_txn, key, now)?;
-            main_table.insert(key, &VersionedValue::V1(new_value))?;
+            main_table.insert(key, &VersionedValue::V1(new_value.clone()))?;
         }
 
         write_txn.commit()?;
-        Ok(())
+        Ok(new_value)
     }
 }
 
@@ -167,13 +168,15 @@ impl Database {
     ///
     /// Returns `Err(NotFound)` if the key doesn't exist.
     /// Returns `Err(Trashed)` if the key is trashed.
-    pub fn touch(&mut self, key: &Key, now: SystemTime) -> Result<(), DatabaseError> {
+    pub fn touch(&mut self, key: &Key, now: SystemTime) -> Result<Value, DatabaseError> {
         let write_txn = self.db.begin_write()?;
+
+        let mut value;
 
         {
             let mut main_table = write_txn.open_table(MAIN_TABLE)?;
 
-            let mut value = main_table
+            value = main_table
                 .get(key)?
                 .map(|g| Self::extract_latest(g.value()))
                 .ok_or(DatabaseError::NotFound)?;
@@ -187,47 +190,11 @@ impl Database {
 
             value.metadata.lifecycle_state = LifecycleState::Active { last_accessed: now };
 
-            main_table.insert(key, &VersionedValue::V1(value))?;
+            main_table.insert(key, &VersionedValue::V1(value.clone()))?;
         }
 
         write_txn.commit()?;
-        Ok(())
-    }
-
-    /// Marks content as modified (updates updated_at and last_accessed).
-    ///
-    /// Returns `Err(NotFound)` if the key doesn't exist.
-    /// Returns `Err(Trashed)` if the key is trashed.
-    pub fn mark_content_modified(
-        &mut self,
-        key: &Key,
-        now: SystemTime,
-    ) -> Result<(), DatabaseError> {
-        let write_txn = self.db.begin_write()?;
-
-        {
-            let mut main_table = write_txn.open_table(MAIN_TABLE)?;
-
-            let mut value = main_table
-                .get(key)?
-                .map(|g| Self::extract_latest(g.value()))
-                .ok_or(DatabaseError::NotFound)?;
-
-            let LifecycleState::Active { last_accessed } = value.metadata.lifecycle_state else {
-                return Err(DatabaseError::Trashed);
-            };
-
-            Self::remove_active_ttl(&write_txn, key, last_accessed)?;
-            Self::insert_active_ttl(&write_txn, key, now)?;
-
-            value.metadata.updated_at = now;
-            value.metadata.lifecycle_state = LifecycleState::Active { last_accessed: now };
-
-            main_table.insert(key, &VersionedValue::V1(value))?;
-        }
-
-        write_txn.commit()?;
-        Ok(())
+        Ok(value)
     }
 
     /// Adds an attachment to a key.
@@ -259,7 +226,6 @@ impl Database {
             Self::remove_active_ttl(&write_txn, key, last_accessed)?;
             Self::insert_active_ttl(&write_txn, key, now)?;
 
-            value.metadata.updated_at = now;
             value.metadata.lifecycle_state = LifecycleState::Active { last_accessed: now };
 
             main_table.insert(key, &VersionedValue::V1(value))?;
@@ -305,7 +271,6 @@ impl Database {
             Self::remove_active_ttl(&write_txn, key, last_accessed)?;
             Self::insert_active_ttl(&write_txn, key, now)?;
 
-            value.metadata.updated_at = now;
             value.metadata.lifecycle_state = LifecycleState::Active { last_accessed: now };
 
             main_table.insert(key, &VersionedValue::V1(value))?;
@@ -362,7 +327,6 @@ impl Database {
             Self::remove_active_ttl(&write_txn, key, last_accessed)?;
             Self::insert_active_ttl(&write_txn, key, now)?;
 
-            value.metadata.updated_at = now;
             value.metadata.lifecycle_state = LifecycleState::Active { last_accessed: now };
 
             main_table.insert(key, &VersionedValue::V1(value))?;
@@ -440,7 +404,6 @@ impl Database {
                 }
             }
 
-            value.metadata.updated_at = now;
             main_table.insert(dst, &VersionedValue::V1(value))?;
         }
 

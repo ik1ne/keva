@@ -2,7 +2,7 @@
 //!
 //! Run with: `cargo run -q --example seed_data -p keva_core`
 
-use keva_core::core::KevaCore;
+use keva_core::core::{AttachmentConflictResolution, KevaCore};
 use keva_core::types::{Config, Key, SavedConfig};
 use std::io::Write;
 use std::path::PathBuf;
@@ -17,24 +17,20 @@ fn main() {
         saved: SavedConfig {
             trash_ttl: Duration::from_secs(30 * 24 * 60 * 60), // 30 days
             purge_ttl: Duration::from_secs(7 * 24 * 60 * 60),  // 7 days
-            inline_threshold_bytes: 1024 * 1024,               // 1MB
         },
     };
 
     let mut keva = KevaCore::open(config).expect("Failed to open keva database");
     let now = SystemTime::now();
 
-    println!("\n[Inlined Text Keys]");
-    seed_inlined_text(&mut keva, now);
+    println!("\n[Keys with Content]");
+    seed_content_keys(&mut keva, now, &base_path);
 
-    println!("\n[Blob-Stored Text Keys]");
-    seed_blob_text(&mut keva, now);
-
-    println!("\n[File Keys]");
-    seed_files(&mut keva, now, &base_path);
+    println!("\n[Keys with Attachments]");
+    seed_attachment_keys(&mut keva, now, &base_path);
 
     println!("\n[Trashed Keys]");
-    seed_trashed(&mut keva, now);
+    seed_trashed(&mut keva, now, &base_path);
 
     // Summary
     let active = keva.active_keys().unwrap_or_default();
@@ -46,7 +42,7 @@ fn main() {
     );
 }
 
-fn seed_inlined_text(keva: &mut KevaCore, now: SystemTime) {
+fn seed_content_keys(keva: &mut KevaCore, now: SystemTime, _base_path: &PathBuf) {
     let keys = [
         (
             "todo",
@@ -69,24 +65,26 @@ fn seed_inlined_text(keva: &mut KevaCore, now: SystemTime) {
 
     for (key_str, content) in keys {
         let key = Key::try_from(key_str).expect("Invalid key");
-        match keva.upsert_text(&key, content, now) {
-            Ok(()) => println!("  Created: {}", key_str),
-            Err(e) => println!("  Skipped {} ({})", key_str, e),
+
+        // Create key if it doesn't exist
+        if keva.get(&key).unwrap().is_none() {
+            match keva.create(&key, now) {
+                Ok(_value) => {
+                    // Write content to the content file
+                    let content_path = keva.content_path(&key);
+                    std::fs::write(&content_path, content).ok();
+                    keva.touch(&key, now).ok();
+                    println!("  Created: {}", key_str);
+                }
+                Err(e) => println!("  Skipped {} ({})", key_str, e),
+            }
+        } else {
+            println!("  Skipped {} (already exists)", key_str);
         }
     }
 }
 
-fn seed_blob_text(keva: &mut KevaCore, now: SystemTime) {
-    // Create text larger than 1MB to trigger blob storage
-    let large_content = "x".repeat(1024 * 1024 + 100);
-    let key = Key::try_from("large-text").expect("Invalid key");
-    match keva.upsert_text(&key, &large_content, now) {
-        Ok(()) => println!("  Created: large-text ({}KB blob-stored)", large_content.len() / 1024),
-        Err(e) => println!("  Skipped large-text ({})", e),
-    }
-}
-
-fn seed_files(keva: &mut KevaCore, now: SystemTime, base_path: &PathBuf) {
+fn seed_attachment_keys(keva: &mut KevaCore, now: SystemTime, base_path: &PathBuf) {
     let temp_dir = base_path.join("_seed_temp");
     std::fs::create_dir_all(&temp_dir).ok();
 
@@ -108,16 +106,32 @@ fn seed_files(keva: &mut KevaCore, now: SystemTime, base_path: &PathBuf) {
 
     // Add files to keva
     let key = Key::try_from("my-files").expect("Invalid key");
-    match keva.add_files(&key, &file_paths, now) {
-        Ok(()) => println!("  Created: my-files ({} files)", file_paths.len()),
-        Err(e) => println!("  Skipped my-files ({})", e),
+    if keva.get(&key).unwrap().is_none() {
+        match keva.create(&key, now) {
+            Ok(_value) => {
+                let attachments: Vec<_> = file_paths
+                    .into_iter()
+                    .map(|p| (p, Some(AttachmentConflictResolution::Skip)))
+                    .collect();
+
+                match keva.add_attachments(&key, &attachments, now) {
+                    Ok(value) => {
+                        println!("  Created: my-files ({} attachments)", value.attachments.len())
+                    }
+                    Err(e) => println!("  Failed to add attachments ({})", e),
+                }
+            }
+            Err(e) => println!("  Skipped my-files ({})", e),
+        }
+    } else {
+        println!("  Skipped my-files (already exists)");
     }
 
     // Clean up temp files
     std::fs::remove_dir_all(&temp_dir).ok();
 }
 
-fn seed_trashed(keva: &mut KevaCore, now: SystemTime) {
+fn seed_trashed(keva: &mut KevaCore, now: SystemTime, _base_path: &PathBuf) {
     let keys = [
         ("old-draft", "This is an old draft that was deleted"),
         ("deprecated/config", "old_setting=true"),
@@ -125,11 +139,21 @@ fn seed_trashed(keva: &mut KevaCore, now: SystemTime) {
 
     for (key_str, content) in keys {
         let key = Key::try_from(key_str).expect("Invalid key");
-        if keva.upsert_text(&key, content, now).is_ok() {
-            match keva.trash(&key, now) {
-                Ok(()) => println!("  Trashed: {}", key_str),
-                Err(e) => println!("  Failed to trash {} ({})", key_str, e),
+
+        if keva.get(&key).unwrap().is_none() {
+            if keva.create(&key, now).is_ok() {
+                // Write content
+                let content_path = keva.content_path(&key);
+                std::fs::write(&content_path, content).ok();
+                keva.touch(&key, now).ok();
+
+                match keva.trash(&key, now) {
+                    Ok(()) => println!("  Trashed: {}", key_str),
+                    Err(e) => println!("  Failed to trash {} ({})", key_str, e),
+                }
             }
+        } else {
+            println!("  Skipped {} (already exists)", key_str);
         }
     }
 }

@@ -1,10 +1,3 @@
-//! File storage for content, attachments, and thumbnails.
-//!
-//! Storage structure:
-//! - content/{key_hash}.md - Markdown content
-//! - blobs/{key_hash}/{filename} - Attachments
-//! - thumbnails/{key_hash}/{filename}.thumb - Generated thumbnails
-
 use std::path::{Path, PathBuf};
 
 pub mod error {
@@ -34,14 +27,12 @@ pub mod error {
 
 use error::FileStorageError;
 
-/// Manages file storage for content, attachments, and thumbnails.
 pub struct FileStorage {
     pub content_path: PathBuf,
     pub blobs_path: PathBuf,
     pub thumbnails_path: PathBuf,
 }
 
-/// Removes a directory if it exists and is empty.
 fn remove_dir_if_empty(path: &Path) -> Result<(), FileStorageError> {
     if path.exists() && path.read_dir()?.next().is_none() {
         std::fs::remove_dir(path)?;
@@ -51,7 +42,6 @@ fn remove_dir_if_empty(path: &Path) -> Result<(), FileStorageError> {
 
 /// Content file operations.
 impl FileStorage {
-    /// Creates an empty content file for a key.
     pub fn create_content(&self, key_hash: &Path) -> Result<(), FileStorageError> {
         let content_file = self.content_path.join(key_hash).with_extension("md");
         if let Some(parent) = content_file.parent() {
@@ -61,12 +51,10 @@ impl FileStorage {
         Ok(())
     }
 
-    /// Returns the path to a key's content file.
     pub fn content_file_path(&self, key_hash: &Path) -> PathBuf {
         self.content_path.join(key_hash).with_extension("md")
     }
 
-    /// Removes a key's content file.
     pub fn remove_content(&self, key_hash: &Path) -> Result<(), FileStorageError> {
         let content_file = self.content_path.join(key_hash).with_extension("md");
         if content_file.exists() {
@@ -78,9 +66,6 @@ impl FileStorage {
 
 /// Attachment file operations.
 impl FileStorage {
-    /// Copies a file to the attachments directory.
-    ///
-    /// Returns the size of the file in bytes.
     pub fn add_attachment(
         &self,
         key_hash: &Path,
@@ -101,12 +86,10 @@ impl FileStorage {
         Ok(metadata.len())
     }
 
-    /// Returns the path to a specific attachment.
     pub fn attachment_path(&self, key_hash: &Path, filename: &str) -> PathBuf {
         self.blobs_path.join(key_hash).join(filename)
     }
 
-    /// Removes an attachment file.
     pub fn remove_attachment(
         &self,
         key_hash: &Path,
@@ -124,7 +107,6 @@ impl FileStorage {
         Ok(())
     }
 
-    /// Renames an attachment file.
     pub fn rename_attachment(
         &self,
         key_hash: &Path,
@@ -140,7 +122,6 @@ impl FileStorage {
         Ok(())
     }
 
-    /// Removes all attachments for a key.
     pub fn remove_all_attachments(&self, key_hash: &Path) -> Result<(), FileStorageError> {
         let dir_path = self.blobs_path.join(key_hash);
         if dir_path.exists() {
@@ -152,13 +133,10 @@ impl FileStorage {
 
 /// Thumbnail operations.
 impl FileStorage {
-    /// Maximum thumbnail dimension in pixels.
+    pub(crate) const THUMB_VER: u32 = 1;
     const THUMB_SIZE: u32 = 200;
-
-    /// Supported image extensions for thumbnail generation.
     const SUPPORTED_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp"];
 
-    /// Checks if a filename has a supported image extension.
     pub fn is_supported_image(filename: &str) -> bool {
         let ext = filename
             .rsplit('.')
@@ -168,15 +146,12 @@ impl FileStorage {
         Self::SUPPORTED_EXTENSIONS.contains(&ext.as_str())
     }
 
-    /// Returns the path to a thumbnail file.
     pub fn thumbnail_path(&self, key_hash: &Path, filename: &str) -> PathBuf {
         self.thumbnails_path
             .join(key_hash)
             .join(format!("{}.thumb", filename))
     }
 
-    /// Generates a thumbnail for an attachment.
-    ///
     /// Returns `Err(UnsupportedFormat)` if the file is not a supported image.
     pub fn generate_thumbnail(
         &self,
@@ -223,7 +198,6 @@ impl FileStorage {
         Ok(())
     }
 
-    /// Removes a thumbnail file.
     pub fn remove_thumbnail(
         &self,
         key_hash: &Path,
@@ -241,7 +215,22 @@ impl FileStorage {
         Ok(())
     }
 
-    /// Removes all thumbnails for a key.
+    pub fn rename_thumbnail(
+        &self,
+        key_hash: &Path,
+        old_filename: &str,
+        new_filename: &str,
+    ) -> Result<(), FileStorageError> {
+        let old_path = self.thumbnail_path(key_hash, old_filename);
+        let new_path = self.thumbnail_path(key_hash, new_filename);
+
+        if old_path.exists() {
+            std::fs::rename(old_path, new_path)?;
+        }
+
+        Ok(())
+    }
+
     pub fn remove_all_thumbnails(&self, key_hash: &Path) -> Result<(), FileStorageError> {
         let dir_path = self.thumbnails_path.join(key_hash);
         if dir_path.exists() {
@@ -253,7 +242,6 @@ impl FileStorage {
 
 /// Cleanup operations.
 impl FileStorage {
-    /// Removes all files for a key (content, attachments, thumbnails).
     pub fn remove_all(&self, key_hash: &Path) -> Result<(), FileStorageError> {
         self.remove_content(key_hash)?;
         self.remove_all_attachments(key_hash)?;
@@ -261,7 +249,6 @@ impl FileStorage {
         Ok(())
     }
 
-    /// Renames all files from one key to another (content, attachments, thumbnails).
     pub fn rename_all(
         &self,
         old_key_hash: &Path,
@@ -300,9 +287,6 @@ impl FileStorage {
         Ok(())
     }
 
-    /// Lists all key hashes that have blob directories.
-    ///
-    /// Used for orphan blob detection during garbage collection.
     pub fn list_blob_key_hashes(&self) -> Result<Vec<PathBuf>, FileStorageError> {
         if !self.blobs_path.exists() {
             return Ok(Vec::new());
@@ -322,7 +306,6 @@ impl FileStorage {
         Ok(dirs)
     }
 
-    /// Lists all key hashes that have content files.
     pub fn list_content_key_hashes(&self) -> Result<Vec<PathBuf>, FileStorageError> {
         if !self.content_path.exists() {
             return Ok(Vec::new());
