@@ -1,10 +1,10 @@
-//! Blob storage mapping and inlined file management
+//! File storage for content, attachments, and thumbnails.
+//!
+//! Storage structure:
+//! - content/{key_hash}.md - Markdown content
+//! - blobs/{key_hash}/{filename} - Attachments
+//! - thumbnails/{key_hash}/{filename}.thumb - Generated thumbnails
 
-use crate::core::file::error::FileStorageError;
-use crate::types::value::versioned_value::ValueVariant;
-use crate::types::value::versioned_value::file_hash::FileHasher;
-use crate::types::value::versioned_value::latest_value::*;
-use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
 pub mod error {
@@ -20,34 +20,26 @@ pub mod error {
 
         #[error("File name is not valid UTF-8")]
         NonUtf8FileName,
+
+        #[error("Image error: {0}")]
+        Image(#[from] image::ImageError),
+
+        #[error("Resize error: {0}")]
+        Resize(#[from] fast_image_resize::ResizeError),
+
+        #[error("Unsupported image format")]
+        UnsupportedFormat,
     }
 }
 
-/// Manages file storage and out-lining inlined files.
-///
-/// # Fields
-/// - `base_path`: The base directory where blob-stored files are kept.
-/// - `inline_threshold_bytes`: The size threshold (in bytes) for inlining files.
-///
-/// # File Storage Structure
-/// Blob-stored files are organized in `{base_path}/{key_path}/{file_hash}/{file_name}`.
-///
-/// # Text Storage Structure
-/// Blob-stored text files are stored in `{base_path}/{key_path}/text.txt`.
-///
-/// # Inlined Files/Text
-/// Inlined files are stored inside [`db`](crate::core::db::Database).
-///
-/// # Ensuring File Paths
-/// The `ensure_file_path` method provides a way to get a filesystem path for both
-/// inlined and blob-stored files, writing inlined files to a temporary location if necessary.
-pub struct FileStorage {
-    pub base_path: PathBuf,
-    pub inline_threshold_bytes: u64,
-}
+use error::FileStorageError;
 
-pub(crate) const TEXT_FILE_NAME: &str = "text.txt";
-pub(crate) const TEMP_INLINE_CACHE: &str = "temp_inline";
+/// Manages file storage for content, attachments, and thumbnails.
+pub struct FileStorage {
+    pub content_path: PathBuf,
+    pub blobs_path: PathBuf,
+    pub thumbnails_path: PathBuf,
+}
 
 /// Removes a directory if it exists and is empty.
 fn remove_dir_if_empty(path: &Path) -> Result<(), FileStorageError> {
@@ -57,245 +49,298 @@ fn remove_dir_if_empty(path: &Path) -> Result<(), FileStorageError> {
     Ok(())
 }
 
+/// Content file operations.
 impl FileStorage {
-    pub fn store_file(&self, key_path: &Path, file: &Path) -> Result<FileData, FileStorageError> {
-        let metadata = std::fs::metadata(file)?;
+    /// Creates an empty content file for a key.
+    pub fn create_content(&self, key_hash: &Path) -> Result<(), FileStorageError> {
+        let content_file = self.content_path.join(key_hash).with_extension("md");
+        if let Some(parent) = content_file.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::File::create(&content_file)?;
+        Ok(())
+    }
 
-        let is_inline = metadata.len() <= self.inline_threshold_bytes;
+    /// Returns the path to a key's content file.
+    pub fn content_file_path(&self, key_hash: &Path) -> PathBuf {
+        self.content_path.join(key_hash).with_extension("md")
+    }
+
+    /// Removes a key's content file.
+    pub fn remove_content(&self, key_hash: &Path) -> Result<(), FileStorageError> {
+        let content_file = self.content_path.join(key_hash).with_extension("md");
+        if content_file.exists() {
+            std::fs::remove_file(&content_file)?;
+        }
+        Ok(())
+    }
+}
+
+/// Attachment file operations.
+impl FileStorage {
+    /// Copies a file to the attachments directory.
+    ///
+    /// Returns the size of the file in bytes.
+    pub fn add_attachment(
+        &self,
+        key_hash: &Path,
+        source: &Path,
+        filename: &str,
+    ) -> Result<u64, FileStorageError> {
+        let metadata = std::fs::metadata(source)?;
         if metadata.is_dir() {
             return Err(FileStorageError::IsDirectory);
         }
-        let file_name: String = file
-            .file_name()
-            .ok_or(FileStorageError::IsDirectory)?
-            .to_str()
-            .ok_or(FileStorageError::NonUtf8FileName)?
-            .to_string();
 
-        if is_inline {
-            Ok(FileData::Inlined(InlineFileData {
-                file_name,
-                data: std::fs::read(file)?,
-            }))
-        } else {
-            let mut hasher = <Value as ValueVariant>::Hasher::new();
-            let mut file_handle = std::fs::File::open(file)?;
-            std::io::copy(&mut file_handle, &mut hasher)?;
-            let hash = hasher.finalize();
+        let dest_dir = self.blobs_path.join(key_hash);
+        std::fs::create_dir_all(&dest_dir)?;
 
-            let file_path = self
-                .base_path
-                .join(key_path)
-                .join(hash.to_string())
-                .join(&file_name);
+        let dest_path = dest_dir.join(filename);
+        std::fs::copy(source, &dest_path)?;
 
-            if let Some(parent) = file_path.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            std::fs::copy(file, file_path)?;
-
-            Ok(FileData::BlobStored(BlobStoredFileData { file_name, hash }))
-        }
+        Ok(metadata.len())
     }
 
-    pub fn store_text(
-        &self,
-        key_path: &Path,
-        text: Cow<'_, str>,
-    ) -> Result<TextData, FileStorageError> {
-        let is_inline = text.len() as u64 <= self.inline_threshold_bytes;
-
-        if is_inline {
-            Ok(TextData::Inlined(text.into_owned()))
-        } else {
-            let text_path = self.base_path.join(key_path).join(TEXT_FILE_NAME);
-
-            if let Some(parent) = text_path.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            std::fs::write(text_path, text.as_bytes())?;
-
-            Ok(TextData::BlobStored)
-        }
+    /// Returns the path to a specific attachment.
+    pub fn attachment_path(&self, key_hash: &Path, filename: &str) -> PathBuf {
+        self.blobs_path.join(key_hash).join(filename)
     }
 
-    pub fn remove_blob_stored_file(
+    /// Removes an attachment file.
+    pub fn remove_attachment(
         &self,
-        key_path: &Path,
-        BlobStoredFileData { file_name, hash }: &BlobStoredFileData,
+        key_hash: &Path,
+        filename: &str,
     ) -> Result<(), FileStorageError> {
-        let file_path = self
-            .base_path
-            .join(key_path)
-            .join(hash.to_string())
-            .join(file_name);
-
+        let file_path = self.blobs_path.join(key_hash).join(filename);
         if file_path.exists() {
             std::fs::remove_file(&file_path)?;
         }
 
-        // Clean up empty parent directories (hash dir, then key dir)
-        if let Some(hash_path) = file_path.parent() {
-            remove_dir_if_empty(hash_path)?;
-            if let Some(key_path_dir) = hash_path.parent() {
-                remove_dir_if_empty(key_path_dir)?;
-            }
-        }
+        // Clean up empty key directory
+        let key_dir = self.blobs_path.join(key_hash);
+        remove_dir_if_empty(&key_dir)?;
 
         Ok(())
     }
 
-    pub fn remove_blob_stored_text(&self, key_path: &Path) -> Result<(), FileStorageError> {
-        let text_path = self.base_path.join(key_path).join(TEXT_FILE_NAME);
+    /// Renames an attachment file.
+    pub fn rename_attachment(
+        &self,
+        key_hash: &Path,
+        old_filename: &str,
+        new_filename: &str,
+    ) -> Result<(), FileStorageError> {
+        let old_path = self.blobs_path.join(key_hash).join(old_filename);
+        let new_path = self.blobs_path.join(key_hash).join(new_filename);
 
-        if text_path.exists() {
-            std::fs::remove_file(&text_path)?;
+        if old_path.exists() {
+            std::fs::rename(old_path, new_path)?;
+        }
+        Ok(())
+    }
+
+    /// Removes all attachments for a key.
+    pub fn remove_all_attachments(&self, key_hash: &Path) -> Result<(), FileStorageError> {
+        let dir_path = self.blobs_path.join(key_hash);
+        if dir_path.exists() {
+            std::fs::remove_dir_all(&dir_path)?;
+        }
+        Ok(())
+    }
+}
+
+/// Thumbnail operations.
+impl FileStorage {
+    /// Maximum thumbnail dimension in pixels.
+    const THUMB_SIZE: u32 = 200;
+
+    /// Supported image extensions for thumbnail generation.
+    const SUPPORTED_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "gif", "webp"];
+
+    /// Checks if a filename has a supported image extension.
+    pub fn is_supported_image(filename: &str) -> bool {
+        let ext = filename
+            .rsplit('.')
+            .next()
+            .map(str::to_ascii_lowercase)
+            .unwrap_or_default();
+        Self::SUPPORTED_EXTENSIONS.contains(&ext.as_str())
+    }
+
+    /// Returns the path to a thumbnail file.
+    pub fn thumbnail_path(&self, key_hash: &Path, filename: &str) -> PathBuf {
+        self.thumbnails_path
+            .join(key_hash)
+            .join(format!("{}.thumb", filename))
+    }
+
+    /// Generates a thumbnail for an attachment.
+    ///
+    /// Returns `Err(UnsupportedFormat)` if the file is not a supported image.
+    pub fn generate_thumbnail(
+        &self,
+        key_hash: &Path,
+        filename: &str,
+    ) -> Result<(), FileStorageError> {
+        if !Self::is_supported_image(filename) {
+            return Err(FileStorageError::UnsupportedFormat);
+        }
+
+        let source_path = self.attachment_path(key_hash, filename);
+        let thumb_path = self.thumbnail_path(key_hash, filename);
+
+        // Load source image
+        let src_image = image::open(&source_path)?;
+        let (src_width, src_height) = (src_image.width(), src_image.height());
+
+        // Calculate target dimensions preserving aspect ratio
+        let scale = (Self::THUMB_SIZE as f32 / src_width.max(src_height) as f32).min(1.0);
+        let dst_width = ((src_width as f32 * scale) as u32).max(1);
+        let dst_height = ((src_height as f32 * scale) as u32).max(1);
+
+        // Create destination image
+        let mut dst_image = image::DynamicImage::new(dst_width, dst_height, src_image.color());
+
+        // Resize using fast_image_resize
+        let mut resizer = fast_image_resize::Resizer::new();
+        resizer.resize(
+            &src_image,
+            &mut dst_image,
+            Some(&fast_image_resize::ResizeOptions::new().resize_alg(
+                fast_image_resize::ResizeAlg::Convolution(fast_image_resize::FilterType::Lanczos3),
+            )),
+        )?;
+
+        // Ensure thumbnail directory exists
+        if let Some(parent) = thumb_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        // Save as PNG
+        dst_image.save_with_format(&thumb_path, image::ImageFormat::Png)?;
+
+        Ok(())
+    }
+
+    /// Removes a thumbnail file.
+    pub fn remove_thumbnail(
+        &self,
+        key_hash: &Path,
+        filename: &str,
+    ) -> Result<(), FileStorageError> {
+        let thumb_path = self.thumbnail_path(key_hash, filename);
+        if thumb_path.exists() {
+            std::fs::remove_file(&thumb_path)?;
         }
 
         // Clean up empty key directory
-        if let Some(key_path_dir) = text_path.parent() {
-            remove_dir_if_empty(key_path_dir)?;
-        }
+        let key_dir = self.thumbnails_path.join(key_hash);
+        remove_dir_if_empty(&key_dir)?;
 
         Ok(())
     }
 
-    pub fn remove_all(&self, key_path: &Path) -> Result<(), FileStorageError> {
-        let dir_path = self.base_path.join(key_path);
+    /// Removes all thumbnails for a key.
+    pub fn remove_all_thumbnails(&self, key_hash: &Path) -> Result<(), FileStorageError> {
+        let dir_path = self.thumbnails_path.join(key_hash);
         if dir_path.exists() {
-            std::fs::remove_dir_all(dir_path.as_path())?;
+            std::fs::remove_dir_all(&dir_path)?;
         }
+        Ok(())
+    }
+}
 
+/// Cleanup operations.
+impl FileStorage {
+    /// Removes all files for a key (content, attachments, thumbnails).
+    pub fn remove_all(&self, key_hash: &Path) -> Result<(), FileStorageError> {
+        self.remove_content(key_hash)?;
+        self.remove_all_attachments(key_hash)?;
+        self.remove_all_thumbnails(key_hash)?;
         Ok(())
     }
 
-    /// Renames a key's blob directory.
-    ///
-    /// If the old directory doesn't exist (no blobs stored), this is a no-op.
-    pub fn rename(&self, old_key_path: &Path, new_key_path: &Path) -> Result<(), FileStorageError> {
-        let old_dir = self.base_path.join(old_key_path);
-        let new_dir = self.base_path.join(new_key_path);
-
-        if !old_dir.exists() {
-            return Ok(()); // No blobs to move
-        }
-
-        if new_dir.exists() {
-            std::fs::remove_dir_all(&new_dir)?;
-        }
-        std::fs::rename(old_dir, new_dir)?;
-
-        Ok(())
-    }
-
-    /// Ensures all files exist on disk, returning their paths.
-    ///
-    /// Inlined files are written to a temporary location under [TEMP_INLINE_CACHE].
-    /// Clears the ensure cache once for all files (not per-file).
-    pub fn ensure_file_paths(
+    /// Renames all files from one key to another (content, attachments, thumbnails).
+    pub fn rename_all(
         &self,
-        key_path: &Path,
-        files: &[FileData],
-    ) -> Result<Vec<PathBuf>, FileStorageError> {
-        // Keep ensured cache for the current key only (clipboard viability + space optimization).
-        //
-        // Important: ensure is called from "copy" flows and users often press Ctrl+C repeatedly.
-        // Make this idempotent and cheap:
-        // - First, clean up other keys' ensure caches (but keep this key).
-        // - Then, for inlined files, avoid rewriting if the ensured file already exists.
-        self.cleanup_ensure_cache(Some(key_path))?;
-
-        let inline_dir = self.base_path.join(TEMP_INLINE_CACHE).join(key_path);
-
-        files
-            .iter()
-            .map(|file| match file {
-                FileData::Inlined(InlineFileData { file_name, data }) => {
-                    let mut hasher = <<Value as ValueVariant>::Hasher as FileHasher>::new();
-                    FileHasher::update(&mut hasher, data);
-                    let hash = FileHasher::finalize(&hasher);
-                    let file_dir_path = inline_dir.join(hash.to_string());
-                    std::fs::create_dir_all(file_dir_path.as_path())?;
-                    let file_path = file_dir_path.join(file_name);
-
-                    // Fast path: if already ensured, don't rewrite on repeated copy.
-                    if !file_path.exists() {
-                        std::fs::write(file_path.as_path(), data)?;
-                    }
-
-                    Ok(file_path)
-                }
-                FileData::BlobStored(BlobStoredFileData { file_name, hash }) => {
-                    let file_path = self
-                        .base_path
-                        .join(key_path)
-                        .join(hash.to_string())
-                        .join(file_name);
-
-                    Ok(file_path)
-                }
-            })
-            .collect()
-    }
-
-    /// Cleans up the inline file cache, optionally preserving one key's cache.
-    ///
-    /// Called before `ensure_file_path` to bound disk usage. When `keep_key_path` is
-    /// provided, that key's cached files are preserved for repeated copy operations.
-    fn cleanup_ensure_cache(&self, keep_key_path: Option<&Path>) -> Result<(), FileStorageError> {
-        let ensure_dir = self.base_path.join(TEMP_INLINE_CACHE);
-        if !ensure_dir.exists() {
-            return Ok(());
+        old_key_hash: &Path,
+        new_key_hash: &Path,
+    ) -> Result<(), FileStorageError> {
+        // Rename content file
+        let old_content = self.content_path.join(old_key_hash).with_extension("md");
+        let new_content = self.content_path.join(new_key_hash).with_extension("md");
+        if old_content.exists() {
+            if new_content.exists() {
+                std::fs::remove_file(&new_content)?;
+            }
+            std::fs::rename(old_content, new_content)?;
         }
 
-        let keep_dir = keep_key_path.map(|k| ensure_dir.join(k));
-
-        for entry in std::fs::read_dir(ensure_dir.as_path())? {
-            let entry = entry?;
-            let path = entry.path();
-
-            if let Some(ref keep_dir) = keep_dir
-                && path == *keep_dir
-            {
-                continue;
+        // Rename attachments directory
+        let old_blobs = self.blobs_path.join(old_key_hash);
+        let new_blobs = self.blobs_path.join(new_key_hash);
+        if old_blobs.exists() {
+            if new_blobs.exists() {
+                std::fs::remove_dir_all(&new_blobs)?;
             }
+            std::fs::rename(old_blobs, new_blobs)?;
+        }
 
-            if path.is_dir() {
-                std::fs::remove_dir_all(path.as_path())?;
-            } else {
-                std::fs::remove_file(path.as_path())?;
+        // Rename thumbnails directory
+        let old_thumbs = self.thumbnails_path.join(old_key_hash);
+        let new_thumbs = self.thumbnails_path.join(new_key_hash);
+        if old_thumbs.exists() {
+            if new_thumbs.exists() {
+                std::fs::remove_dir_all(&new_thumbs)?;
             }
+            std::fs::rename(old_thumbs, new_thumbs)?;
         }
 
         Ok(())
     }
 
-    /// Lists all blob directories in the storage.
+    /// Lists all key hashes that have blob directories.
     ///
-    /// Returns the directory names (which are blake3 hashes of keys).
-    /// This is used for orphan blob detection during garbage collection.
-    pub fn list_blob_dirs(&self) -> Result<Vec<PathBuf>, FileStorageError> {
-        if !self.base_path.exists() {
+    /// Used for orphan blob detection during garbage collection.
+    pub fn list_blob_key_hashes(&self) -> Result<Vec<PathBuf>, FileStorageError> {
+        if !self.blobs_path.exists() {
             return Ok(Vec::new());
         }
 
         let mut dirs = Vec::new();
-        for entry in std::fs::read_dir(&self.base_path)? {
+        for entry in std::fs::read_dir(&self.blobs_path)? {
             let entry = entry?;
             let path = entry.path();
-            // Skip the temp_inline directory
-            if path.file_name() == Some(std::ffi::OsStr::new(TEMP_INLINE_CACHE)) {
-                continue;
-            }
-            if path.is_dir() {
-                // Return just the directory name (the hash)
-                if let Some(name) = path.file_name() {
-                    dirs.push(PathBuf::from(name));
-                }
+            if path.is_dir()
+                && let Some(name) = path.file_name()
+            {
+                dirs.push(PathBuf::from(name));
             }
         }
 
         Ok(dirs)
+    }
+
+    /// Lists all key hashes that have content files.
+    pub fn list_content_key_hashes(&self) -> Result<Vec<PathBuf>, FileStorageError> {
+        if !self.content_path.exists() {
+            return Ok(Vec::new());
+        }
+
+        let mut hashes = Vec::new();
+        for entry in std::fs::read_dir(&self.content_path)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_file()
+                && path.extension().is_some_and(|e| e == "md")
+                && let Some(stem) = path.file_stem()
+            {
+                hashes.push(PathBuf::from(stem));
+            }
+        }
+
+        Ok(hashes)
     }
 }
 

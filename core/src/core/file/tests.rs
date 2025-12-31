@@ -1,436 +1,310 @@
-use crate::core::file::*;
-use crate::types::value::versioned_value::ValueVariant;
-use crate::types::value::versioned_value::latest_value::{BlobStoredFileData, FileData, Value};
-use common::*;
-use std::borrow::Cow;
-use std::ffi::OsString;
+use super::*;
 use std::io::Write;
 use std::path::Path;
 use tempfile::tempdir;
 
-mod common {
-    use crate::core::file::{FileStorage, TEXT_FILE_NAME, TextData};
-    use crate::types::value::versioned_value::ValueVariant;
-    use crate::types::value::versioned_value::latest_value::{
-        BlobStoredFileData, FileData, InlineFileData, Value,
+fn create_test_storage() -> (FileStorage, tempfile::TempDir) {
+    let temp_dir = tempdir().unwrap();
+    let storage = FileStorage {
+        content_path: temp_dir.path().join("content"),
+        blobs_path: temp_dir.path().join("blobs"),
+        thumbnails_path: temp_dir.path().join("thumbnails"),
     };
-    use std::borrow::Cow;
-    use std::io::Write;
-    use std::path::Path;
-    use tempfile::TempDir;
-
-    pub(super) fn store_inline_file(
-        temp_dir: &TempDir,
-        storage: &FileStorage,
-        key_hash: impl AsRef<Path> + Copy,
-        file_name: &str,
-        contents: &str,
-    ) -> InlineFileData {
-        let test_file_path = temp_dir.path().join(file_name);
-        let mut test_file = std::fs::File::create(&test_file_path).unwrap();
-        test_file.write_all(contents.as_bytes()).unwrap();
-
-        let result = storage
-            .store_file(key_hash.as_ref(), &test_file_path)
-            .unwrap();
-
-        match result {
-            FileData::Inlined(inline_data) => {
-                assert_eq!(inline_data.file_name, file_name);
-                assert_eq!(inline_data.data, contents.as_bytes());
-                inline_data
-            }
-            _ => panic!("Expected inline file data"),
-        }
-    }
-
-    pub(super) fn store_blob_file(
-        temp_dir: &TempDir,
-        storage: &FileStorage,
-        key_hash: impl AsRef<Path> + Copy,
-        file_name: &str,
-        contents: &str,
-    ) -> BlobStoredFileData {
-        let test_file_path = temp_dir.path().join(file_name);
-        let mut test_file = std::fs::File::create(&test_file_path).unwrap();
-        test_file.write_all(contents.as_bytes()).unwrap();
-
-        let result = storage
-            .store_file(key_hash.as_ref(), &test_file_path)
-            .unwrap();
-
-        match result {
-            FileData::BlobStored(blob_data) => {
-                assert_eq!(blob_data.file_name, file_name);
-                assert_eq!(blob_data.hash, {
-                    let mut hasher = <Value as ValueVariant>::Hasher::new();
-                    hasher.update(contents.as_bytes());
-                    hasher.finalize()
-                });
-
-                let stored_file_path = storage
-                    .base_path
-                    .join(key_hash)
-                    .join(blob_data.hash.to_string())
-                    .join(&blob_data.file_name);
-                assert!(stored_file_path.exists());
-                assert_eq!(std::fs::read_to_string(stored_file_path).unwrap(), contents);
-                blob_data
-            }
-            _ => panic!("Expected blob stored file data"),
-        }
-    }
-
-    pub(super) fn store_inline_text(
-        storage: &FileStorage,
-        key_hash: impl AsRef<Path> + Copy,
-        text: &str,
-    ) -> String {
-        let result = storage
-            .store_text(key_hash.as_ref(), Cow::Borrowed(text))
-            .unwrap();
-
-        match result {
-            TextData::Inlined(inlined_text) => {
-                assert_eq!(inlined_text, text);
-                inlined_text
-            }
-            _ => panic!("Expected inlined text data, got {:?}", result),
-        }
-    }
-
-    pub(super) fn store_blob_text(
-        storage: &FileStorage,
-        key_hash: impl AsRef<Path> + Copy,
-        text: &str,
-    ) -> TextData {
-        let result = storage
-            .store_text(key_hash.as_ref(), Cow::Borrowed(text))
-            .unwrap();
-
-        match &result {
-            TextData::BlobStored => {
-                let stored_file_path = storage.base_path.join(key_hash).join(TEXT_FILE_NAME);
-                assert!(stored_file_path.exists());
-                assert_eq!(std::fs::read_to_string(stored_file_path).unwrap(), text);
-            }
-            _ => panic!("Expected blob stored text data, got {:?}", result),
-        }
-
-        result
-    }
+    (storage, temp_dir)
 }
 
-mod store_file {
+fn create_test_file(dir: &tempfile::TempDir, name: &str, content: &[u8]) -> std::path::PathBuf {
+    let path = dir.path().join(name);
+    let mut file = std::fs::File::create(&path).unwrap();
+    file.write_all(content).unwrap();
+    path
+}
+
+mod create_content {
     use super::*;
 
     #[test]
-    fn test_store_inline_file() {
-        let temp_dir = tempdir().unwrap();
-        let storage = FileStorage {
-            base_path: temp_dir.path().to_path_buf(),
-            inline_threshold_bytes: 1024,
-        };
+    fn test_create_content_creates_empty_file() {
+        let (storage, _temp) = create_test_storage();
+        let key_hash = Path::new("abc123");
 
-        let test_file_path = temp_dir.path().join("test_inline.txt");
-        let mut test_file = std::fs::File::create(&test_file_path).unwrap();
-        writeln!(test_file, "This is a small file.").unwrap();
+        storage.create_content(key_hash).unwrap();
 
-        let result = storage
-            .store_file(Path::new("key_hash"), &test_file_path)
-            .unwrap();
-
-        match result {
-            FileData::Inlined(inline_data) => {
-                assert_eq!(inline_data.file_name, "test_inline.txt");
-                assert_eq!(inline_data.data, b"This is a small file.\n");
-            }
-            _ => panic!("Expected inline file data"),
-        }
+        let content_file = storage.content_file_path(key_hash);
+        assert!(content_file.exists());
+        assert_eq!(std::fs::read_to_string(&content_file).unwrap(), "");
     }
 
     #[test]
-    fn test_store_blob_file() {
-        let temp_dir = tempdir().unwrap();
-        let storage = FileStorage {
-            base_path: temp_dir.path().to_path_buf(),
-            inline_threshold_bytes: 10,
-        };
+    fn test_create_content_creates_parent_directories() {
+        let (storage, _temp) = create_test_storage();
+        let key_hash = Path::new("abc123");
 
-        store_blob_file(
-            &temp_dir,
-            &storage,
-            Path::new("key_hash"),
-            "test_blob.txt",
-            "This is a blob stored file.",
-        );
+        assert!(!storage.content_path.exists());
+        storage.create_content(key_hash).unwrap();
+        assert!(storage.content_path.exists());
     }
 
     #[test]
-    fn test_store_two_blob_files() {
-        let temp_dir = tempdir().unwrap();
-        let storage = FileStorage {
-            base_path: temp_dir.path().to_path_buf(),
-            inline_threshold_bytes: 10,
-        };
+    fn test_content_file_path_has_md_extension() {
+        let (storage, _temp) = create_test_storage();
+        let key_hash = Path::new("abc123");
 
-        store_blob_file(
-            &temp_dir,
-            &storage,
-            "key_hash",
-            "test_blob1.txt",
-            "This is the first blob stored file.",
-        );
-
-        store_blob_file(
-            &temp_dir,
-            &storage,
-            "key_hash",
-            "test_blob2.txt",
-            "This is the second blob stored file.",
-        );
-    }
-
-    #[test]
-    fn test_store_directory_error() {
-        let temp_dir = tempdir().unwrap();
-        let storage = FileStorage {
-            base_path: temp_dir.path().to_path_buf(),
-            inline_threshold_bytes: 1024,
-        };
-
-        let result = storage.store_file(Path::new("key_hash"), temp_dir.path());
-
-        match result {
-            Err(FileStorageError::IsDirectory) => {}
-            result => panic!("Expected IsDirectory error, got {:?}", result),
-        }
-    }
-
-    #[test]
-    #[cfg_attr(
-        target_os = "macos",
-        ignore = "macOS does not support non-UTF-8 file names in HFS+ and APFS"
-    )]
-    fn test_store_non_utf8_file_name() {
-        #[cfg(unix)]
-        let invalid: OsString = {
-            use std::os::unix::ffi::OsStringExt;
-            OsString::from_vec(vec![0x80, 0x81, 0x82])
-        };
-
-        #[cfg(windows)]
-        let invalid: OsString = {
-            use std::os::windows::ffi::OsStringExt;
-            // Unpaired surrogate - valid WTF-8, invalid UTF-8
-            OsString::from_wide(&[0xD800])
-        };
-
-        #[cfg(not(any(unix, windows)))]
-        {
-            panic!("Test not supported on this platform");
-        }
-
-        let temp_dir = tempdir().unwrap();
-        let storage = FileStorage {
-            base_path: temp_dir.path().to_path_buf(),
-            inline_threshold_bytes: 1024,
-        };
-
-        let non_utf8_file_path = temp_dir.path().join(invalid);
-        std::fs::File::create(&non_utf8_file_path).unwrap();
-        let result = storage.store_file(Path::new("key_hash"), &non_utf8_file_path);
-        match result {
-            Err(FileStorageError::NonUtf8FileName) => {}
-            result => panic!("Expected NonUtf8FileName error, got {:?}", result),
-        }
+        let path = storage.content_file_path(key_hash);
+        assert_eq!(path.extension().unwrap(), "md");
     }
 }
 
-mod store_text {
+mod remove_content {
     use super::*;
 
     #[test]
-    fn test_store_inlined_text() {
-        let temp_dir = tempdir().unwrap();
-        let storage = FileStorage {
-            base_path: temp_dir.path().to_path_buf(),
-            inline_threshold_bytes: 1024,
-        };
+    fn test_remove_content_removes_file() {
+        let (storage, _temp) = create_test_storage();
+        let key_hash = Path::new("abc123");
 
-        let text = "This is a short text.";
-        let result = storage
-            .store_text(Path::new("key_hash"), Cow::Borrowed(text))
-            .unwrap();
+        storage.create_content(key_hash).unwrap();
+        let content_file = storage.content_file_path(key_hash);
+        assert!(content_file.exists());
 
-        match &result {
-            TextData::Inlined(i) => assert_eq!(i, text),
-            _ => panic!("Expected inlined text data, got {:?}", result),
-        }
+        storage.remove_content(key_hash).unwrap();
+        assert!(!content_file.exists());
     }
 
     #[test]
-    fn test_store_blob_stored_text() {
-        let temp_dir = tempdir().unwrap();
-        let storage = FileStorage {
-            base_path: temp_dir.path().to_path_buf(),
-            inline_threshold_bytes: 10,
-        };
+    fn test_remove_nonexistent_content_succeeds() {
+        let (storage, _temp) = create_test_storage();
+        let key_hash = Path::new("nonexistent");
 
-        store_blob_text(&storage, Path::new("key_hash"), "This is a long text.");
+        storage.remove_content(key_hash).unwrap();
     }
 }
 
-mod remove_blob_stored_file {
+mod add_attachment {
     use super::*;
 
     #[test]
-    fn test_remove_blob_file() {
-        let temp_dir = tempdir().unwrap();
-        let storage = FileStorage {
-            base_path: temp_dir.path().to_path_buf(),
-            inline_threshold_bytes: 10,
-        };
+    fn test_add_attachment_copies_file() {
+        let (storage, temp) = create_test_storage();
+        let key_hash = Path::new("abc123");
+        let source = create_test_file(&temp, "source.txt", b"file content");
 
-        let key_path = Path::new("key_hash");
-        let file_name = "to_be_removed.txt";
-        let blob_data = store_blob_file(
-            &temp_dir,
-            &storage,
-            key_path,
-            file_name,
-            "This blob file will be removed.",
+        let size = storage
+            .add_attachment(key_hash, &source, "dest.txt")
+            .unwrap();
+
+        assert_eq!(size, 12);
+        let dest_path = storage.attachment_path(key_hash, "dest.txt");
+        assert!(dest_path.exists());
+        assert_eq!(std::fs::read_to_string(&dest_path).unwrap(), "file content");
+    }
+
+    #[test]
+    fn test_add_attachment_creates_directory() {
+        let (storage, temp) = create_test_storage();
+        let key_hash = Path::new("abc123");
+        let source = create_test_file(&temp, "source.txt", b"content");
+
+        assert!(!storage.blobs_path.join(key_hash).exists());
+        storage
+            .add_attachment(key_hash, &source, "file.txt")
+            .unwrap();
+        assert!(storage.blobs_path.join(key_hash).exists());
+    }
+
+    #[test]
+    fn test_add_directory_fails() {
+        let (storage, temp) = create_test_storage();
+        let key_hash = Path::new("abc123");
+
+        let result = storage.add_attachment(key_hash, temp.path(), "dir");
+        assert!(matches!(result, Err(FileStorageError::IsDirectory)));
+    }
+}
+
+mod attachment_path {
+    use super::*;
+
+    #[test]
+    fn test_attachment_path_format() {
+        let (storage, _temp) = create_test_storage();
+        let key_hash = Path::new("abc123");
+
+        let path = storage.attachment_path(key_hash, "test.txt");
+        assert!(
+            path.ends_with("blobs/abc123/test.txt") || path.ends_with("blobs\\abc123\\test.txt")
         );
+    }
+}
+
+mod remove_attachment {
+    use super::*;
+
+    #[test]
+    fn test_remove_attachment_removes_file() {
+        let (storage, temp) = create_test_storage();
+        let key_hash = Path::new("abc123");
+        let source = create_test_file(&temp, "source.txt", b"content");
 
         storage
-            .remove_blob_stored_file(key_path, &blob_data)
+            .add_attachment(key_hash, &source, "file.txt")
             .unwrap();
+        let path = storage.attachment_path(key_hash, "file.txt");
+        assert!(path.exists());
 
-        let stored_file_path = storage
-            .base_path
-            .join(key_path)
-            .join(blob_data.hash.to_string())
-            .join(file_name);
-        assert!(!stored_file_path.exists());
-        let parent_dir = stored_file_path.parent().unwrap();
-        assert!(!parent_dir.exists());
+        storage.remove_attachment(key_hash, "file.txt").unwrap();
+        assert!(!path.exists());
     }
 
     #[test]
-    fn test_remove_nonexistent_blob_file() {
-        let temp_dir = tempdir().unwrap();
-        let storage = FileStorage {
-            base_path: temp_dir.path().to_path_buf(),
-            inline_threshold_bytes: 10,
-        };
-
-        let key_path = Path::new("key_hash");
-        let blob_data = BlobStoredFileData {
-            file_name: "nonexistent.txt".to_string(),
-            hash: {
-                let mut hasher = <Value as ValueVariant>::Hasher::new();
-                hasher.update(b"nonexistent content");
-                hasher.finalize()
-            },
-        };
-
-        let result = storage.remove_blob_stored_file(key_path, &blob_data);
-        result.unwrap(); // Should succeed (idempotent delete)
-    }
-
-    #[test]
-    fn test_remove_blob_file_from_two_files() {
-        let temp_dir = tempdir().unwrap();
-        let storage = FileStorage {
-            base_path: temp_dir.path().to_path_buf(),
-            inline_threshold_bytes: 10,
-        };
-
-        let key_path = Path::new("key_hash");
-        let file_name1 = "shared_file1.txt";
-        let file_name2 = "shared_file2.txt";
-        let file_contents1 = "This is the first shared blob file.";
-        let file_contents2 = "This is the second shared blob file.";
-
-        let blob_data1 = store_blob_file(&temp_dir, &storage, key_path, file_name1, file_contents1);
-
-        let blob_data2 = store_blob_file(&temp_dir, &storage, key_path, file_name2, file_contents2);
+    fn test_remove_last_attachment_cleans_directory() {
+        let (storage, temp) = create_test_storage();
+        let key_hash = Path::new("abc123");
+        let source = create_test_file(&temp, "source.txt", b"content");
 
         storage
-            .remove_blob_stored_file(key_path, &blob_data1)
+            .add_attachment(key_hash, &source, "file.txt")
             .unwrap();
+        let key_dir = storage.blobs_path.join(key_hash);
+        assert!(key_dir.exists());
 
-        let stored_file_path1 = storage
-            .base_path
-            .join(key_path)
-            .join(blob_data1.hash.to_string())
-            .join(&blob_data1.file_name);
-        assert!(!stored_file_path1.exists());
-
-        let stored_file_path2 = storage
-            .base_path
-            .join(key_path)
-            .join(blob_data2.hash.to_string())
-            .join(&blob_data2.file_name);
-        assert!(stored_file_path2.exists());
-    }
-
-    #[test]
-    fn test_remove_last_file_cleans_directory() {
-        let temp_dir = tempdir().unwrap();
-        let storage = FileStorage {
-            base_path: temp_dir.path().to_path_buf(),
-            inline_threshold_bytes: 10,
-        };
-
-        let key_path = Path::new("key_hash");
-        let file_name = "only_file.txt";
-        let blob_data = store_blob_file(
-            &temp_dir,
-            &storage,
-            key_path,
-            file_name,
-            "This is the only blob file.",
-        );
-
-        storage
-            .remove_blob_stored_file(key_path, &blob_data)
-            .unwrap();
-
-        let stored_file_path = storage
-            .base_path
-            .join(key_path)
-            .join(blob_data.hash.to_string())
-            .join(file_name);
-        assert!(!stored_file_path.exists());
-        let hash_dir = storage
-            .base_path
-            .join(key_path)
-            .join(blob_data.hash.to_string());
-        assert!(!hash_dir.exists());
-        let key_dir = storage.base_path.join(key_path);
+        storage.remove_attachment(key_hash, "file.txt").unwrap();
         assert!(!key_dir.exists());
     }
+
+    #[test]
+    fn test_remove_nonexistent_attachment_succeeds() {
+        let (storage, _temp) = create_test_storage();
+        let key_hash = Path::new("abc123");
+
+        storage
+            .remove_attachment(key_hash, "nonexistent.txt")
+            .unwrap();
+    }
 }
 
-mod remove_blob_stored_text {
+mod rename_attachment {
     use super::*;
 
     #[test]
-    fn test_remove_blob_stored_text() {
-        let temp_dir = tempdir().unwrap();
-        let storage = FileStorage {
-            base_path: temp_dir.path().to_path_buf(),
-            inline_threshold_bytes: 10,
-        };
+    fn test_rename_attachment_renames_file() {
+        let (storage, temp) = create_test_storage();
+        let key_hash = Path::new("abc123");
+        let source = create_test_file(&temp, "source.txt", b"content");
 
-        let key_path = Path::new("key_hash");
-        store_blob_text(&storage, key_path, "This blob text will be removed.");
+        storage
+            .add_attachment(key_hash, &source, "old.txt")
+            .unwrap();
 
-        storage.remove_blob_stored_text(key_path).unwrap();
+        storage
+            .rename_attachment(key_hash, "old.txt", "new.txt")
+            .unwrap();
 
-        let stored_file_path = storage.base_path.join(key_path).join(TEXT_FILE_NAME);
-        assert!(!stored_file_path.exists());
+        let old_path = storage.attachment_path(key_hash, "old.txt");
+        let new_path = storage.attachment_path(key_hash, "new.txt");
+        assert!(!old_path.exists());
+        assert!(new_path.exists());
+        assert_eq!(std::fs::read_to_string(&new_path).unwrap(), "content");
+    }
+
+    #[test]
+    fn test_rename_nonexistent_attachment_succeeds() {
+        let (storage, _temp) = create_test_storage();
+        let key_hash = Path::new("abc123");
+
+        storage
+            .rename_attachment(key_hash, "nonexistent.txt", "new.txt")
+            .unwrap();
+    }
+}
+
+mod remove_all_attachments {
+    use super::*;
+
+    #[test]
+    fn test_remove_all_attachments_removes_directory() {
+        let (storage, temp) = create_test_storage();
+        let key_hash = Path::new("abc123");
+        let source1 = create_test_file(&temp, "file1.txt", b"content1");
+        let source2 = create_test_file(&temp, "file2.txt", b"content2");
+
+        storage
+            .add_attachment(key_hash, &source1, "file1.txt")
+            .unwrap();
+        storage
+            .add_attachment(key_hash, &source2, "file2.txt")
+            .unwrap();
+
+        let key_dir = storage.blobs_path.join(key_hash);
+        assert!(key_dir.exists());
+
+        storage.remove_all_attachments(key_hash).unwrap();
+        assert!(!key_dir.exists());
+    }
+
+    #[test]
+    fn test_remove_all_attachments_nonexistent_succeeds() {
+        let (storage, _temp) = create_test_storage();
+        let key_hash = Path::new("nonexistent");
+
+        storage.remove_all_attachments(key_hash).unwrap();
+    }
+}
+
+mod thumbnail {
+    use super::*;
+
+    #[test]
+    fn test_thumbnail_path_format() {
+        let (storage, _temp) = create_test_storage();
+        let key_hash = Path::new("abc123");
+
+        let path = storage.thumbnail_path(key_hash, "image.png");
+        assert!(
+            path.ends_with("thumbnails/abc123/image.png.thumb")
+                || path.ends_with("thumbnails\\abc123\\image.png.thumb")
+        );
+    }
+
+    #[test]
+    fn test_remove_thumbnail_removes_file() {
+        let (storage, _temp) = create_test_storage();
+        let key_hash = Path::new("abc123");
+
+        let thumb_dir = storage.thumbnails_path.join(key_hash);
+        std::fs::create_dir_all(&thumb_dir).unwrap();
+        let thumb_path = thumb_dir.join("image.png.thumb");
+        std::fs::write(&thumb_path, b"thumbnail data").unwrap();
+
+        storage.remove_thumbnail(key_hash, "image.png").unwrap();
+        assert!(!thumb_path.exists());
+    }
+
+    #[test]
+    fn test_remove_last_thumbnail_cleans_directory() {
+        let (storage, _temp) = create_test_storage();
+        let key_hash = Path::new("abc123");
+
+        let thumb_dir = storage.thumbnails_path.join(key_hash);
+        std::fs::create_dir_all(&thumb_dir).unwrap();
+        std::fs::write(thumb_dir.join("image.png.thumb"), b"data").unwrap();
+
+        storage.remove_thumbnail(key_hash, "image.png").unwrap();
+        assert!(!thumb_dir.exists());
+    }
+
+    #[test]
+    fn test_remove_all_thumbnails_removes_directory() {
+        let (storage, _temp) = create_test_storage();
+        let key_hash = Path::new("abc123");
+
+        let thumb_dir = storage.thumbnails_path.join(key_hash);
+        std::fs::create_dir_all(&thumb_dir).unwrap();
+        std::fs::write(thumb_dir.join("img1.thumb"), b"data1").unwrap();
+        std::fs::write(thumb_dir.join("img2.thumb"), b"data2").unwrap();
+
+        storage.remove_all_thumbnails(key_hash).unwrap();
+        assert!(!thumb_dir.exists());
     }
 }
 
@@ -438,198 +312,296 @@ mod remove_all {
     use super::*;
 
     #[test]
-    fn test_remove_all_files_and_texts() {
-        let temp_dir = tempdir().unwrap();
-        let storage = FileStorage {
-            base_path: temp_dir.path().to_path_buf(),
-            inline_threshold_bytes: 10,
-        };
+    fn test_remove_all_removes_content_attachments_thumbnails() {
+        let (storage, temp) = create_test_storage();
+        let key_hash = Path::new("abc123");
 
-        let key_path = Path::new("key_hash");
-        let inlined_text = "inline";
-        let blob_text = "This is a blob.";
+        // Create content
+        storage.create_content(key_hash).unwrap();
 
-        store_inline_file(&temp_dir, &storage, key_path, "inline.txt", inlined_text);
-        store_blob_file(&temp_dir, &storage, key_path, "blob.txt", blob_text);
+        // Create attachment
+        let source = create_test_file(&temp, "file.txt", b"content");
+        storage
+            .add_attachment(key_hash, &source, "file.txt")
+            .unwrap();
 
-        store_inline_text(&storage, key_path, inlined_text);
-        store_blob_text(&storage, key_path, blob_text);
+        // Create thumbnail
+        let thumb_dir = storage.thumbnails_path.join(key_hash);
+        std::fs::create_dir_all(&thumb_dir).unwrap();
+        std::fs::write(thumb_dir.join("img.thumb"), b"data").unwrap();
 
-        assert!(temp_dir.path().join(key_path).exists());
+        // Verify all exist
+        assert!(storage.content_file_path(key_hash).exists());
+        assert!(storage.blobs_path.join(key_hash).exists());
+        assert!(storage.thumbnails_path.join(key_hash).exists());
 
-        storage.remove_all(key_path).unwrap();
+        storage.remove_all(key_hash).unwrap();
 
-        assert!(!temp_dir.path().join(key_path).exists());
+        assert!(!storage.content_file_path(key_hash).exists());
+        assert!(!storage.blobs_path.join(key_hash).exists());
+        assert!(!storage.thumbnails_path.join(key_hash).exists());
     }
 }
 
-mod ensure_file_path {
+mod rename_all {
     use super::*;
 
     #[test]
-    fn test_ensure_inlined_file_path() {
-        let temp_dir = tempdir().unwrap();
-        let storage = FileStorage {
-            base_path: temp_dir.path().to_path_buf(),
-            inline_threshold_bytes: 1024,
-        };
+    fn test_rename_all_renames_content_attachments_thumbnails() {
+        let (storage, temp) = create_test_storage();
+        let old_hash = Path::new("old_hash");
+        let new_hash = Path::new("new_hash");
 
-        let file_name = "inlined.txt";
-        let contents = "This is an inlined file.";
-        let hash = <Value as ValueVariant>::Hasher::new()
-            .update(contents.as_bytes())
-            .finalize();
+        // Create content
+        storage.create_content(old_hash).unwrap();
+        std::fs::write(storage.content_file_path(old_hash), "test").unwrap();
 
-        let key_path = Path::new("key_hash");
-        let inline_file_data =
-            store_inline_file(&temp_dir, &storage, key_path, file_name, contents);
-
-        let results = storage
-            .ensure_file_paths(key_path, &[FileData::Inlined(inline_file_data)])
+        // Create attachment
+        let source = create_test_file(&temp, "file.txt", b"content");
+        storage
+            .add_attachment(old_hash, &source, "file.txt")
             .unwrap();
 
-        let expected_path = temp_dir
-            .path()
-            .join(TEMP_INLINE_CACHE)
-            .join(key_path)
-            .join(hash.to_string())
-            .join(file_name);
-        assert_eq!(&results, &[expected_path]);
-        assert_eq!(std::fs::read_to_string(&results[0]).unwrap(), contents);
+        // Create thumbnail
+        let thumb_dir = storage.thumbnails_path.join(old_hash);
+        std::fs::create_dir_all(&thumb_dir).unwrap();
+        std::fs::write(thumb_dir.join("img.thumb"), b"data").unwrap();
+
+        storage.rename_all(old_hash, new_hash).unwrap();
+
+        // Old paths should not exist
+        assert!(!storage.content_file_path(old_hash).exists());
+        assert!(!storage.blobs_path.join(old_hash).exists());
+        assert!(!storage.thumbnails_path.join(old_hash).exists());
+
+        // New paths should exist
+        assert!(storage.content_file_path(new_hash).exists());
+        assert!(storage.blobs_path.join(new_hash).exists());
+        assert!(storage.thumbnails_path.join(new_hash).exists());
     }
 
     #[test]
-    fn test_ensure_is_idempotent_for_same_key_and_file() {
-        let temp_dir = tempdir().unwrap();
-        let storage = FileStorage {
-            base_path: temp_dir.path().to_path_buf(),
-            inline_threshold_bytes: 1024,
-        };
+    fn test_rename_all_nonexistent_succeeds() {
+        let (storage, _temp) = create_test_storage();
+        let old_hash = Path::new("nonexistent");
+        let new_hash = Path::new("new_hash");
 
-        let file_name = "inlined.txt";
-        let contents = "This is an inlined file.";
-        let hash = <Value as ValueVariant>::Hasher::new()
-            .update(contents.as_bytes())
-            .finalize();
-
-        let key_path = Path::new("key_hash");
-
-        let expected_path = temp_dir
-            .path()
-            .join(TEMP_INLINE_CACHE)
-            .join(key_path)
-            .join(hash.to_string())
-            .join(file_name);
-
-        // First ensure: should materialize the file.
-        let inline_file_data_1 =
-            store_inline_file(&temp_dir, &storage, key_path, file_name, contents);
-        let ensured_1 = storage
-            .ensure_file_paths(key_path, &[FileData::Inlined(inline_file_data_1)])
-            .unwrap();
-
-        assert_eq!(&ensured_1, std::slice::from_ref(&expected_path));
-        assert!(ensured_1[0].exists());
-
-        let metadata_1 = std::fs::metadata(&ensured_1[0]).unwrap();
-        let modified_1 = metadata_1.modified().unwrap();
-
-        // Second ensure with the same key and same content: should not rewrite.
-        let inline_file_data_2 =
-            store_inline_file(&temp_dir, &storage, key_path, file_name, contents);
-        let ensured_2 = storage
-            .ensure_file_paths(key_path, &[FileData::Inlined(inline_file_data_2)])
-            .unwrap();
-
-        assert_eq!(&ensured_2, &[expected_path]);
-
-        let metadata_2 = std::fs::metadata(&ensured_2[0]).unwrap();
-        let modified_2 = metadata_2.modified().unwrap();
-
-        // If we didn't rewrite, mtime should stay the same (or at least not go backwards).
-        // Prefer strict equality, but some filesystems have coarse timestamp resolution.
-        assert!(modified_2 >= modified_1);
+        storage.rename_all(old_hash, new_hash).unwrap();
     }
 
     #[test]
-    fn test_ensure_switching_keys_clears_previous_ensured_cache() {
-        let temp_dir = tempdir().unwrap();
-        let storage = FileStorage {
-            base_path: temp_dir.path().to_path_buf(),
-            inline_threshold_bytes: 1024,
-        };
+    fn test_rename_all_overwrites_destination() {
+        let (storage, temp) = create_test_storage();
+        let old_hash = Path::new("old_hash");
+        let new_hash = Path::new("new_hash");
 
-        let file_name = "inlined.txt";
-        let contents = "This is an inlined file.";
-        let hash = <Value as ValueVariant>::Hasher::new()
-            .update(contents.as_bytes())
-            .finalize();
+        // Create old content
+        storage.create_content(old_hash).unwrap();
+        std::fs::write(storage.content_file_path(old_hash), "old content").unwrap();
 
-        let key_a = Path::new("key_hash_a");
-        let key_b = Path::new("key_hash_b");
-
-        let inline_a = store_inline_file(&temp_dir, &storage, key_a, file_name, contents);
-        let inline_b = store_inline_file(&temp_dir, &storage, key_b, file_name, contents);
-
-        let ensured_a = storage
-            .ensure_file_paths(key_a, &[FileData::Inlined(inline_a)])
+        // Create old attachment
+        let source1 = create_test_file(&temp, "old.txt", b"old attachment");
+        storage
+            .add_attachment(old_hash, &source1, "file.txt")
             .unwrap();
 
-        let expected_a = temp_dir
-            .path()
-            .join(TEMP_INLINE_CACHE)
-            .join(key_a)
-            .join(hash.to_string())
-            .join(file_name);
-        assert_eq!(&ensured_a, &[expected_a]);
-        assert!(ensured_a[0].exists());
+        // Create new content (to be overwritten)
+        storage.create_content(new_hash).unwrap();
+        std::fs::write(storage.content_file_path(new_hash), "new content").unwrap();
 
-        let ensured_b = storage
-            .ensure_file_paths(key_b, &[FileData::Inlined(inline_b)])
+        // Create new attachment (to be overwritten)
+        let source2 = create_test_file(&temp, "new.txt", b"new attachment");
+        storage
+            .add_attachment(new_hash, &source2, "other.txt")
             .unwrap();
 
-        let expected_b = temp_dir
-            .path()
-            .join(TEMP_INLINE_CACHE)
-            .join(key_b)
-            .join(hash.to_string())
-            .join(file_name);
-        assert_eq!(&ensured_b, &[expected_b]);
-        assert!(ensured_b[0].exists());
+        storage.rename_all(old_hash, new_hash).unwrap();
 
-        // Ensuring for key_b should clear ensured cache for key_a.
-        let ensured_root = temp_dir.path().join(TEMP_INLINE_CACHE);
-        assert!(!ensured_root.join(key_a).exists());
-        assert!(ensured_root.join(key_b).exists());
+        // Content should be old content
+        assert_eq!(
+            std::fs::read_to_string(storage.content_file_path(new_hash)).unwrap(),
+            "old content"
+        );
+
+        // Attachments should be from old key
+        let new_blobs = storage.blobs_path.join(new_hash);
+        assert!(new_blobs.join("file.txt").exists());
+        assert!(!new_blobs.join("other.txt").exists());
+    }
+}
+
+mod list_key_hashes {
+    use super::*;
+
+    #[test]
+    fn test_list_blob_key_hashes() {
+        let (storage, temp) = create_test_storage();
+        let source = create_test_file(&temp, "file.txt", b"content");
+
+        storage
+            .add_attachment(Path::new("hash1"), &source, "file.txt")
+            .unwrap();
+        storage
+            .add_attachment(Path::new("hash2"), &source, "file.txt")
+            .unwrap();
+
+        let hashes = storage.list_blob_key_hashes().unwrap();
+        assert_eq!(hashes.len(), 2);
+        assert!(hashes.contains(&std::path::PathBuf::from("hash1")));
+        assert!(hashes.contains(&std::path::PathBuf::from("hash2")));
     }
 
     #[test]
-    fn test_ensure_blob_stored_file_path() {
-        let temp_dir = tempdir().unwrap();
-        let storage = FileStorage {
-            base_path: temp_dir.path().to_path_buf(),
-            inline_threshold_bytes: 10,
-        };
+    fn test_list_blob_key_hashes_empty() {
+        let (storage, _temp) = create_test_storage();
 
-        let file_name = "blob_stored.txt";
-        let contents = "This is a blob stored file.";
-        let hash = <Value as ValueVariant>::Hasher::new()
-            .update(contents.as_bytes())
-            .finalize();
+        let hashes = storage.list_blob_key_hashes().unwrap();
+        assert!(hashes.is_empty());
+    }
 
-        let key_path = Path::new("key_hash");
-        let blob_file_data = store_blob_file(&temp_dir, &storage, key_path, file_name, contents);
+    #[test]
+    fn test_list_content_key_hashes() {
+        let (storage, _temp) = create_test_storage();
 
-        let results = storage
-            .ensure_file_paths(key_path, &[FileData::BlobStored(blob_file_data)])
-            .unwrap();
+        storage.create_content(Path::new("hash1")).unwrap();
+        storage.create_content(Path::new("hash2")).unwrap();
 
-        let expected_path = temp_dir
-            .path()
-            .join(key_path)
-            .join(hash.to_string())
-            .join(file_name);
-        assert_eq!(&results, &[expected_path]);
-        assert_eq!(std::fs::read_to_string(&results[0]).unwrap(), contents);
+        let hashes = storage.list_content_key_hashes().unwrap();
+        assert_eq!(hashes.len(), 2);
+        assert!(hashes.contains(&std::path::PathBuf::from("hash1")));
+        assert!(hashes.contains(&std::path::PathBuf::from("hash2")));
+    }
+
+    #[test]
+    fn test_list_content_key_hashes_empty() {
+        let (storage, _temp) = create_test_storage();
+
+        let hashes = storage.list_content_key_hashes().unwrap();
+        assert!(hashes.is_empty());
+    }
+}
+
+mod thumbnail_generation {
+    use super::*;
+
+    #[test]
+    fn test_is_supported_image_png() {
+        assert!(FileStorage::is_supported_image("image.png"));
+        assert!(FileStorage::is_supported_image("image.PNG"));
+    }
+
+    #[test]
+    fn test_is_supported_image_jpeg() {
+        assert!(FileStorage::is_supported_image("photo.jpg"));
+        assert!(FileStorage::is_supported_image("photo.jpeg"));
+        assert!(FileStorage::is_supported_image("photo.JPEG"));
+    }
+
+    #[test]
+    fn test_is_supported_image_other_formats() {
+        assert!(FileStorage::is_supported_image("image.gif"));
+        assert!(FileStorage::is_supported_image("image.webp"));
+    }
+
+    #[test]
+    fn test_is_supported_image_unsupported() {
+        assert!(!FileStorage::is_supported_image("document.pdf"));
+        assert!(!FileStorage::is_supported_image("video.mp4"));
+        assert!(!FileStorage::is_supported_image("file.txt"));
+        assert!(!FileStorage::is_supported_image("noext"));
+    }
+
+    #[test]
+    fn test_generate_thumbnail_unsupported_format() {
+        let (storage, _temp) = create_test_storage();
+        let key_hash = Path::new("test_hash");
+
+        let result = storage.generate_thumbnail(key_hash, "document.pdf");
+        assert!(matches!(result, Err(FileStorageError::UnsupportedFormat)));
+    }
+
+    fn create_test_image(storage: &FileStorage, key_hash: &Path, filename: &str, width: u32, height: u32) {
+        let img = image::RgbImage::from_fn(width, height, |x, y| {
+            image::Rgb([(x % 256) as u8, (y % 256) as u8, 128])
+        });
+        let blob_dir = storage.blobs_path.join(key_hash);
+        std::fs::create_dir_all(&blob_dir).unwrap();
+        img.save(blob_dir.join(filename)).unwrap();
+    }
+
+    fn open_thumbnail(path: &Path) -> image::DynamicImage {
+        let bytes = std::fs::read(path).unwrap();
+        image::load_from_memory(&bytes).unwrap()
+    }
+
+    #[test]
+    fn test_generate_thumbnail_landscape() {
+        let (storage, _temp) = create_test_storage();
+        let key_hash = Path::new("test_hash");
+
+        create_test_image(&storage, key_hash, "landscape.png", 400, 300);
+        storage.generate_thumbnail(key_hash, "landscape.png").unwrap();
+
+        let thumb_path = storage.thumbnail_path(key_hash, "landscape.png");
+        assert!(thumb_path.exists());
+
+        let thumb = open_thumbnail(&thumb_path);
+        // 400x300 scaled to fit 200px max -> 200x150
+        assert_eq!(thumb.width(), 200);
+        assert_eq!(thumb.height(), 150);
+    }
+
+    #[test]
+    fn test_generate_thumbnail_portrait() {
+        let (storage, _temp) = create_test_storage();
+        let key_hash = Path::new("test_hash");
+
+        create_test_image(&storage, key_hash, "portrait.png", 300, 600);
+        storage.generate_thumbnail(key_hash, "portrait.png").unwrap();
+
+        let thumb = open_thumbnail(&storage.thumbnail_path(key_hash, "portrait.png"));
+        // 300x600 scaled to fit 200px max -> 100x200
+        assert_eq!(thumb.width(), 100);
+        assert_eq!(thumb.height(), 200);
+    }
+
+    #[test]
+    fn test_generate_thumbnail_square() {
+        let (storage, _temp) = create_test_storage();
+        let key_hash = Path::new("test_hash");
+
+        create_test_image(&storage, key_hash, "square.png", 400, 400);
+        storage.generate_thumbnail(key_hash, "square.png").unwrap();
+
+        let thumb = open_thumbnail(&storage.thumbnail_path(key_hash, "square.png"));
+        assert_eq!(thumb.width(), 200);
+        assert_eq!(thumb.height(), 200);
+    }
+
+    #[test]
+    fn test_generate_thumbnail_no_upscale() {
+        let (storage, _temp) = create_test_storage();
+        let key_hash = Path::new("test_hash");
+
+        create_test_image(&storage, key_hash, "small.png", 100, 80);
+        storage.generate_thumbnail(key_hash, "small.png").unwrap();
+
+        let thumb = open_thumbnail(&storage.thumbnail_path(key_hash, "small.png"));
+        // Small images should not be upscaled
+        assert_eq!(thumb.width(), 100);
+        assert_eq!(thumb.height(), 80);
+    }
+
+    #[test]
+    fn test_generate_thumbnail_exact_size() {
+        let (storage, _temp) = create_test_storage();
+        let key_hash = Path::new("test_hash");
+
+        create_test_image(&storage, key_hash, "exact.png", 200, 150);
+        storage.generate_thumbnail(key_hash, "exact.png").unwrap();
+
+        let thumb = open_thumbnail(&storage.thumbnail_path(key_hash, "exact.png"));
+        assert_eq!(thumb.width(), 200);
+        assert_eq!(thumb.height(), 150);
     }
 }
