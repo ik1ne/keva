@@ -4,12 +4,12 @@
 
 - `Spec.md` - Product specification and design decisions
 - `Planned.md` - Planned features and roadmap
-- `implementation_detail.md` - Implementation details
 - `todo.md` - Current tasks
 
 ## Cargo Commands
 
 Working directory is the keva project root. Do not use `cd`, `--manifest-path`, or `-C` flags:
+
 ```sh
 # Good
 cargo build -q
@@ -23,6 +23,7 @@ cargo build -q --manifest-path "C:/Users/.../Cargo.toml"
 ```
 
 Always use `-q` flag to minimize output:
+
 ```sh
 cargo build -q
 cargo test -q
@@ -30,6 +31,7 @@ cargo clippy -q
 ```
 
 Run clippy on all code (library + tests):
+
 ```sh
 cargo clippy -q --lib --tests
 ```
@@ -39,10 +41,11 @@ cargo clippy -q --lib --tests
 ### Win32 Message Parameters
 
 Extract raw `wparam`/`lparam` values into named variables that explain their meaning:
+
 ```rust
 // Good - reader understands the values without looking up Windows docs
 let cursor_x = (lparam.0 & 0xFFFF) as i16 as i32;
-let cursor_y = ((lparam.0 >> 16) & 0xFFFF) as i16 as i32;
+let cursor_y = ((lparam.0 > > 16) & 0xFFFF) as i16 as i32;
 let previous_window = lparam.0;
 let virtual_key = wparam.0 as u16;
 
@@ -67,11 +70,13 @@ if wparam.0 as u16 == VK_ESCAPE.0 { ... }
 
 ### Error Types
 
-Prefer distinct error variants over reusing generic ones. Each error should represent a specific failure condition that callers may want to handle differently.
+Prefer distinct error variants over reusing generic ones. Each error should represent a specific failure condition that
+callers may want to handle differently.
 
 ### Doc Comments
 
 Only add doc comments when they provide information beyond what the code already expresses:
+
 ```rust
 // Bad - restates the obvious
 /// Gets the name.
@@ -102,6 +107,7 @@ Document error conditions explicitly when a function can fail in multiple ways.
 ### Assertions
 
 Prefer full struct comparisons over individual field assertions:
+
 ```rust
 // Good - shows expected state clearly, catches unexpected field changes
 assert_eq!(
@@ -119,6 +125,7 @@ assert_eq!(value.metadata.updated_at, now);
 ```
 
 Use slice comparisons:
+
 ```rust
 // Good
 assert_eq!(items, &[expected]);
@@ -130,20 +137,23 @@ assert_eq!(items[0], expected);
 ```
 
 Use informative panic messages:
+
 ```rust
-match &value {
-    Variant::Expected(v) => { ... }
-    other => panic!("Expected Expected variant, got: {other:?}"),
+match & value {
+Variant::Expected(v) => { ... }
+other => panic!("Expected Expected variant, got: {other:?}"),
 }
 ```
 
 ### Whitebox Testing
 
-Don't test redundant combinations if independent behaviors are already covered. If behavior A and behavior B are tested independently, their combination doesn't need a separate test unless there's interaction.
+Don't test redundant combinations if independent behaviors are already covered. If behavior A and behavior B are tested
+independently, their combination doesn't need a separate test unless there's interaction.
 
 ### Test Documentation
 
 Add doc comments to tests that document intentional design decisions:
+
 ```rust
 /// Stale keys can still be rescued before GC runs.
 ///
