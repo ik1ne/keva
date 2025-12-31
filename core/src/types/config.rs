@@ -11,7 +11,6 @@ pub struct Config {
 pub struct SavedConfig {
     pub trash_ttl: Duration,
     pub purge_ttl: Duration,
-    pub inline_threshold_bytes: u64,
 }
 
 impl Config {
@@ -19,7 +18,15 @@ impl Config {
         self.base_path.join("keva.redb")
     }
 
-    pub fn blob_path(&self) -> PathBuf {
+    pub fn content_path(&self) -> PathBuf {
+        self.base_path.join("content")
+    }
+
+    pub fn blobs_path(&self) -> PathBuf {
         self.base_path.join("blobs")
+    }
+
+    pub fn thumbnails_path(&self) -> PathBuf {
+        self.base_path.join("thumbnails")
     }
 }

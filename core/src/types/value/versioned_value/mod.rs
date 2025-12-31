@@ -1,13 +1,10 @@
-use file_hash::FileHasher;
 use redb::TypeName;
 pub use v1 as latest_value;
 
-pub(crate) mod file_hash;
 pub mod v1;
 
 pub trait ValueVariant {
     const VERSION: u8;
-    type Hasher: FileHasher;
 }
 
 #[derive(Debug, Clone)]
