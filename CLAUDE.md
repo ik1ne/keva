@@ -38,6 +38,45 @@ cargo clippy -q --lib --tests
 
 ## Code Style
 
+### Imports
+
+Always group imports at the top of the file. Never use local imports inside functions or blocks:
+
+```rust
+// Good - imports at module top
+use crate::core::KevaCore;
+
+impl Foo {
+    fn bar() {
+        let ver = KevaCore::THUMB_VER;
+    }
+}
+
+// Bad - local import inside function
+impl Foo {
+    fn bar() {
+        use crate::core::KevaCore;
+        let ver = KevaCore::THUMB_VER;
+    }
+}
+```
+
+For test submodules, use `super::*` to inherit from the parent module:
+
+```rust
+// In src/core/db/tests.rs (submodule of db/mod.rs)
+use super::*;  // Gets Database, error module, etc. from parent
+use crate::types::config::SavedConfig;  // Types not in parent
+
+mod create {
+    use super::*;  // Gets items from tests.rs level
+    use common::{create_test_db, make_key};
+
+    #[test]
+    fn test_create() { ... }
+}
+```
+
 ### Win32 Message Parameters
 
 Extract raw `wparam`/`lparam` values into named variables that explain their meaning:
