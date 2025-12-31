@@ -102,7 +102,6 @@ Attachments stored at `blobs/{key_hash}/{filename}`.
 - Original filename preserved
 - Unique within key (enforced by API)
 - Copied via `std::fs::copy` (enables CoW on supporting filesystems)
-- **Hard maximum: 1 GB per file** (enforced by core)
 
 ### Thumbnails
 
@@ -237,7 +236,6 @@ impl KevaCore {
     ) -> Result<PathBuf, StorageError>;
 
     /// Add attachments with pre-resolved conflict decisions
-    /// Rejects files > 1 GB
     fn add_attachments(
         &mut self,
         key: &Key,
@@ -326,7 +324,6 @@ enum AddResult {
     Renamed { original: String, actual: String },
     Skipped { filename: String },
     Overwritten { filename: String },
-    Rejected { filename: String, reason: String },  // e.g., exceeds 1 GB
 }
 ```
 
@@ -353,7 +350,6 @@ enum StorageError {
     AlreadyTrashed,         // Key already in Trash
     DestinationExists,      // Rename target exists (and overwrite=false)
     AttachmentNotFound,     // Referenced attachment doesn't exist
-    FileTooLarge,           // File exceeds 1 GB limit
 }
 ```
 
