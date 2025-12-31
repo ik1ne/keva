@@ -6,21 +6,20 @@ use std::ffi::c_void;
 use std::ptr::null_mut;
 use std::sync::OnceLock;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
-    CreateCoreWebView2Environment, ICoreWebView2, ICoreWebView2Controller,
-    ICoreWebView2Environment, ICoreWebView2Environment12,
-    ICoreWebView2WebMessageReceivedEventArgs, ICoreWebView2_17,
-    COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_WRITE,
+    COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_WRITE, CreateCoreWebView2Environment, ICoreWebView2,
+    ICoreWebView2_17, ICoreWebView2Controller, ICoreWebView2Environment,
+    ICoreWebView2Environment12, ICoreWebView2WebMessageReceivedEventArgs,
 };
 use webview2_com::{
     CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
     WebMessageReceivedEventHandler, pwstr_from_str,
 };
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
-use windows::Win32::System::Com::{CoInitializeEx, CoTaskMemFree, COINIT_APARTMENTTHREADED};
+use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoTaskMemFree};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, IDC_ARROW, LoadCursorW, MSG,
-    PostQuitMessage, RegisterClassW, ShowWindow, SW_SHOW, WM_CLOSE, WM_DESTROY, WNDCLASSW,
+    PostQuitMessage, RegisterClassW, SW_SHOW, ShowWindow, WM_CLOSE, WM_DESTROY, WNDCLASSW,
     WS_OVERLAPPEDWINDOW,
 };
 use windows::core::{Interface, PWSTR, w};
@@ -211,16 +210,21 @@ fn create_controller(hwnd: HWND, env: ICoreWebView2Environment) {
                     let mut token = 0i64;
                     webview
                         .add_WebMessageReceived(
-                            &WebMessageReceivedEventHandler::create(Box::new(
-                                move |_wv, args: Option<ICoreWebView2WebMessageReceivedEventArgs>| {
-                                    handle_message(
-                                        &webview_for_handler,
-                                        &env_for_handler,
-                                        args,
-                                    );
-                                    Ok(())
-                                },
-                            )),
+                            &WebMessageReceivedEventHandler::create(
+                                Box::new(
+                                    move |_wv,
+                                          args: Option<
+                                        ICoreWebView2WebMessageReceivedEventArgs,
+                                    >| {
+                                        handle_message(
+                                            &webview_for_handler,
+                                            &env_for_handler,
+                                            args,
+                                        );
+                                        Ok(())
+                                    },
+                                ),
+                            ),
                             &mut token,
                         )
                         .ok();
@@ -272,13 +276,19 @@ fn send_shared_buffer(webview: &ICoreWebView2, env: &ICoreWebView2Environment) {
     unsafe {
         // Try to get ICoreWebView2Environment12 for CreateSharedBuffer
         let Ok(env12) = env.cast::<ICoreWebView2Environment12>() else {
-            send_error(webview, "ICoreWebView2Environment12 not available (need SDK 1.0.1661+)");
+            send_error(
+                webview,
+                "ICoreWebView2Environment12 not available (need SDK 1.0.1661+)",
+            );
             return;
         };
 
         // Try to get ICoreWebView2_17 for PostSharedBufferToScript
         let Ok(webview17) = webview.cast::<ICoreWebView2_17>() else {
-            send_error(webview, "ICoreWebView2_17 not available (need SDK 1.0.1661+)");
+            send_error(
+                webview,
+                "ICoreWebView2_17 not available (need SDK 1.0.1661+)",
+            );
             return;
         };
 
@@ -286,7 +296,10 @@ fn send_shared_buffer(webview: &ICoreWebView2, env: &ICoreWebView2Environment) {
         let test_data = "Hello from SharedBuffer! ".repeat(400_000); // ~10MB
         let data_bytes = test_data.as_bytes();
 
-        eprintln!("[Native] Creating SharedBuffer of {} bytes", data_bytes.len());
+        eprintln!(
+            "[Native] Creating SharedBuffer of {} bytes",
+            data_bytes.len()
+        );
 
         // Create shared buffer (returns Result<ICoreWebView2SharedBuffer>)
         let buffer = match env12.CreateSharedBuffer(data_bytes.len() as u64) {
@@ -314,7 +327,10 @@ fn send_shared_buffer(webview: &ICoreWebView2, env: &ICoreWebView2Environment) {
             COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_WRITE,
             additional_data,
         ) {
-            send_error(webview, &format!("PostSharedBufferToScript failed: {:?}", e));
+            send_error(
+                webview,
+                &format!("PostSharedBufferToScript failed: {:?}", e),
+            );
             return;
         }
 
@@ -325,14 +341,20 @@ fn send_shared_buffer(webview: &ICoreWebView2, env: &ICoreWebView2Environment) {
 
 fn send_error(webview: &ICoreWebView2, message: &str) {
     eprintln!("[Native] Error: {}", message);
-    let json = format!(r#"{{"type":"error","message":"{}"}}"#, message.replace('"', "\\\""));
+    let json = format!(
+        r#"{{"type":"error","message":"{}"}}"#,
+        message.replace('"', "\\\"")
+    );
     unsafe {
         let _ = webview.PostWebMessageAsJson(pwstr_from_str(&json));
     }
 }
 
 fn send_info(webview: &ICoreWebView2, message: &str) {
-    let json = format!(r#"{{"type":"info","message":"{}"}}"#, message.replace('"', "\\\""));
+    let json = format!(
+        r#"{{"type":"info","message":"{}"}}"#,
+        message.replace('"', "\\\"")
+    );
     unsafe {
         let _ = webview.PostWebMessageAsJson(pwstr_from_str(&json));
     }

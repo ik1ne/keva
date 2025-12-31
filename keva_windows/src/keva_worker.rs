@@ -66,9 +66,7 @@ fn worker_loop(requests: Receiver<Request>, responses: Sender<OutgoingMessage>, 
 
 fn handle_request(keva: &mut KevaCore, request: Request) -> Option<OutgoingMessage> {
     match request {
-        Request::GetKeys => {
-            Some(get_keys_response(keva))
-        }
+        Request::GetKeys => Some(get_keys_response(keva)),
         Request::GetValue { key: key_str } => {
             let now = SystemTime::now();
             let result = (|| {
@@ -88,7 +86,10 @@ fn handle_request(keva: &mut KevaCore, request: Request) -> Option<OutgoingMessa
 
             Some(OutgoingMessage::Value { value })
         }
-        Request::Save { key: key_str, content } => {
+        Request::Save {
+            key: key_str,
+            content,
+        } => {
             let now = SystemTime::now();
             if let Ok(key) = Key::try_from(key_str.as_str()) {
                 let _ = keva.upsert_text(&key, &content, now);

@@ -2,7 +2,6 @@
 
 use crate::app::App;
 use crate::keva_worker::{self, WM_KEVA_RESPONSE, WM_SHUTDOWN_COMPLETE};
-use crate::webview::{WEBVIEW, bridge::post_message, messages::OutgoingMessage};
 use crate::platform::{
     handlers::{
         get_resize_border, on_activate, on_command, on_create, on_destroy, on_getminmaxinfo,
@@ -14,6 +13,7 @@ use crate::platform::{
 use crate::render::theme::{WINDOW_HEIGHT, WINDOW_WIDTH};
 use crate::templates::APP_HTML_W;
 use crate::webview::init_webview;
+use crate::webview::{WEBVIEW, bridge::post_message, messages::OutgoingMessage};
 use windows::{
     Win32::{
         Foundation::{COLORREF, HWND, LPARAM, LRESULT, TRUE, WPARAM},
@@ -25,9 +25,9 @@ use windows::{
                 CreateWindowExW, DefWindowProcW, DispatchMessageW, GWLP_USERDATA, GetMessageW,
                 GetSystemMetrics, IDC_ARROW, LoadCursorW, MSG, PostQuitMessage, RegisterClassW,
                 SM_CXSCREEN, SM_CYSCREEN, SW_SHOW, SWP_NOCOPYBITS, SetForegroundWindow,
-                SetWindowLongPtrW, ShowWindow, TranslateMessage, WINDOWPOS, WM_ACTIVATE,
+                SetWindowLongPtrW, ShowWindow, TranslateMessage, WINDOWPOS, WM_ACTIVATE, WM_CLOSE,
                 WM_COMMAND, WM_CREATE, WM_DESTROY, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN,
-                WM_CLOSE, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT, WM_SIZE,
+                WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT, WM_SIZE,
                 WM_WINDOWPOSCHANGING, WNDCLASSW, WS_CLIPCHILDREN, WS_EX_APPWINDOW, WS_EX_TOPMOST,
                 WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SIZEBOX, WS_SYSMENU,
             },
