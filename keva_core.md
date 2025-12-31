@@ -332,7 +332,7 @@ enum AddResult {
 ```rust
 struct MaintenanceState {
     keys_trashed: Vec<Key>,
-    keys_purged: usize,
+    keys_purged: Vec<Key>,
     orphaned_files_removed: usize,
 }
 ```
