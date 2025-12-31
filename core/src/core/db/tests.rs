@@ -1,9 +1,13 @@
+use super::*;
+use crate::core::KevaCore;
+use crate::types::TtlKey;
+use crate::types::config::SavedConfig;
+use common::{create_test_db, make_key};
+use std::time::Duration;
+use tempfile::TempDir;
+
 mod common {
-    use crate::core::db::Database;
-    use crate::types::config::{Config, SavedConfig};
-    use crate::types::key::Key;
-    use std::time::Duration;
-    use tempfile::TempDir;
+    use super::*;
 
     pub(super) fn create_test_db() -> (Database, TempDir) {
         let temp_dir = TempDir::new().unwrap();
@@ -12,7 +16,6 @@ mod common {
             saved: SavedConfig {
                 trash_ttl: Duration::from_secs(30 * 24 * 60 * 60), // 30 days
                 purge_ttl: Duration::from_secs(7 * 24 * 60 * 60),  // 7 days
-                inline_threshold_bytes: 1024 * 1024,               // 1MB
             },
         };
         let db = Database::new(config).unwrap();
@@ -29,7 +32,6 @@ mod common {
             saved: SavedConfig {
                 trash_ttl: Duration::from_secs(trash_ttl_secs),
                 purge_ttl: Duration::from_secs(purge_ttl_secs),
-                inline_threshold_bytes: 1024 * 1024,
             },
         };
         let db = Database::new(config).unwrap();
@@ -41,83 +43,38 @@ mod common {
     }
 }
 
-mod insert {
-    use super::common::{create_test_db, make_key};
-    use crate::core::db::{ACTIVE_EXPIRY, ClipData};
-    use crate::types::TtlKey;
-    use crate::types::value::versioned_value::latest_value::{
-        FileData, InlineFileData, LifecycleState, Metadata, TextData,
-    };
-    use std::time::{Duration, SystemTime};
+mod create {
+    use super::*;
 
     #[test]
-    fn test_insert_text() {
+    fn test_create_new_key() {
         let (mut db, _temp) = create_test_db();
         let key = make_key("test/key");
         let now = SystemTime::now();
 
-        db.insert(
-            &key,
-            now,
-            ClipData::Text(TextData::Inlined("hello world".to_string())),
-        )
-        .unwrap();
+        db.create(&key, now).unwrap();
 
         let value = db.get(&key).unwrap().unwrap();
-        assert_eq!(
-            value.clip_data,
-            ClipData::Text(TextData::Inlined("hello world".to_string()))
-        );
-
+        assert!(value.attachments.is_empty());
+        assert_eq!(value.thumb_version, KevaCore::THUMB_VER);
         assert_eq!(
             value.metadata,
             Metadata {
                 created_at: now,
                 updated_at: now,
-                last_accessed: now,
-                trashed_at: None,
-                lifecycle_state: LifecycleState::Active,
+                lifecycle_state: LifecycleState::Active { last_accessed: now },
             }
         )
     }
 
     #[test]
-    fn test_insert_files() {
-        let (mut db, _temp) = create_test_db();
-        let key = make_key("test/with-file");
-        let now = SystemTime::now();
-
-        let file_data = FileData::Inlined(InlineFileData {
-            file_name: "test.txt".to_string(),
-            data: b"file content".to_vec(),
-        });
-
-        db.insert(&key, now, ClipData::Files(vec![file_data.clone()]))
-            .unwrap();
-
-        let value = db.get(&key).unwrap().unwrap();
-        match &value.clip_data {
-            ClipData::Files(files) => {
-                assert_eq!(files, &[file_data]);
-            }
-            ClipData::Text(t) => panic!("Expected Files variant, got: {t:?}"),
-        }
-    }
-
-    #[test]
-    fn test_insert_registers_in_ttl_table() {
+    fn test_create_registers_in_ttl_table() {
         let (mut db, _temp) = create_test_db();
         let key = make_key("test/ttl");
         let now = SystemTime::now();
 
-        db.insert(
-            &key,
-            now,
-            ClipData::Text(TextData::Inlined("content".to_string())),
-        )
-        .unwrap();
+        db.create(&key, now).unwrap();
 
-        // Verify TTL table: key should be in ACTIVE_EXPIRY for auto-trash scheduling
         let write_txn = db.db.begin_write().unwrap();
         let ttl_key = TtlKey {
             timestamp: now,
@@ -127,130 +84,33 @@ mod insert {
     }
 
     #[test]
-    fn test_insert_overwrites_existing_key() {
+    fn test_create_existing_key_fails() {
         let (mut db, _temp) = create_test_db();
-        let key = make_key("test/overwrite");
+        let key = make_key("test/key");
         let now = SystemTime::now();
 
-        db.insert(
-            &key,
-            now,
-            ClipData::Text(TextData::Inlined("first".to_string())),
-        )
-        .unwrap();
+        db.create(&key, now).unwrap();
 
-        // Insert again should overwrite (Database always overwrites, Storage handles permission)
-        let insert_time = now + Duration::from_secs(100);
-        db.insert(
-            &key,
-            insert_time,
-            ClipData::Text(TextData::Inlined("second".to_string())),
-        )
-        .unwrap();
-
-        let value = db.get(&key).unwrap().unwrap();
-        assert_eq!(
-            value.metadata,
-            Metadata {
-                created_at: insert_time,
-                updated_at: insert_time,
-                last_accessed: insert_time,
-                trashed_at: None,
-                lifecycle_state: LifecycleState::Active,
-            }
-        );
-        assert_eq!(
-            value.clip_data,
-            ClipData::Text(TextData::Inlined("second".to_string()))
-        );
+        let result = db.create(&key, now);
+        assert!(matches!(result, Err(DatabaseError::AlreadyExists)));
     }
 
     #[test]
-    fn test_insert_overwrites_trashed_key() {
+    fn test_create_trashed_key_fails() {
         let (mut db, _temp) = create_test_db();
-        let key = make_key("test/trashed-overwrite");
+        let key = make_key("test/key");
         let now = SystemTime::now();
 
-        db.insert(
-            &key,
-            now,
-            ClipData::Text(TextData::Inlined("first".to_string())),
-        )
-        .unwrap();
+        db.create(&key, now).unwrap();
+        db.trash(&key, now).unwrap();
 
-        db.trash(&key, now + Duration::from_secs(10)).unwrap();
-
-        let insert_time = now + Duration::from_secs(100);
-        db.insert(
-            &key,
-            insert_time,
-            ClipData::Text(TextData::Inlined("second".to_string())),
-        )
-        .unwrap();
-
-        let value = db.get(&key).unwrap().unwrap();
-        assert_eq!(
-            value.metadata,
-            Metadata {
-                created_at: insert_time,
-                updated_at: insert_time,
-                last_accessed: insert_time,
-                trashed_at: None,
-                lifecycle_state: LifecycleState::Active,
-            }
-        );
-        assert_eq!(
-            value.clip_data,
-            ClipData::Text(TextData::Inlined("second".to_string()))
-        );
-    }
-
-    #[test]
-    fn test_insert_after_purge() {
-        let (mut db, _temp) = create_test_db();
-        let key = make_key("test/overwrite");
-        let create_time = SystemTime::now();
-
-        db.insert(
-            &key,
-            create_time,
-            ClipData::Text(TextData::Inlined("first".to_string())),
-        )
-        .unwrap();
-
-        db.purge(&key).unwrap();
-
-        let update_time = create_time + Duration::from_secs(100);
-        db.insert(
-            &key,
-            update_time,
-            ClipData::Text(TextData::Inlined("second".to_string())),
-        )
-        .unwrap();
-
-        let value = db.get(&key).unwrap().unwrap();
-        assert_eq!(
-            value.metadata,
-            Metadata {
-                created_at: update_time,
-                updated_at: update_time,
-                last_accessed: update_time,
-                trashed_at: None,
-                lifecycle_state: LifecycleState::Active,
-            }
-        );
-        assert_eq!(
-            value.clip_data,
-            ClipData::Text(TextData::Inlined("second".to_string()))
-        );
+        let result = db.create(&key, now);
+        assert!(matches!(result, Err(DatabaseError::AlreadyExists)));
     }
 }
 
 mod get {
-    use super::common::{create_test_db, make_key};
-    use crate::core::db::ClipData;
-    use crate::types::value::versioned_value::latest_value::{LifecycleState, Metadata, TextData};
-    use std::time::{Duration, SystemTime};
+    use super::*;
 
     #[test]
     fn test_get_existing_key() {
@@ -258,26 +118,16 @@ mod get {
         let key = make_key("test/key");
         let now = SystemTime::now();
 
-        db.insert(
-            &key,
-            now,
-            ClipData::Text(TextData::Inlined("content".to_string())),
-        )
-        .unwrap();
+        db.create(&key, now).unwrap();
 
         let value = db.get(&key).unwrap().unwrap();
-        assert_eq!(
-            value.clip_data,
-            ClipData::Text(TextData::Inlined("content".to_string()))
-        );
+        assert!(value.attachments.is_empty());
         assert_eq!(
             value.metadata,
             Metadata {
                 created_at: now,
                 updated_at: now,
-                last_accessed: now,
-                trashed_at: None,
-                lifecycle_state: LifecycleState::Active,
+                lifecycle_state: LifecycleState::Active { last_accessed: now },
             }
         );
     }
@@ -297,12 +147,7 @@ mod get {
         let key = make_key("test/key");
         let now = SystemTime::now();
 
-        db.insert(
-            &key,
-            now,
-            ClipData::Text(TextData::Inlined("content".to_string())),
-        )
-        .unwrap();
+        db.create(&key, now).unwrap();
 
         let trash_time = now + Duration::from_secs(10);
         db.trash(&key, trash_time).unwrap();
@@ -313,101 +158,16 @@ mod get {
             Metadata {
                 created_at: now,
                 updated_at: now,
-                last_accessed: now,
-                trashed_at: Some(trash_time),
-                lifecycle_state: LifecycleState::Trash,
+                lifecycle_state: LifecycleState::Trash {
+                    trashed_at: trash_time
+                },
             }
         );
-    }
-}
-
-mod update {
-    use super::common::{create_test_db, make_key};
-    use crate::core::db::{ClipData, DatabaseError};
-    use crate::types::value::versioned_value::latest_value::{LifecycleState, Metadata, TextData};
-    use std::time::{Duration, SystemTime};
-
-    #[test]
-    fn test_update_text() {
-        let (mut db, _temp) = create_test_db();
-        let key = make_key("test/update");
-        let create_time = SystemTime::now();
-
-        db.insert(
-            &key,
-            create_time,
-            ClipData::Text(TextData::Inlined("original".to_string())),
-        )
-        .unwrap();
-
-        let update_time = create_time + Duration::from_secs(50);
-        db.update(
-            &key,
-            update_time,
-            ClipData::Text(TextData::Inlined("updated".to_string())),
-        )
-        .unwrap();
-
-        let value = db.get(&key).unwrap().unwrap();
-        assert_eq!(
-            value.clip_data,
-            ClipData::Text(TextData::Inlined("updated".to_string()))
-        );
-        // created_at should be preserved, updated_at and last_accessed should reflect update time
-        assert_eq!(
-            value.metadata,
-            Metadata {
-                created_at: create_time,
-                updated_at: update_time,
-                last_accessed: update_time,
-                trashed_at: None,
-                lifecycle_state: LifecycleState::Active,
-            }
-        );
-    }
-
-    #[test]
-    fn test_update_nonexistent_key() {
-        let (mut db, _temp) = create_test_db();
-        let key = make_key("nonexistent");
-
-        let result = db.update(
-            &key,
-            SystemTime::now(),
-            ClipData::Text(TextData::Inlined("text".to_string())),
-        );
-        assert!(matches!(result, Err(DatabaseError::NotFound)));
-    }
-
-    #[test]
-    fn test_update_trashed_key() {
-        let (mut db, _temp) = create_test_db();
-        let key = make_key("test/trashed");
-        let now = SystemTime::now();
-
-        db.insert(
-            &key,
-            now,
-            ClipData::Text(TextData::Inlined("original".to_string())),
-        )
-        .unwrap();
-
-        db.trash(&key, now + Duration::from_secs(10)).unwrap();
-
-        let result = db.update(
-            &key,
-            now + Duration::from_secs(20),
-            ClipData::Text(TextData::Inlined("updated".to_string())),
-        );
-        assert!(matches!(result, Err(DatabaseError::Trashed)));
     }
 }
 
 mod touch {
-    use super::common::{create_test_db, make_key};
-    use crate::core::db::{ClipData, DatabaseError};
-    use crate::types::value::versioned_value::latest_value::{LifecycleState, Metadata, TextData};
-    use std::time::{Duration, SystemTime};
+    use super::*;
 
     #[test]
     fn test_touch_updates_last_accessed() {
@@ -415,31 +175,21 @@ mod touch {
         let key = make_key("test/touch");
         let create_time = SystemTime::now();
 
-        db.insert(
-            &key,
-            create_time,
-            ClipData::Text(TextData::Inlined("content".to_string())),
-        )
-        .unwrap();
+        db.create(&key, create_time).unwrap();
 
         let touch_time = create_time + Duration::from_secs(50);
         db.touch(&key, touch_time).unwrap();
 
         let value = db.get(&key).unwrap().unwrap();
-        // touch() only updates last_accessed, not updated_at
         assert_eq!(
             value.metadata,
             Metadata {
                 created_at: create_time,
                 updated_at: create_time,
-                last_accessed: touch_time,
-                trashed_at: None,
-                lifecycle_state: LifecycleState::Active,
+                lifecycle_state: LifecycleState::Active {
+                    last_accessed: touch_time
+                },
             }
-        );
-        assert_eq!(
-            value.clip_data,
-            ClipData::Text(TextData::Inlined("content".to_string()))
         );
     }
 
@@ -458,326 +208,438 @@ mod touch {
         let key = make_key("test/trashed");
         let now = SystemTime::now();
 
-        db.insert(
-            &key,
-            now,
-            ClipData::Text(TextData::Inlined("content".to_string())),
-        )
-        .unwrap();
+        db.create(&key, now).unwrap();
+        db.trash(&key, now).unwrap();
 
-        db.trash(&key, now + Duration::from_secs(10)).unwrap();
-
-        let result = db.touch(&key, now + Duration::from_secs(20));
+        let result = db.touch(&key, now);
         assert!(matches!(result, Err(DatabaseError::Trashed)));
     }
 }
 
-mod append_files {
-    use super::common::{create_test_db, make_key};
-    use crate::core::db::{ClipData, DatabaseError};
-    use crate::types::value::versioned_value::latest_value::{
-        FileData, InlineFileData, LifecycleState, Metadata, TextData,
-    };
-    use std::time::{Duration, SystemTime};
+mod mark_content_modified {
+    use super::*;
 
     #[test]
-    fn test_append_files_to_existing_files() {
+    fn test_mark_content_modified_updates_timestamps() {
         let (mut db, _temp) = create_test_db();
-        let key = make_key("test/append");
+        let key = make_key("test/key");
         let create_time = SystemTime::now();
 
-        let file1 = FileData::Inlined(InlineFileData {
-            file_name: "file1.txt".to_string(),
-            data: b"content1".to_vec(),
-        });
-        let file2 = FileData::Inlined(InlineFileData {
-            file_name: "file2.txt".to_string(),
-            data: b"content2".to_vec(),
-        });
+        db.create(&key, create_time).unwrap();
 
-        // Insert initial value with one file
-        db.insert(&key, create_time, ClipData::Files(vec![file1.clone()]))
-            .unwrap();
-
-        // Append another file
-        let append_time = create_time + Duration::from_secs(50);
-        db.append_files(&key, append_time, vec![file2.clone()])
-            .unwrap();
+        let modify_time = create_time + Duration::from_secs(50);
+        db.mark_content_modified(&key, modify_time).unwrap();
 
         let value = db.get(&key).unwrap().unwrap();
-
-        // Should have 2 files now
-        match &value.clip_data {
-            ClipData::Files(files) => {
-                assert_eq!(files, &[file1, file2]);
-            }
-            ClipData::Text(t) => panic!("Expected Files variant, got: {t:?}"),
-        }
-
         assert_eq!(
             value.metadata,
             Metadata {
                 created_at: create_time,
-                updated_at: append_time,
-                last_accessed: append_time,
-                trashed_at: None,
-                lifecycle_state: LifecycleState::Active,
+                updated_at: modify_time,
+                lifecycle_state: LifecycleState::Active {
+                    last_accessed: modify_time
+                },
             }
         );
     }
 
     #[test]
-    fn test_append_files_to_text_fails() {
-        let (mut db, _temp) = create_test_db();
-        let key = make_key("test/append-to-text");
-        let create_time = SystemTime::now();
-
-        // Insert with text only
-        db.insert(
-            &key,
-            create_time,
-            ClipData::Text(TextData::Inlined("text only".to_string())),
-        )
-        .unwrap();
-
-        // Append a file should fail with TypeMismatch
-        let result = db.append_files(
-            &key,
-            create_time + Duration::from_secs(50),
-            vec![FileData::Inlined(InlineFileData {
-                file_name: "new_file.txt".to_string(),
-                data: b"new content".to_vec(),
-            })],
-        );
-        assert!(matches!(result, Err(DatabaseError::TypeMismatch)));
-    }
-
-    #[test]
-    fn test_append_files_nonexistent_key() {
+    fn test_mark_content_modified_nonexistent_key() {
         let (mut db, _temp) = create_test_db();
         let key = make_key("nonexistent");
 
-        let result = db.append_files(
-            &key,
-            SystemTime::now(),
-            vec![FileData::Inlined(InlineFileData {
-                file_name: "file.txt".to_string(),
-                data: b"content".to_vec(),
-            })],
-        );
+        let result = db.mark_content_modified(&key, SystemTime::now());
         assert!(matches!(result, Err(DatabaseError::NotFound)));
     }
 
     #[test]
-    fn test_append_files_trashed_key() {
+    fn test_mark_content_modified_trashed_key_fails() {
         let (mut db, _temp) = create_test_db();
         let key = make_key("test/trashed");
         let now = SystemTime::now();
 
-        db.insert(
-            &key,
-            now,
-            ClipData::Files(vec![FileData::Inlined(InlineFileData {
-                file_name: "file.txt".to_string(),
-                data: b"content".to_vec(),
-            })]),
-        )
-        .unwrap();
+        db.create(&key, now).unwrap();
+        db.trash(&key, now).unwrap();
 
-        db.trash(&key, now + Duration::from_secs(10)).unwrap();
-
-        let result = db.append_files(
-            &key,
-            now + Duration::from_secs(20),
-            vec![FileData::Inlined(InlineFileData {
-                file_name: "file2.txt".to_string(),
-                data: b"content2".to_vec(),
-            })],
-        );
+        let result = db.mark_content_modified(&key, now);
         assert!(matches!(result, Err(DatabaseError::Trashed)));
-    }
-
-    #[test]
-    fn test_append_empty_files_returns_error() {
-        let (mut db, _temp) = create_test_db();
-        let key = make_key("test/empty-append");
-        let now = SystemTime::now();
-
-        let file = FileData::Inlined(InlineFileData {
-            file_name: "file.txt".to_string(),
-            data: b"content".to_vec(),
-        });
-
-        db.insert(&key, now, ClipData::Files(vec![file.clone()]))
-            .unwrap();
-
-        let result = db.append_files(&key, now + Duration::from_secs(50), vec![]);
-        assert!(matches!(result, Err(DatabaseError::EmptyInput)));
     }
 }
 
-mod remove_file_at {
-    use super::common::{create_test_db, make_key};
-    use crate::core::db::{ClipData, DatabaseError};
-    use crate::types::value::versioned_value::latest_value::{
-        FileData, InlineFileData, LifecycleState, Metadata, TextData,
-    };
-    use std::time::{Duration, SystemTime};
+mod add_attachment {
+    use super::*;
 
     #[test]
-    fn test_remove_file_at_removes_entry() {
+    fn test_add_attachment() {
         let (mut db, _temp) = create_test_db();
-        let key = make_key("test/remove_file_at");
-        let now = SystemTime::now();
+        let key = make_key("test/key");
+        let create_time = SystemTime::now();
 
-        let file1 = FileData::Inlined(InlineFileData {
-            file_name: "file1.txt".to_string(),
-            data: b"content1".to_vec(),
-        });
-        let file2 = FileData::Inlined(InlineFileData {
-            file_name: "file2.txt".to_string(),
-            data: b"content2".to_vec(),
-        });
+        db.create(&key, create_time).unwrap();
 
-        db.insert(
+        let add_time = create_time + Duration::from_secs(10);
+        db.add_attachment(
             &key,
-            now,
-            ClipData::Files(vec![file1.clone(), file2.clone()]),
+            Attachment {
+                filename: "test.txt".to_string(),
+                size: 100,
+            },
+            add_time,
         )
         .unwrap();
 
-        let remove_time = now + Duration::from_secs(10);
-        let removed = db.remove_file_at(&key, remove_time, 0).unwrap();
-
-        assert_eq!(removed, file1);
-
         let value = db.get(&key).unwrap().unwrap();
-        match &value.clip_data {
-            ClipData::Files(files) => {
-                assert_eq!(files, &[file2]);
-            }
-            ClipData::Text(t) => panic!("Expected Files variant, got: {t:?}"),
-        }
+        assert_eq!(value.attachments.len(), 1);
+        assert_eq!(value.attachments[0].filename, "test.txt");
+        assert_eq!(value.attachments[0].size, 100);
         assert_eq!(
             value.metadata,
             Metadata {
-                created_at: now,
-                updated_at: remove_time,
-                last_accessed: remove_time,
-                trashed_at: None,
-                lifecycle_state: LifecycleState::Active,
+                created_at: create_time,
+                updated_at: add_time,
+                lifecycle_state: LifecycleState::Active {
+                    last_accessed: add_time
+                },
             }
         );
     }
 
     #[test]
-    fn test_remove_file_at_last_file_becomes_empty_text() {
+    fn test_add_multiple_attachments() {
         let (mut db, _temp) = create_test_db();
-        let key = make_key("test/remove_last");
+        let key = make_key("test/key");
         let now = SystemTime::now();
 
-        let file = FileData::Inlined(InlineFileData {
-            file_name: "only_file.txt".to_string(),
-            data: b"content".to_vec(),
-        });
-
-        db.insert(&key, now, ClipData::Files(vec![file])).unwrap();
-
-        let remove_time = now + Duration::from_secs(10);
-        db.remove_file_at(&key, remove_time, 0).unwrap();
+        db.create(&key, now).unwrap();
+        db.add_attachment(
+            &key,
+            Attachment {
+                filename: "file1.txt".to_string(),
+                size: 100,
+            },
+            now,
+        )
+        .unwrap();
+        db.add_attachment(
+            &key,
+            Attachment {
+                filename: "file2.txt".to_string(),
+                size: 200,
+            },
+            now,
+        )
+        .unwrap();
 
         let value = db.get(&key).unwrap().unwrap();
-        assert_eq!(
-            value.clip_data,
-            ClipData::Text(TextData::Inlined(String::new()))
-        );
-        assert_eq!(
-            value.metadata,
-            Metadata {
-                created_at: now,
-                updated_at: remove_time,
-                last_accessed: remove_time,
-                trashed_at: None,
-                lifecycle_state: LifecycleState::Active,
-            }
-        );
+        assert_eq!(value.attachments.len(), 2);
     }
 
     #[test]
-    fn test_remove_file_at_nonexistent_key() {
+    fn test_add_attachment_nonexistent_key() {
         let (mut db, _temp) = create_test_db();
         let key = make_key("nonexistent");
 
-        let result = db.remove_file_at(&key, SystemTime::now(), 0);
+        let result = db.add_attachment(
+            &key,
+            Attachment {
+                filename: "test.txt".to_string(),
+                size: 100,
+            },
+            SystemTime::now(),
+        );
         assert!(matches!(result, Err(DatabaseError::NotFound)));
     }
 
     #[test]
-    fn test_remove_file_at_trashed_key() {
+    fn test_add_attachment_trashed_key() {
         let (mut db, _temp) = create_test_db();
         let key = make_key("test/trashed");
         let now = SystemTime::now();
 
-        db.insert(
+        db.create(&key, now).unwrap();
+        db.trash(&key, now).unwrap();
+
+        let result = db.add_attachment(
             &key,
+            Attachment {
+                filename: "test.txt".to_string(),
+                size: 100,
+            },
             now,
-            ClipData::Files(vec![FileData::Inlined(InlineFileData {
-                file_name: "file.txt".to_string(),
-                data: b"content".to_vec(),
-            })]),
-        )
-        .unwrap();
-
-        db.trash(&key, now + Duration::from_secs(10)).unwrap();
-
-        let result = db.remove_file_at(&key, now + Duration::from_secs(20), 0);
+        );
         assert!(matches!(result, Err(DatabaseError::Trashed)));
     }
 
     #[test]
-    fn test_remove_file_at_on_text_fails() {
+    fn test_add_attachment_updates_ttl() {
         let (mut db, _temp) = create_test_db();
-        let key = make_key("test/text");
-        let now = SystemTime::now();
+        let key = make_key("test/ttl");
+        let create_time = SystemTime::now();
 
-        db.insert(
+        db.create(&key, create_time).unwrap();
+
+        let add_time = create_time + Duration::from_secs(10);
+        db.add_attachment(
             &key,
-            now,
-            ClipData::Text(TextData::Inlined("text content".to_string())),
+            Attachment {
+                filename: "test.txt".to_string(),
+                size: 100,
+            },
+            add_time,
         )
         .unwrap();
 
-        let result = db.remove_file_at(&key, now, 0);
-        assert!(matches!(result, Err(DatabaseError::TypeMismatch)));
+        let write_txn = db.db.begin_write().unwrap();
+        let old_ttl = TtlKey {
+            timestamp: create_time,
+            key: key.clone(),
+        };
+        let new_ttl = TtlKey {
+            timestamp: add_time,
+            key: key.clone(),
+        };
+        assert!(!ACTIVE_EXPIRY.remove(&write_txn, &old_ttl).unwrap());
+        assert!(ACTIVE_EXPIRY.remove(&write_txn, &new_ttl).unwrap());
+    }
+}
+
+mod remove_attachment {
+    use super::*;
+
+    #[test]
+    fn test_remove_attachment() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("test/key");
+        let create_time = SystemTime::now();
+
+        db.create(&key, create_time).unwrap();
+        db.add_attachment(
+            &key,
+            Attachment {
+                filename: "test.txt".to_string(),
+                size: 100,
+            },
+            create_time,
+        )
+        .unwrap();
+
+        let remove_time = create_time + Duration::from_secs(10);
+        db.remove_attachment(&key, "test.txt", remove_time).unwrap();
+
+        let value = db.get(&key).unwrap().unwrap();
+        assert!(value.attachments.is_empty());
+        assert_eq!(
+            value.metadata,
+            Metadata {
+                created_at: create_time,
+                updated_at: remove_time,
+                lifecycle_state: LifecycleState::Active {
+                    last_accessed: remove_time
+                },
+            }
+        );
     }
 
     #[test]
-    fn test_remove_file_at_out_of_bounds() {
+    fn test_remove_nonexistent_attachment() {
         let (mut db, _temp) = create_test_db();
-        let key = make_key("test/oob");
+        let key = make_key("test/key");
         let now = SystemTime::now();
 
-        db.insert(
+        db.create(&key, now).unwrap();
+
+        let result = db.remove_attachment(&key, "nonexistent.txt", now);
+        assert!(matches!(result, Err(DatabaseError::AttachmentNotFound(_))));
+    }
+
+    #[test]
+    fn test_remove_attachment_nonexistent_key() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("nonexistent");
+
+        let result = db.remove_attachment(&key, "test.txt", SystemTime::now());
+        assert!(matches!(result, Err(DatabaseError::NotFound)));
+    }
+
+    #[test]
+    fn test_remove_attachment_trashed_key() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("test/trashed");
+        let now = SystemTime::now();
+
+        db.create(&key, now).unwrap();
+        db.add_attachment(
             &key,
+            Attachment {
+                filename: "test.txt".to_string(),
+                size: 100,
+            },
             now,
-            ClipData::Files(vec![FileData::Inlined(InlineFileData {
-                file_name: "file.txt".to_string(),
-                data: b"content".to_vec(),
-            })]),
+        )
+        .unwrap();
+        db.trash(&key, now).unwrap();
+
+        let result = db.remove_attachment(&key, "test.txt", now);
+        assert!(matches!(result, Err(DatabaseError::Trashed)));
+    }
+
+    #[test]
+    fn test_remove_attachment_updates_ttl() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("test/ttl");
+        let create_time = SystemTime::now();
+
+        db.create(&key, create_time).unwrap();
+        db.add_attachment(
+            &key,
+            Attachment {
+                filename: "test.txt".to_string(),
+                size: 100,
+            },
+            create_time,
         )
         .unwrap();
 
-        let result = db.remove_file_at(&key, now, 5);
-        assert!(matches!(result, Err(DatabaseError::NotFound)));
+        let remove_time = create_time + Duration::from_secs(10);
+        db.remove_attachment(&key, "test.txt", remove_time).unwrap();
+
+        let write_txn = db.db.begin_write().unwrap();
+        let old_ttl = TtlKey {
+            timestamp: create_time,
+            key: key.clone(),
+        };
+        let new_ttl = TtlKey {
+            timestamp: remove_time,
+            key: key.clone(),
+        };
+        assert!(!ACTIVE_EXPIRY.remove(&write_txn, &old_ttl).unwrap());
+        assert!(ACTIVE_EXPIRY.remove(&write_txn, &new_ttl).unwrap());
+    }
+}
+
+mod rename_attachment {
+    use super::*;
+
+    #[test]
+    fn test_rename_attachment() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("test/key");
+        let create_time = SystemTime::now();
+
+        db.create(&key, create_time).unwrap();
+        db.add_attachment(
+            &key,
+            Attachment {
+                filename: "old.txt".to_string(),
+                size: 100,
+            },
+            create_time,
+        )
+        .unwrap();
+
+        let rename_time = create_time + Duration::from_secs(10);
+        db.rename_attachment(&key, "old.txt", "new.txt", rename_time)
+            .unwrap();
+
+        let value = db.get(&key).unwrap().unwrap();
+        assert_eq!(value.attachments.len(), 1);
+        assert_eq!(value.attachments[0].filename, "new.txt");
+        assert_eq!(value.attachments[0].size, 100);
+        assert_eq!(
+            value.metadata,
+            Metadata {
+                created_at: create_time,
+                updated_at: rename_time,
+                lifecycle_state: LifecycleState::Active {
+                    last_accessed: rename_time
+                },
+            }
+        );
+    }
+
+    #[test]
+    fn test_rename_nonexistent_attachment() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("test/key");
+        let now = SystemTime::now();
+
+        db.create(&key, now).unwrap();
+
+        let result = db.rename_attachment(&key, "nonexistent.txt", "new.txt", now);
+        assert!(matches!(result, Err(DatabaseError::AttachmentNotFound(_))));
+    }
+
+    #[test]
+    fn test_rename_overwrites_existing() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("test/key");
+        let now = SystemTime::now();
+
+        db.create(&key, now).unwrap();
+        db.add_attachment(
+            &key,
+            Attachment {
+                filename: "a.txt".to_string(),
+                size: 100,
+            },
+            now,
+        )
+        .unwrap();
+        db.add_attachment(
+            &key,
+            Attachment {
+                filename: "b.txt".to_string(),
+                size: 200,
+            },
+            now,
+        )
+        .unwrap();
+
+        db.rename_attachment(&key, "a.txt", "b.txt", now).unwrap();
+
+        let value = db.get(&key).unwrap().unwrap();
+        assert_eq!(value.attachments.len(), 1);
+        assert_eq!(value.attachments[0].filename, "b.txt");
+        assert_eq!(value.attachments[0].size, 100); // Source's size preserved
+    }
+
+    #[test]
+    fn test_rename_attachment_updates_ttl() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("test/ttl");
+        let create_time = SystemTime::now();
+
+        db.create(&key, create_time).unwrap();
+        db.add_attachment(
+            &key,
+            Attachment {
+                filename: "old.txt".to_string(),
+                size: 100,
+            },
+            create_time,
+        )
+        .unwrap();
+
+        let rename_time = create_time + Duration::from_secs(10);
+        db.rename_attachment(&key, "old.txt", "new.txt", rename_time)
+            .unwrap();
+
+        let write_txn = db.db.begin_write().unwrap();
+        let old_ttl = TtlKey {
+            timestamp: create_time,
+            key: key.clone(),
+        };
+        let new_ttl = TtlKey {
+            timestamp: rename_time,
+            key: key.clone(),
+        };
+        assert!(!ACTIVE_EXPIRY.remove(&write_txn, &old_ttl).unwrap());
+        assert!(ACTIVE_EXPIRY.remove(&write_txn, &new_ttl).unwrap());
     }
 }
 
 mod rename {
-    use super::common::{create_test_db, make_key};
-    use crate::core::db::{ACTIVE_EXPIRY, ClipData, DatabaseError, TRASH_EXPIRY};
-    use crate::types::TtlKey;
-    use crate::types::value::versioned_value::latest_value::{LifecycleState, Metadata, TextData};
-    use std::time::{Duration, SystemTime};
+    use super::*;
 
     #[test]
     fn test_rename_key() {
@@ -786,32 +648,18 @@ mod rename {
         let dst = make_key("dst/key");
         let now = SystemTime::now();
 
-        db.insert(
-            &src,
-            now,
-            ClipData::Text(TextData::Inlined("content".to_string())),
-        )
-        .unwrap();
+        db.create(&src, now).unwrap();
+        db.rename(&src, &dst, now).unwrap();
 
-        db.rename(&src, &dst).unwrap();
-
-        // Old key should not exist
         assert!(db.get(&src).unwrap().is_none());
 
-        // New key should have the value with preserved metadata
         let value = db.get(&dst).unwrap().unwrap();
-        assert_eq!(
-            value.clip_data,
-            ClipData::Text(TextData::Inlined("content".to_string()))
-        );
         assert_eq!(
             value.metadata,
             Metadata {
                 created_at: now,
                 updated_at: now,
-                last_accessed: now,
-                trashed_at: None,
-                lifecycle_state: LifecycleState::Active,
+                lifecycle_state: LifecycleState::Active { last_accessed: now },
             }
         );
     }
@@ -823,17 +671,12 @@ mod rename {
         let dst = make_key("dst/trashed");
         let now = SystemTime::now();
 
-        db.insert(
-            &src,
-            now,
-            ClipData::Text(TextData::Inlined("content".to_string())),
-        )
-        .unwrap();
+        db.create(&src, now).unwrap();
 
         let trash_time = now + Duration::from_secs(10);
         db.trash(&src, trash_time).unwrap();
 
-        db.rename(&src, &dst).unwrap();
+        db.rename(&src, &dst, now).unwrap();
 
         let value = db.get(&dst).unwrap().unwrap();
         assert_eq!(
@@ -841,9 +684,9 @@ mod rename {
             Metadata {
                 created_at: now,
                 updated_at: now,
-                last_accessed: now,
-                trashed_at: Some(trash_time),
-                lifecycle_state: LifecycleState::Trash,
+                lifecycle_state: LifecycleState::Trash {
+                    trashed_at: trash_time
+                },
             }
         );
     }
@@ -854,7 +697,7 @@ mod rename {
         let src = make_key("nonexistent");
         let dst = make_key("dst/key");
 
-        let result = db.rename(&src, &dst);
+        let result = db.rename(&src, &dst, SystemTime::now());
         assert!(matches!(result, Err(DatabaseError::NotFound)));
     }
 
@@ -865,80 +708,13 @@ mod rename {
         let key2 = make_key("key2");
         let now = SystemTime::now();
 
-        db.insert(
-            &key1,
-            now,
-            ClipData::Text(TextData::Inlined("content1".to_string())),
-        )
-        .unwrap();
+        db.create(&key1, now).unwrap();
+        db.create(&key2, now).unwrap();
 
-        db.insert(
-            &key2,
-            now,
-            ClipData::Text(TextData::Inlined("content2".to_string())),
-        )
-        .unwrap();
+        db.rename(&key1, &key2, now).unwrap();
 
-        // Rename key1 to key2 should overwrite key2 (Database always overwrites, Storage handles permission)
-        db.rename(&key1, &key2).unwrap();
-
-        // key1 should not exist
         assert!(db.get(&key1).unwrap().is_none());
-
-        // key2 should have key1's content
-        let value = db.get(&key2).unwrap().unwrap();
-        assert_eq!(
-            value.clip_data,
-            ClipData::Text(TextData::Inlined("content1".to_string()))
-        );
-    }
-
-    #[test]
-    fn test_rename_overwrites_trashed_dst() {
-        let (mut db, _temp) = create_test_db();
-        let key1 = make_key("source");
-        let key2 = make_key("target");
-        let now = SystemTime::now();
-
-        db.insert(
-            &key1,
-            now,
-            ClipData::Text(TextData::Inlined("source content".to_string())),
-        )
-        .unwrap();
-
-        db.insert(
-            &key2,
-            now,
-            ClipData::Text(TextData::Inlined("target content".to_string())),
-        )
-        .unwrap();
-
-        // Trash key2
-        db.trash(&key2, now + Duration::from_secs(10)).unwrap();
-
-        // Rename key1 to key2 should succeed (overwriting trashed key2)
-        db.rename(&key1, &key2).unwrap();
-
-        // key1 should not exist
-        assert!(db.get(&key1).unwrap().is_none());
-
-        // key2 should have key1's content and metadata
-        let value = db.get(&key2).unwrap().unwrap();
-        assert_eq!(
-            value.clip_data,
-            ClipData::Text(TextData::Inlined("source content".to_string()))
-        );
-        assert_eq!(
-            value.metadata,
-            Metadata {
-                created_at: now,
-                updated_at: now,
-                last_accessed: now,
-                trashed_at: None,
-                lifecycle_state: LifecycleState::Active,
-            }
-        );
+        assert!(db.get(&key2).unwrap().is_some());
     }
 
     #[test]
@@ -948,16 +724,9 @@ mod rename {
         let dst = make_key("dst/key");
         let now = SystemTime::now();
 
-        db.insert(
-            &src,
-            now,
-            ClipData::Text(TextData::Inlined("content".to_string())),
-        )
-        .unwrap();
+        db.create(&src, now).unwrap();
+        db.rename(&src, &dst, now).unwrap();
 
-        db.rename(&src, &dst).unwrap();
-
-        // Verify TTL entry transferred: src removed, dst added with same timestamp
         let write_txn = db.db.begin_write().unwrap();
         let src_ttl = TtlKey {
             timestamp: now,
@@ -978,19 +747,13 @@ mod rename {
         let dst = make_key("dst/trashed");
         let now = SystemTime::now();
 
-        db.insert(
-            &src,
-            now,
-            ClipData::Text(TextData::Inlined("content".to_string())),
-        )
-        .unwrap();
+        db.create(&src, now).unwrap();
 
         let trash_time = now + Duration::from_secs(10);
         db.trash(&src, trash_time).unwrap();
 
-        db.rename(&src, &dst).unwrap();
+        db.rename(&src, &dst, now).unwrap();
 
-        // Verify TTL entry transferred: src removed, dst added with same timestamp
         let write_txn = db.db.begin_write().unwrap();
         let src_ttl = TtlKey {
             timestamp: trash_time,
@@ -1005,12 +768,39 @@ mod rename {
     }
 }
 
+mod update_thumb_version {
+    use super::*;
+
+    #[test]
+    fn test_update_thumb_version() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("test/thumb");
+        let now = SystemTime::now();
+
+        db.create(&key, now).unwrap();
+
+        let value = db.get(&key).unwrap().unwrap();
+        assert_eq!(value.thumb_version, KevaCore::THUMB_VER);
+
+        db.update_thumb_version(&key, KevaCore::THUMB_VER + 1)
+            .unwrap();
+
+        let value = db.get(&key).unwrap().unwrap();
+        assert_eq!(value.thumb_version, KevaCore::THUMB_VER + 1);
+    }
+
+    #[test]
+    fn test_update_thumb_version_not_found() {
+        let (mut db, _temp) = create_test_db();
+        let key = make_key("nonexistent");
+
+        let result = db.update_thumb_version(&key, 1);
+        assert!(matches!(result, Err(DatabaseError::NotFound)));
+    }
+}
+
 mod trash {
-    use super::common::{create_test_db, make_key};
-    use crate::core::db::{ACTIVE_EXPIRY, ClipData, DatabaseError, TRASH_EXPIRY};
-    use crate::types::TtlKey;
-    use crate::types::value::versioned_value::latest_value::{LifecycleState, Metadata, TextData};
-    use std::time::{Duration, SystemTime};
+    use super::*;
 
     #[test]
     fn test_trash_sets_lifecycle_and_timestamp() {
@@ -1018,12 +808,7 @@ mod trash {
         let key = make_key("test/trash");
         let create_time = SystemTime::now();
 
-        db.insert(
-            &key,
-            create_time,
-            ClipData::Text(TextData::Inlined("content".to_string())),
-        )
-        .unwrap();
+        db.create(&key, create_time).unwrap();
 
         let trash_time = create_time + Duration::from_secs(100);
         db.trash(&key, trash_time).unwrap();
@@ -1034,13 +819,12 @@ mod trash {
             Metadata {
                 created_at: create_time,
                 updated_at: create_time,
-                last_accessed: create_time,
-                trashed_at: Some(trash_time),
-                lifecycle_state: LifecycleState::Trash,
+                lifecycle_state: LifecycleState::Trash {
+                    trashed_at: trash_time
+                },
             }
         );
 
-        // Verify TTL tables: key should be moved from ACTIVE_EXPIRY to TRASH_EXPIRY
         let write_txn = db.db.begin_write().unwrap();
         let old_ttl_key = TtlKey {
             timestamp: create_time,
@@ -1050,9 +834,7 @@ mod trash {
             timestamp: trash_time,
             key: key.clone(),
         };
-        // Key should no longer be in ACTIVE_EXPIRY (remove returns false)
         assert!(!ACTIVE_EXPIRY.remove(&write_txn, &old_ttl_key).unwrap());
-        // Key should be in TRASH_EXPIRY (remove returns true)
         assert!(TRASH_EXPIRY.remove(&write_txn, &new_ttl_key).unwrap());
     }
 
@@ -1071,27 +853,16 @@ mod trash {
         let key = make_key("test/double-trash");
         let now = SystemTime::now();
 
-        db.insert(
-            &key,
-            now,
-            ClipData::Text(TextData::Inlined("content".to_string())),
-        )
-        .unwrap();
+        db.create(&key, now).unwrap();
+        db.trash(&key, now).unwrap();
 
-        db.trash(&key, now + Duration::from_secs(10)).unwrap();
-
-        // Trying to trash again should fail
-        let result = db.trash(&key, now + Duration::from_secs(20));
+        let result = db.trash(&key, now);
         assert!(matches!(result, Err(DatabaseError::Trashed)));
     }
 }
 
 mod restore {
-    use super::common::{create_test_db, make_key};
-    use crate::core::db::{ACTIVE_EXPIRY, ClipData, DatabaseError};
-    use crate::types::TtlKey;
-    use crate::types::value::versioned_value::latest_value::{LifecycleState, Metadata, TextData};
-    use std::time::{Duration, SystemTime};
+    use super::*;
 
     #[test]
     fn test_restore_trashed_key() {
@@ -1099,12 +870,7 @@ mod restore {
         let key = make_key("test/restore");
         let create_time = SystemTime::now();
 
-        db.insert(
-            &key,
-            create_time,
-            ClipData::Text(TextData::Inlined("content".to_string())),
-        )
-        .unwrap();
+        db.create(&key, create_time).unwrap();
 
         let trash_time = create_time + Duration::from_secs(10);
         db.trash(&key, trash_time).unwrap();
@@ -1113,18 +879,19 @@ mod restore {
         db.restore(&key, restore_time).unwrap();
 
         let value = db.get(&key).unwrap().unwrap();
+        // Note: restore only updates last_accessed, not updated_at
+        // (restore is not a content modification)
         assert_eq!(
             value.metadata,
             Metadata {
                 created_at: create_time,
-                updated_at: restore_time,
-                last_accessed: restore_time,
-                trashed_at: None,
-                lifecycle_state: LifecycleState::Active,
+                updated_at: create_time,
+                lifecycle_state: LifecycleState::Active {
+                    last_accessed: restore_time
+                },
             }
         );
 
-        // Verify TTL table: key should be back in ACTIVE_EXPIRY
         let write_txn = db.db.begin_write().unwrap();
         let ttl_key = TtlKey {
             timestamp: restore_time,
@@ -1148,24 +915,15 @@ mod restore {
         let key = make_key("test/active");
         let now = SystemTime::now();
 
-        db.insert(
-            &key,
-            now,
-            ClipData::Text(TextData::Inlined("content".to_string())),
-        )
-        .unwrap();
+        db.create(&key, now).unwrap();
 
-        // Trying to restore an active key should fail
-        let result = db.restore(&key, now + Duration::from_secs(10));
+        let result = db.restore(&key, now);
         assert!(matches!(result, Err(DatabaseError::NotTrashed)));
     }
 }
 
 mod purge {
-    use super::common::{create_test_db, make_key};
-    use crate::core::db::{ClipData, DatabaseError};
-    use crate::types::value::versioned_value::latest_value::TextData;
-    use std::time::{Duration, SystemTime};
+    use super::*;
 
     #[test]
     fn test_purge_removes_key() {
@@ -1173,16 +931,9 @@ mod purge {
         let key = make_key("test/purge");
         let now = SystemTime::now();
 
-        db.insert(
-            &key,
-            now,
-            ClipData::Text(TextData::Inlined("content".to_string())),
-        )
-        .unwrap();
-
+        db.create(&key, now).unwrap();
         db.purge(&key).unwrap();
 
-        // Key should no longer exist
         assert!(db.get(&key).unwrap().is_none());
     }
 
@@ -1192,13 +943,7 @@ mod purge {
         let key = make_key("test/purge-trashed");
         let now = SystemTime::now();
 
-        db.insert(
-            &key,
-            now,
-            ClipData::Text(TextData::Inlined("content".to_string())),
-        )
-        .unwrap();
-
+        db.create(&key, now).unwrap();
         db.trash(&key, now + Duration::from_secs(10)).unwrap();
         db.purge(&key).unwrap();
 
@@ -1216,26 +961,19 @@ mod purge {
 }
 
 mod gc {
-    use super::common::{create_test_db, create_test_db_with_ttl, make_key};
-    use crate::core::db::ClipData;
-    use crate::types::value::versioned_value::latest_value::{LifecycleState, Metadata, TextData};
-    use std::time::{Duration, SystemTime};
+    use super::*;
+    use common::{create_test_db, create_test_db_with_ttl, make_key};
 
     #[test]
     fn test_gc_no_expired() {
         let (mut db, _temp) = create_test_db();
         let now = SystemTime::now();
 
-        db.insert(
-            &make_key("test"),
-            now,
-            ClipData::Text(TextData::Inlined("content".to_string())),
-        )
-        .unwrap();
+        db.create(&make_key("test"), now).unwrap();
 
-        // Immediately check - nothing should be expired
         let result = db.gc(now).unwrap();
-        assert!(result.is_empty());
+        assert!(result.trashed.is_empty());
+        assert!(result.purged.is_empty());
     }
 
     #[test]
@@ -1245,30 +983,23 @@ mod gc {
         let create_time = SystemTime::now();
         let key = make_key("test");
 
-        db.insert(
-            &key,
-            create_time,
-            ClipData::Text(TextData::Inlined("content".to_string())),
-        )
-        .unwrap();
+        db.create(&key, create_time).unwrap();
 
-        // Run GC after TTL has passed
         let gc_time = create_time + Duration::from_secs(150);
         let result = db.gc(gc_time).unwrap();
 
         assert_eq!(result.trashed, std::slice::from_ref(&key));
         assert!(result.purged.is_empty());
 
-        // Verify the key is now trashed
         let value = db.get(&key).unwrap().unwrap();
         assert_eq!(
             value.metadata,
             Metadata {
                 created_at: create_time,
                 updated_at: create_time,
-                last_accessed: create_time,
-                trashed_at: Some(gc_time),
-                lifecycle_state: LifecycleState::Trash,
+                lifecycle_state: LifecycleState::Trash {
+                    trashed_at: gc_time
+                },
             }
         );
     }
@@ -1280,24 +1011,17 @@ mod gc {
         let create_time = SystemTime::now();
         let key = make_key("test");
 
-        db.insert(
-            &key,
-            create_time,
-            ClipData::Text(TextData::Inlined("content".to_string())),
-        )
-        .unwrap();
+        db.create(&key, create_time).unwrap();
 
         let trash_time = create_time + Duration::from_secs(10);
         db.trash(&key, trash_time).unwrap();
 
-        // Run GC after purge TTL has passed
         let gc_time = trash_time + Duration::from_secs(60);
         let result = db.gc(gc_time).unwrap();
 
         assert!(result.trashed.is_empty());
         assert_eq!(result.purged, std::slice::from_ref(&key));
 
-        // Verify the key no longer exists
         assert!(db.get(&key).unwrap().is_none());
     }
 
@@ -1308,20 +1032,15 @@ mod gc {
         let create_time = SystemTime::now();
         let key = make_key("lifecycle-test");
 
-        // Create
-        db.insert(
-            &key,
-            create_time,
-            ClipData::Text(TextData::Inlined("content".to_string())),
-        )
-        .unwrap();
+        db.create(&key, create_time).unwrap();
 
-        // Phase 1: Before trash TTL - nothing to do
+        // Phase 1: Before trash TTL
         let t1 = create_time + Duration::from_secs(50);
         let result1 = db.gc(t1).unwrap();
-        assert!(result1.is_empty());
+        assert!(result1.trashed.is_empty());
+        assert!(result1.purged.is_empty());
 
-        // Phase 2: After trash TTL - should be trashed
+        // Phase 2: After trash TTL
         let t2 = create_time + Duration::from_secs(150);
         let result2 = db.gc(t2).unwrap();
         assert_eq!(result2.trashed, std::slice::from_ref(&key));
@@ -1333,19 +1052,16 @@ mod gc {
             Metadata {
                 created_at: create_time,
                 updated_at: create_time,
-                last_accessed: create_time,
-                trashed_at: Some(t2),
-                lifecycle_state: LifecycleState::Trash,
+                lifecycle_state: LifecycleState::Trash { trashed_at: t2 },
             }
         );
 
-        // Phase 3: After purge TTL - should be purged
+        // Phase 3: After purge TTL
         let t3 = t2 + Duration::from_secs(60);
         let result3 = db.gc(t3).unwrap();
         assert!(result3.trashed.is_empty());
         assert_eq!(result3.purged, std::slice::from_ref(&key));
 
-        // Key should be gone
         assert!(db.get(&key).unwrap().is_none());
     }
 
@@ -1356,23 +1072,17 @@ mod gc {
         let create_time = SystemTime::now();
         let key = make_key("touch-test");
 
-        db.insert(
-            &key,
-            create_time,
-            ClipData::Text(TextData::Inlined("content".to_string())),
-        )
-        .unwrap();
+        db.create(&key, create_time).unwrap();
 
-        // Touch at t=80 (before trash TTL of 100)
         let touch_time = create_time + Duration::from_secs(80);
         db.touch(&key, touch_time).unwrap();
 
-        // GC at t=150 (would be expired based on create_time, but not based on touch_time)
+        // Would be expired based on create_time, but not based on touch_time
         let check_time = create_time + Duration::from_secs(150);
         let result = db.gc(check_time).unwrap();
-        assert!(result.trashed.is_empty()); // Touch reset the timer
+        assert!(result.trashed.is_empty());
 
-        // GC at t=200 (now past touch_time + trash_ttl)
+        // Now past touch_time + trash_ttl
         let check_time2 = touch_time + Duration::from_secs(110);
         let result2 = db.gc(check_time2).unwrap();
         assert_eq!(result2.trashed.len(), 1);
@@ -1380,63 +1090,39 @@ mod gc {
 }
 
 mod edge_cases {
-    use super::common::{create_test_db, create_test_db_with_ttl, make_key};
-    use crate::core::db::ClipData;
-    use crate::types::value::versioned_value::latest_value::{
-        FileData, InlineFileData, LifecycleState, Metadata, TextData,
-    };
-    use std::time::{Duration, SystemTime};
+    use super::*;
+    use common::{create_test_db, create_test_db_with_ttl, make_key};
 
     #[test]
-    fn test_insert_blob_stored_text() {
+    fn test_multiple_attachments() {
         let (mut db, _temp) = create_test_db();
-        let key = make_key("blob-text");
+        let key = make_key("multi-attachment");
         let now = SystemTime::now();
 
-        db.insert(&key, now, ClipData::Text(TextData::BlobStored))
-            .unwrap();
+        db.create(&key, now).unwrap();
+        db.add_attachment(
+            &key,
+            Attachment {
+                filename: "file1.txt".to_string(),
+                size: 100,
+            },
+            now,
+        )
+        .unwrap();
+        db.add_attachment(
+            &key,
+            Attachment {
+                filename: "file2.txt".to_string(),
+                size: 200,
+            },
+            now,
+        )
+        .unwrap();
 
         let value = db.get(&key).unwrap().unwrap();
-        assert_eq!(value.clip_data, ClipData::Text(TextData::BlobStored));
-        assert_eq!(
-            value.metadata,
-            Metadata {
-                created_at: now,
-                updated_at: now,
-                last_accessed: now,
-                trashed_at: None,
-                lifecycle_state: LifecycleState::Active,
-            }
-        );
-    }
-
-    #[test]
-    fn test_multiple_files() {
-        let (mut db, _temp) = create_test_db();
-        let key = make_key("multi-file");
-        let now = SystemTime::now();
-
-        let files = vec![
-            FileData::Inlined(InlineFileData {
-                file_name: "file1.txt".to_string(),
-                data: b"content1".to_vec(),
-            }),
-            FileData::Inlined(InlineFileData {
-                file_name: "file2.txt".to_string(),
-                data: b"content2".to_vec(),
-            }),
-        ];
-
-        db.insert(&key, now, ClipData::Files(files.clone()))
-            .unwrap();
-
-        let value = db.get(&key).unwrap().unwrap();
-        match &value.clip_data {
-            ClipData::Files(result_files) => {
-                assert_eq!(result_files, &files);
-            }
-            ClipData::Text(t) => panic!("Expected Files variant, got: {t:?}"),
-        }
+        assert_eq!(value.attachments.len(), 2);
+        assert_eq!(value.attachments[0].filename, "file1.txt");
+        assert_eq!(value.attachments[1].filename, "file2.txt");
     }
 
     #[test]
@@ -1444,7 +1130,6 @@ mod edge_cases {
         let (mut db, _temp) = create_test_db();
         let now = SystemTime::now();
 
-        // Keva supports hierarchical keys (though not implicit parents)
         let keys = [
             "project/config/theme",
             "project/config/language",
@@ -1454,109 +1139,77 @@ mod edge_cases {
 
         for key_str in &keys {
             let key = make_key(key_str);
-            db.insert(
-                &key,
-                now,
-                ClipData::Text(TextData::Inlined(key_str.to_string())),
-            )
-            .unwrap();
+            db.create(&key, now).unwrap();
         }
 
-        // Each key should be independently accessible
         for key_str in &keys {
             let key = make_key(key_str);
             let value = db.get(&key).unwrap().unwrap();
-            assert_eq!(
-                value.clip_data,
-                ClipData::Text(TextData::Inlined(key_str.to_string()))
-            );
+            assert!(matches!(
+                value.metadata.lifecycle_state,
+                LifecycleState::Active { .. }
+            ));
         }
     }
 
     /// Stale active keys (TTL expired but GC hasn't run) can still be touched.
-    ///
-    /// This is intentional: GC is the point of no return, not TTL expiration.
-    /// The window between TTL expiration and GC serves as a grace period
-    /// where users can rescue their data.
     #[test]
     fn test_stale_active_key_can_be_rescued_by_touch() {
         let (mut db, _temp) = create_test_db_with_ttl(100, 50);
         let key = make_key("rescue-me");
         let create_time = SystemTime::now();
 
-        db.insert(
-            &key,
-            create_time,
-            ClipData::Text(TextData::Inlined("important data".to_string())),
-        )
-        .unwrap();
+        db.create(&key, create_time).unwrap();
 
-        // Time passes beyond trash TTL (100s), but GC hasn't run
         let stale_time = create_time + Duration::from_secs(150);
-
-        // Touch should succeed, rescuing the key from future GC
         db.touch(&key, stale_time).unwrap();
 
-        // Verify the key is still active with updated last_accessed
         let value = db.get(&key).unwrap().unwrap();
         assert_eq!(
             value.metadata,
             Metadata {
                 created_at: create_time,
                 updated_at: create_time,
-                last_accessed: stale_time,
-                trashed_at: None,
-                lifecycle_state: LifecycleState::Active,
+                lifecycle_state: LifecycleState::Active {
+                    last_accessed: stale_time
+                },
             }
         );
 
-        // GC at stale_time should not trash it (TTL reset by touch)
         let result = db.gc(stale_time).unwrap();
         assert!(result.trashed.is_empty());
     }
 
     /// Stale trashed keys (purge TTL expired but GC hasn't run) can still be restored.
-    ///
-    /// This is intentional: GC is the point of no return, not TTL expiration.
-    /// The window between TTL expiration and GC serves as a grace period
-    /// where users can rescue their data.
     #[test]
     fn test_stale_trashed_key_can_be_rescued_by_restore() {
         let (mut db, _temp) = create_test_db_with_ttl(100, 50);
         let key = make_key("rescue-me");
         let create_time = SystemTime::now();
 
-        db.insert(
-            &key,
-            create_time,
-            ClipData::Text(TextData::Inlined("important data".to_string())),
-        )
-        .unwrap();
+        db.create(&key, create_time).unwrap();
 
         let trash_time = create_time + Duration::from_secs(10);
         db.trash(&key, trash_time).unwrap();
 
-        // Time passes beyond purge TTL (50s from trash_time), but GC hasn't run
         let stale_time = trash_time + Duration::from_secs(60);
-
-        // Restore should succeed, rescuing the key from future GC
         db.restore(&key, stale_time).unwrap();
 
-        // Verify the key is active again
         let value = db.get(&key).unwrap().unwrap();
+        // Note: restore only updates last_accessed, not updated_at
         assert_eq!(
             value.metadata,
             Metadata {
                 created_at: create_time,
-                updated_at: stale_time,
-                last_accessed: stale_time,
-                trashed_at: None,
-                lifecycle_state: LifecycleState::Active,
+                updated_at: create_time,
+                lifecycle_state: LifecycleState::Active {
+                    last_accessed: stale_time
+                },
             }
         );
 
-        // GC at stale_time should not trash or purge it
         let result = db.gc(stale_time).unwrap();
-        assert!(result.is_empty());
+        assert!(result.trashed.is_empty());
+        assert!(result.purged.is_empty());
     }
 }
