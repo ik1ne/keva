@@ -313,6 +313,7 @@
     let saveTimer = null;
     let isShuttingDown = false;
     let pendingSelectKey = null;
+    let exactMatch = 'none'; // 'none' | 'active' | 'trashed'
 
     function sendToNative(msg) {
         window.chrome.webview.postMessage(JSON.stringify(msg));
@@ -340,10 +341,8 @@
             return;
         }
 
-        const existingKey = keys.find(k => k.name === query);
-        const existingTrashed = trashedKeys.find(k => k.name === query);
-
-        if (existingKey || existingTrashed) {
+        // Use exactMatch from SearchEngine (O(1) lookup, guaranteed accurate)
+        if (exactMatch !== 'none') {
             searchActionBtn.innerHTML = '&#9998;';
             searchActionBtn.title = 'Edit key';
         } else {
@@ -357,10 +356,8 @@
         const query = searchInput.value.trim();
         if (!query) return;
 
-        const existingKey = keys.find(k => k.name === query);
-        const existingTrashed = trashedKeys.find(k => k.name === query);
-
-        if (existingKey || existingTrashed) {
+        // Use exactMatch for reliable existence check
+        if (exactMatch !== 'none') {
             selectKey(query);
         } else {
             sendToNative({type: 'create', key: query});
@@ -373,8 +370,8 @@
         if (e.key === 'Enter') {
             const query = searchInput.value.trim();
             if (query) {
-                const exists = keys.some(k => k.name === query) || trashedKeys.some(k => k.name === query);
-                if (exists) {
+                // Use exactMatch for reliable existence check
+                if (exactMatch !== 'none') {
                     selectKey(query);
                 } else {
                     pendingSelectKey = query;
@@ -472,24 +469,24 @@
         const msg = event.data;
 
         switch (msg.type) {
+            case 'coreReady':
+                hideSplash();
+                break;
+
             case 'theme':
                 applyTheme(msg.theme);
                 break;
 
-            case 'keys':
-                hideSplash();
-                keys = msg.keys.filter(k => !k.trashed);
-                trashedKeys = msg.keys.filter(k => k.trashed);
-                renderKeyList();
-                renderTrashList();
-                updateSearchButton();
-                if (pendingSelectKey) {
-                    selectKey(pendingSelectKey);
+            case 'keyCreated':
+                if (!msg.success) {
+                    alert('Key already exists: ' + msg.key);
                     pendingSelectKey = null;
                 }
                 break;
 
             case 'value':
+                // Ignore stale responses from previously selected keys
+                if (msg.key !== selectedKey) break;
                 if (msg.value) {
                     if (msg.value.type === 'text') {
                         showEditor(msg.value.content);
@@ -504,9 +501,14 @@
             case 'searchResults':
                 keys = msg.keys.filter(k => !k.trashed);
                 trashedKeys = msg.keys.filter(k => k.trashed);
+                exactMatch = msg.exactMatch;
                 renderKeyList();
                 renderTrashList();
                 updateSearchButton();
+                if (pendingSelectKey) {
+                    selectKey(pendingSelectKey);
+                    pendingSelectKey = null;
+                }
                 break;
 
             case 'shutdown':
@@ -568,6 +570,8 @@
         isSelectedTrashed = trashedKeys.some(k => k.name === keyName);
         updateSelection();
         updateSearchButton();
+        // Clear right pane while loading
+        showEmptyState('Loading...');
         sendToNative({type: 'select', key: keyName});
     }
 

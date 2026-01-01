@@ -120,6 +120,24 @@ impl SearchEngine {
     }
 }
 
+/// Exact match operations (O(1) lookup).
+impl SearchEngine {
+    /// Returns true if the key exists in the active index.
+    pub fn has_active(&self, key: &Key) -> bool {
+        self.active.is_present(key)
+    }
+
+    /// Returns true if the key exists in the trash index.
+    pub fn has_trashed(&self, key: &Key) -> bool {
+        self.trash.is_present(key)
+    }
+
+    /// Returns true if the key exists in either index.
+    pub fn has_key(&self, key: &Key) -> bool {
+        self.has_active(key) || self.has_trashed(key)
+    }
+}
+
 /// Maintenance operations.
 impl SearchEngine {
     /// Triggers index rebuild if pending deletions exceed the threshold.

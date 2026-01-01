@@ -348,6 +348,7 @@ name = "keva_windows"
 version = "0.1.0"
 dependencies = [
  "keva_core",
+ "keva_search",
  "serde",
  "serde_json",
  "webview2-com",

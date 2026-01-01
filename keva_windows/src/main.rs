@@ -4,7 +4,6 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod app;
 mod keva_worker;
 mod platform;
 mod render;

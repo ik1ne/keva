@@ -1,12 +1,15 @@
 //! WebView2 initialization.
 
 use super::bridge::handle_webview_message;
-use super::{WEBVIEW, WebView};
+use super::messages::OutgoingMessage;
+use super::{WEBVIEW, WM_WEBVIEW_MESSAGE, WebView};
 use crate::keva_worker::Request;
 use crate::render::theme::Theme;
 use crate::templates::APP_HTML_W;
 use std::ffi::c_void;
+use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
+use std::thread;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     CreateCoreWebView2Environment, ICoreWebView2, ICoreWebView2Controller,
     ICoreWebView2Environment, ICoreWebView2Settings9, ICoreWebView2WebMessageReceivedEventArgs,
@@ -15,11 +18,12 @@ use webview2_com::{
     CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
     WebMessageReceivedEventHandler,
 };
-use windows::Win32::Foundation::HWND;
+use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::System::Com::CoTaskMemFree;
+use windows::Win32::UI::WindowsAndMessaging::PostMessageW;
 use windows::core::{Interface, PWSTR, w};
 
-/// Initializes a WebView2 at the specified position.
+#[expect(clippy::too_many_arguments)]
 pub fn init_webview(
     hwnd: HWND,
     x: i32,
@@ -28,12 +32,23 @@ pub fn init_webview(
     height: i32,
     theme: Theme,
     request_tx: Sender<Request>,
+    response_rx: Receiver<OutgoingMessage>,
 ) {
     unsafe {
         let _ = CreateCoreWebView2Environment(
             &CreateCoreWebView2EnvironmentCompletedHandler::create(Box::new(move |_error, env| {
                 let Some(env) = env else { return Ok(()) };
-                create_controller(hwnd, x, y, width, height, theme, env, request_tx);
+                create_controller(
+                    hwnd,
+                    x,
+                    y,
+                    width,
+                    height,
+                    theme,
+                    env,
+                    request_tx,
+                    response_rx,
+                );
                 Ok(())
             })),
         );
@@ -50,6 +65,7 @@ fn create_controller(
     theme: Theme,
     env: ICoreWebView2Environment,
     request_tx: Sender<Request>,
+    response_rx: Receiver<OutgoingMessage>,
 ) {
     unsafe {
         let _ = env.CreateCoreWebView2Controller(
@@ -63,7 +79,6 @@ fn create_controller(
                         return Ok(());
                     };
 
-                    // Ensure WebView is visible
                     let _ = controller.SetIsVisible(true);
 
                     let wv = WebView {
@@ -77,14 +92,43 @@ fn create_controller(
                         Theme::Light => w!("document.documentElement.dataset.theme='light';"),
                     };
                     let _ = wv.webview.ExecuteScript(script, None);
+
+                    #[cfg(debug_assertions)]
+                    let _ = wv.webview.OpenDevToolsWindow();
+
                     WEBVIEW
                         .set(wv)
                         .unwrap_or_else(|_| panic!("Failed to set webview"));
+
+                    // Start forwarder thread now that WEBVIEW is set
+                    start_forwarder_thread(hwnd, response_rx);
+
                     Ok(())
                 },
             )),
         );
     }
+}
+
+/// Spawns a thread that forwards worker responses to WebView via UI thread.
+///
+/// WebView2 requires PostWebMessageAsJson to be called from the UI thread.
+/// This thread serializes messages and posts WM_WEBVIEW_MESSAGE to marshal
+/// the call to the UI thread's wndproc.
+fn start_forwarder_thread(hwnd: HWND, response_rx: Receiver<OutgoingMessage>) {
+    let hwnd_raw = hwnd.0 as isize;
+    thread::spawn(move || {
+        let hwnd = HWND(hwnd_raw as *mut _);
+        for msg in response_rx {
+            let json = serde_json::to_string(&msg).expect("Failed to serialize message");
+            // Box the JSON string and leak it - UI thread will reconstruct and drop
+            let boxed = Box::new(json);
+            let ptr = Box::into_raw(boxed);
+            unsafe {
+                let _ = PostMessageW(Some(hwnd), WM_WEBVIEW_MESSAGE, WPARAM(0), LPARAM(ptr as isize));
+            }
+        }
+    });
 }
 
 fn setup_webview(
@@ -96,7 +140,6 @@ fn setup_webview(
         let webview = controller.CoreWebView2().ok()?;
 
         if let Ok(settings) = webview.Settings() {
-            // Disable DevTools in release builds
             #[cfg(not(debug_assertions))]
             let _ = settings.SetAreDevToolsEnabled(false);
 

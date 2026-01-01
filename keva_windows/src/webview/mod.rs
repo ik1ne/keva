@@ -10,6 +10,11 @@ use std::sync::OnceLock;
 use webview2_com::Microsoft::Web::WebView2::Win32::{ICoreWebView2, ICoreWebView2Controller};
 use webview2_com::pwstr_from_str;
 use windows::Win32::Foundation::RECT;
+use windows::Win32::UI::WindowsAndMessaging::WM_APP;
+
+/// Posted by forwarder thread to marshal PostWebMessageAsJson to UI thread.
+/// LPARAM contains a Box<String> pointer to the JSON message.
+pub const WM_WEBVIEW_MESSAGE: u32 = WM_APP + 2;
 
 pub static WEBVIEW: OnceLock<WebView> = OnceLock::new();
 

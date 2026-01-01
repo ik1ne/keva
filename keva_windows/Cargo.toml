@@ -7,6 +7,7 @@ edition = "2024"
 windows-strings = "0.5"
 webview2-com = { git = "https://github.com/ik1ne/webview2-rs.git", branch = "crate_update" }
 keva_core = { path = "../core" }
+keva_search = { path = "../search" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

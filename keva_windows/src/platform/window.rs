@@ -1,19 +1,21 @@
 //! Window creation and message handling.
 
-use crate::app::App;
-use crate::keva_worker::{self, WM_KEVA_RESPONSE, WM_SHUTDOWN_COMPLETE};
+use crate::keva_worker::{self, WM_SHUTDOWN_COMPLETE};
 use crate::platform::{
     handlers::{
         get_resize_border, on_activate, on_command, on_create, on_destroy, on_getminmaxinfo,
-        on_keva_response, on_keydown, on_nccalcsize, on_paint, on_settingchange, on_size,
-        on_trayicon, scale_for_dpi, set_current_theme,
+        on_keydown, on_nccalcsize, on_paint, on_settingchange, on_size, on_trayicon,
+        on_webview_message, scale_for_dpi, set_current_theme,
     },
     hit_test::hit_test,
     tray::{WM_TRAYICON, add_tray_icon},
 };
+use crate::webview::WM_WEBVIEW_MESSAGE;
 use crate::render::theme::{Theme, WINDOW_HEIGHT, WINDOW_WIDTH};
 use crate::webview::init_webview;
-use crate::webview::{WEBVIEW, bridge::post_message, messages::OutgoingMessage};
+use crate::webview::messages::OutgoingMessage;
+use crate::webview::{WEBVIEW, bridge::post_message};
+use std::sync::mpsc;
 use windows::{
     Win32::{
         Foundation::{HWND, LPARAM, LRESULT, TRUE, WPARAM},
@@ -21,12 +23,12 @@ use windows::{
         UI::{
             HiDpi::GetDpiForSystem,
             WindowsAndMessaging::{
-                CreateWindowExW, DefWindowProcW, DispatchMessageW, GWLP_USERDATA, GetMessageW,
-                GetSystemMetrics, IDC_ARROW, LoadCursorW, MSG, PostQuitMessage, RegisterClassW,
-                SM_CXSCREEN, SM_CYSCREEN, SW_SHOW, SWP_NOCOPYBITS, SetForegroundWindow,
-                SetWindowLongPtrW, ShowWindow, TranslateMessage, WINDOWPOS, WM_ACTIVATE, WM_CLOSE,
-                WM_COMMAND, WM_CREATE, WM_DESTROY, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN,
-                WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT, WM_SETTINGCHANGE, WM_SIZE,
+                CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, GetSystemMetrics,
+                IDC_ARROW, LoadCursorW, MSG, PostQuitMessage, RegisterClassW, SM_CXSCREEN,
+                SM_CYSCREEN, SW_SHOW, SWP_NOCOPYBITS, SetForegroundWindow, ShowWindow,
+                TranslateMessage, WINDOWPOS, WM_ACTIVATE, WM_CLOSE, WM_COMMAND, WM_CREATE,
+                WM_DESTROY, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN, WM_NCACTIVATE,
+                WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT, WM_SETTINGCHANGE, WM_SIZE,
                 WM_WINDOWPOSCHANGING, WNDCLASSW, WS_CLIPCHILDREN, WS_EX_APPWINDOW, WS_EX_TOPMOST,
                 WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SIZEBOX, WS_SYSMENU,
             },
@@ -35,13 +37,11 @@ use windows::{
     core::{Result, w},
 };
 
-/// Runs the application.
 pub fn run() -> Result<()> {
     unsafe {
         let instance = GetModuleHandleW(None)?;
         let class_name = w!("KevaWindowClass");
 
-        // Detect system theme for initial background color
         let initial_theme = Theme::detect_system();
         set_current_theme(initial_theme);
         eprintln!("[Native] Initial theme: {:?}", initial_theme);
@@ -57,19 +57,19 @@ pub fn run() -> Result<()> {
         let atom = RegisterClassW(&wc);
         debug_assert!(atom != 0);
 
-        // Borderless window with resize capability
-        // WS_CLIPCHILDREN prevents painting over child windows
+        // WS_POPUP: borderless window (no title bar)
+        // WS_SIZEBOX: resizable edges
+        // WS_CLIPCHILDREN: prevents painting over child windows (WebView)
         let style =
             WS_POPUP | WS_SIZEBOX | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU | WS_CLIPCHILDREN;
 
+        // WS_EX_TOPMOST: always on top
         let ex_style = WS_EX_APPWINDOW | WS_EX_TOPMOST;
 
-        // Scale window dimensions for DPI
         let dpi = GetDpiForSystem();
         let window_width = scale_for_dpi(WINDOW_WIDTH, dpi);
         let window_height = scale_for_dpi(WINDOW_HEIGHT, dpi);
 
-        // Center window on screen
         let screen_width = GetSystemMetrics(SM_CXSCREEN);
         let screen_height = GetSystemMetrics(SM_CYSCREEN);
         let x = (screen_width - window_width) / 2;
@@ -90,16 +90,14 @@ pub fn run() -> Result<()> {
             None,
         )?;
 
-        // Start keva worker thread
-        let (request_tx, response_rx) = keva_worker::start(hwnd);
+        // Create response channel for worker → forwarder communication
+        let (response_tx, response_rx) = mpsc::channel::<OutgoingMessage>();
 
-        // Create App with response receiver
-        let app_ptr = Box::into_raw(Box::new(App { response_rx }));
-        SetWindowLongPtrW(hwnd, GWLP_USERDATA, app_ptr as isize);
+        // Start worker thread (owns KevaCore + SearchEngine)
+        let request_tx = keva_worker::start(hwnd, response_tx);
 
-        // Create WebView with resize border insets
+        // Create WebView (will spawn forwarder thread when ready)
         let (border_x, border_y) = get_resize_border();
-
         init_webview(
             hwnd,
             border_x,
@@ -108,12 +106,11 @@ pub fn run() -> Result<()> {
             window_height - 2 * border_y,
             initial_theme,
             request_tx,
+            response_rx,
         );
 
-        // Create system tray icon
         add_tray_icon(hwnd)?;
 
-        // Show window and bring to foreground
         let _ = ShowWindow(hwnd, SW_SHOW);
         let _ = SetForegroundWindow(hwnd);
 
@@ -127,12 +124,15 @@ pub fn run() -> Result<()> {
     }
 }
 
+/// Window procedure: dispatches Windows messages to handlers.
 extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     match msg {
         WM_CREATE => on_create(hwnd),
         WM_GETMINMAXINFO => on_getminmaxinfo(lparam),
         WM_NCCALCSIZE => on_nccalcsize(wparam, lparam),
+        // WM_NCACTIVATE: return TRUE to prevent default non-client painting
         WM_NCACTIVATE => LRESULT(TRUE.0 as isize),
+        // WM_WINDOWPOSCHANGING: disable BitBlt to prevent visual artifacts during resize
         WM_WINDOWPOSCHANGING => unsafe {
             let wp = lparam.0 as *mut WINDOWPOS;
             if !wp.is_null() {
@@ -140,6 +140,7 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             }
             DefWindowProcW(hwnd, msg, wparam, lparam)
         },
+        // WM_NCHITTEST: determine resize/drag areas for borderless window
         WM_NCHITTEST => {
             let cursor_x = (lparam.0 & 0xFFFF) as i16 as i32;
             let cursor_y = ((lparam.0 >> 16) & 0xFFFF) as i16 as i32;
@@ -154,13 +155,11 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             .unwrap_or_else(|| unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }),
         WM_TRAYICON => on_trayicon(hwnd, lparam),
         WM_COMMAND => on_command(hwnd, wparam),
-        WM_KEVA_RESPONSE =>
-        // SAFETY: wndproc is single-threaded
-        unsafe { on_keva_response(hwnd) },
         WM_SHUTDOWN_COMPLETE => {
             unsafe { PostQuitMessage(0) };
             LRESULT(0)
         }
+        WM_WEBVIEW_MESSAGE => on_webview_message(lparam),
         WM_CLOSE => {
             if let Some(wv) = WEBVIEW.get() {
                 post_message(&wv.webview, &OutgoingMessage::Shutdown);

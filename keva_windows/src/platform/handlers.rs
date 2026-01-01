@@ -1,6 +1,5 @@
 //! Window message handlers.
 
-use crate::app::App;
 use crate::platform::tray::{
     IDM_LAUNCH_AT_LOGIN, IDM_QUIT, IDM_SETTINGS, IDM_SHOW, remove_tray_icon, show_tray_menu,
 };
@@ -13,32 +12,29 @@ use windows::Win32::{
     Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM},
     Graphics::Dwm::{DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND, DwmSetWindowAttribute},
     Graphics::Gdi::{
-        BeginPaint, CreateSolidBrush, DeleteObject, EndPaint, FillRect, PAINTSTRUCT,
-        RDW_INVALIDATE, RedrawWindow,
+        BeginPaint, CreateSolidBrush, DeleteObject, EndPaint, FillRect, PAINTSTRUCT, RDW_INVALIDATE,
+        RedrawWindow,
     },
     UI::{
         HiDpi::GetDpiForSystem,
         Input::KeyboardAndMouse::VK_ESCAPE,
         WindowsAndMessaging::{
-            GWLP_USERDATA, GetClientRect, GetSystemMetrics, GetWindowLongPtrW, GetWindowRect,
-            IsWindowVisible, MINMAXINFO, NCCALCSIZE_PARAMS, PostMessageW, PostQuitMessage,
-            SM_CXPADDEDBORDER, SM_CXSIZEFRAME, SM_CYSIZEFRAME, SW_HIDE, SW_SHOW, SWP_FRAMECHANGED,
-            SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, SetForegroundWindow,
-            SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_LBUTTONUP,
-            WM_RBUTTONUP, WVR_VALIDRECTS,
+            GetClientRect, GetSystemMetrics, GetWindowRect, IsWindowVisible, MINMAXINFO,
+            NCCALCSIZE_PARAMS, PostMessageW, PostQuitMessage, SM_CXPADDEDBORDER, SM_CXSIZEFRAME,
+            SM_CYSIZEFRAME, SW_HIDE, SW_SHOW, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOOWNERZORDER,
+            SWP_NOSIZE, SWP_NOZORDER, SetForegroundWindow, SetWindowPos, ShowWindow,
+            USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_LBUTTONUP, WM_RBUTTONUP, WVR_VALIDRECTS,
         },
     },
 };
 use windows::core::PCWSTR;
 use windows_strings::w;
 
-/// Stores the previously focused window to restore on Esc.
+/// Stores the previously focused window handle to restore focus on Esc.
 pub static PREV_FOREGROUND: AtomicIsize = AtomicIsize::new(0);
 
-/// Stores the current theme (0 = Dark, 1 = Light).
 static CURRENT_THEME: AtomicU8 = AtomicU8::new(0);
 
-/// Sets the current theme for border painting.
 pub fn set_current_theme(theme: Theme) {
     let value = match theme {
         Theme::Dark => 0,
@@ -54,12 +50,11 @@ fn get_current_theme() -> Theme {
     }
 }
 
-/// Scales a logical pixel value to physical pixels based on system DPI.
 pub fn scale_for_dpi(logical: i32, dpi: u32) -> i32 {
     (logical as i64 * dpi as i64 / USER_DEFAULT_SCREEN_DPI as i64) as i32
 }
 
-/// Returns the resize border size using system metrics.
+/// Returns system resize border size (includes padding for touch targets).
 pub fn get_resize_border() -> (i32, i32) {
     unsafe {
         let padded = GetSystemMetrics(SM_CXPADDEDBORDER);
@@ -69,21 +64,10 @@ pub fn get_resize_border() -> (i32, i32) {
     }
 }
 
-/// Gets the App instance from the window's user data.
-///
-/// # Safety
-///
-/// Caller must ensure only one mutable reference exists at a time.
-pub unsafe fn get_app(hwnd: HWND) -> Option<&'static mut App> {
-    unsafe {
-        let ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut App;
-        if ptr.is_null() { None } else { Some(&mut *ptr) }
-    }
-}
-
-/// WM_CREATE: Enable rounded corners and trigger frame update.
+/// WM_CREATE: Enable rounded corners and trigger frame recalculation.
 pub fn on_create(hwnd: HWND) -> LRESULT {
     unsafe {
+        // Windows 11 rounded corners
         let preference = DWMWCP_ROUND;
         let _ = DwmSetWindowAttribute(
             hwnd,
@@ -92,7 +76,7 @@ pub fn on_create(hwnd: HWND) -> LRESULT {
             size_of_val(&preference) as u32,
         );
 
-        // Trigger WM_NCCALCSIZE to properly set up the borderless frame
+        // SWP_FRAMECHANGED triggers WM_NCCALCSIZE to set up borderless frame
         let mut rect = RECT::default();
         let _ = GetWindowRect(hwnd, &mut rect);
         let _ = SetWindowPos(
@@ -108,8 +92,9 @@ pub fn on_create(hwnd: HWND) -> LRESULT {
     LRESULT(0)
 }
 
-/// WM_GETMINMAXINFO: Enforce minimum window size.
+/// WM_GETMINMAXINFO: Enforce minimum window size during resize.
 pub fn on_getminmaxinfo(lparam: LPARAM) -> LRESULT {
+    // lparam points to MINMAXINFO struct
     let info = lparam.0 as *mut MINMAXINFO;
     if !info.is_null() {
         unsafe {
@@ -121,22 +106,20 @@ pub fn on_getminmaxinfo(lparam: LPARAM) -> LRESULT {
     LRESULT(0)
 }
 
-/// WM_NCCALCSIZE: Implement borderless window.
+/// WM_NCCALCSIZE: Remove non-client area to create borderless window.
 pub fn on_nccalcsize(wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    // wparam == 0: simple request, just return 0 to remove non-client area
     if wparam.0 == 0 {
-        // wparam == FALSE: Just return 0 to remove non-client area
         return LRESULT(0);
     }
 
-    // wparam == TRUE: Window is being resized.
-
-    // Nullify the source/dest rectangles to prevent BitBlt jitter
-    // when resizing from top/left edges.
+    // wparam != 0: detailed request during resize
+    // Nullify source/dest rectangles to prevent BitBlt artifacts when resizing
     let params = lparam.0 as *mut NCCALCSIZE_PARAMS;
     if !params.is_null() {
         unsafe {
-            // rgrc[0] stays as-is (new client area = full window)
-            // rgrc[1] and rgrc[2] are set to same 1px rect to nullify BitBlt
+            // rgrc[0] = new client area (keep as-is = full window)
+            // rgrc[1], rgrc[2] = old client/window areas, set to 1px to disable BitBlt
             (*params).rgrc[1] = RECT {
                 left: 0,
                 top: 0,
@@ -146,10 +129,11 @@ pub fn on_nccalcsize(wparam: WPARAM, lparam: LPARAM) -> LRESULT {
             (*params).rgrc[2] = (*params).rgrc[1];
         }
     }
+    // WVR_VALIDRECTS: we've set valid rectangles, don't need system to calculate
     LRESULT(WVR_VALIDRECTS as isize)
 }
 
-/// WM_ACTIVATE: Store previous foreground window.
+/// WM_ACTIVATE: Track previously focused window to restore on Esc.
 pub fn on_activate(wparam: WPARAM, lparam: LPARAM) {
     let activating = (wparam.0 & 0xFFFF) != 0;
     let previous_window = lparam.0;
@@ -158,12 +142,10 @@ pub fn on_activate(wparam: WPARAM, lparam: LPARAM) {
     }
 }
 
-/// WM_KEYDOWN: Handle Escape to hide window.
-/// Returns Some(LRESULT) if handled, None to delegate to DefWindowProcW.
+/// WM_KEYDOWN: Hide window on Esc, restoring focus to previous window.
 pub fn on_keydown(hwnd: HWND, wparam: WPARAM) -> Option<LRESULT> {
     let virtual_key = wparam.0 as u16;
     if virtual_key == VK_ESCAPE.0 {
-        // Restore focus to previous window before hiding
         let prev = PREV_FOREGROUND.load(Ordering::Relaxed);
         unsafe {
             if prev != 0 {
@@ -176,12 +158,12 @@ pub fn on_keydown(hwnd: HWND, wparam: WPARAM) -> Option<LRESULT> {
     None
 }
 
-/// WM_TRAYICON: Handle tray icon clicks.
+/// WM_TRAYICON: Handle system tray icon clicks.
 pub fn on_trayicon(hwnd: HWND, lparam: LPARAM) -> LRESULT {
+    // Low word of lparam contains the mouse message
     let mouse_msg = (lparam.0 & 0xFFFF) as u32;
     unsafe {
         if mouse_msg == WM_LBUTTONUP {
-            // Toggle window visibility on left click
             if IsWindowVisible(hwnd).as_bool() {
                 let _ = ShowWindow(hwnd, SW_HIDE);
             } else {
@@ -189,14 +171,13 @@ pub fn on_trayicon(hwnd: HWND, lparam: LPARAM) -> LRESULT {
                 let _ = SetForegroundWindow(hwnd);
             }
         } else if mouse_msg == WM_RBUTTONUP {
-            // Show context menu on right click
             show_tray_menu(hwnd);
         }
     }
     LRESULT(0)
 }
 
-/// WM_COMMAND: Handle menu commands.
+/// WM_COMMAND: Handle menu commands from tray context menu.
 pub fn on_command(hwnd: HWND, wparam: WPARAM) -> LRESULT {
     let cmd_id = (wparam.0 & 0xFFFF) as u32;
     unsafe {
@@ -205,12 +186,8 @@ pub fn on_command(hwnd: HWND, wparam: WPARAM) -> LRESULT {
                 let _ = ShowWindow(hwnd, SW_SHOW);
                 let _ = SetForegroundWindow(hwnd);
             }
-            IDM_SETTINGS => {
-                // Non-functional until M15-win
-            }
-            IDM_LAUNCH_AT_LOGIN => {
-                // Non-functional until M20-win
-            }
+            IDM_SETTINGS => {}
+            IDM_LAUNCH_AT_LOGIN => {}
             IDM_QUIT => {
                 let _ = PostMessageW(Some(hwnd), WM_CLOSE, WPARAM(0), LPARAM(0));
             }
@@ -220,16 +197,15 @@ pub fn on_command(hwnd: HWND, wparam: WPARAM) -> LRESULT {
     LRESULT(0)
 }
 
-/// WM_SIZE: Resize WebView to match window.
+/// WM_SIZE: Resize WebView to match window, accounting for borders.
 pub fn on_size(wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     let size_type = wparam.0 as u32;
     let width = (lparam.0 & 0xFFFF) as i32;
     let height = ((lparam.0 >> 16) & 0xFFFF) as i32;
 
-    // SIZE_MAXIMIZED = 2: window is maximized or snapped
+    // SIZE_MAXIMIZED = 2: window is maximized or snapped (no visible borders)
     let is_maximized = size_type == 2;
 
-    // Resize WebView with border insets (none when maximized)
     if let Some(wv) = WEBVIEW.get() {
         let (x, y, w, h) = if is_maximized {
             (0, 0, width, height)
@@ -254,18 +230,16 @@ pub fn on_paint(hwnd: HWND) -> LRESULT {
         let mut ps = PAINTSTRUCT::default();
         let hdc = BeginPaint(hwnd, &mut ps);
 
-        // Get border color based on current theme
         let bg_color = match get_current_theme() {
-            Theme::Dark => COLORREF(0x001a1a1a),  // #1a1a1a
-            Theme::Light => COLORREF(0x00ffffff), // #ffffff
+            Theme::Dark => COLORREF(0x001a1a1a),
+            Theme::Light => COLORREF(0x00ffffff),
         };
         let brush = CreateSolidBrush(bg_color);
 
-        // Get client rect and border sizes
         let mut client_rect = RECT::default();
         let _ = GetClientRect(hwnd, &mut client_rect);
 
-        // Paint the whole client area, since WebView renders over the window background
+        // Paint entire client area; WebView renders on top
         let left = RECT {
             left: 0,
             top: 0,
@@ -280,58 +254,32 @@ pub fn on_paint(hwnd: HWND) -> LRESULT {
     LRESULT(0)
 }
 
-/// WM_DESTROY: Clean up app state.
+/// WM_DESTROY: Clean up and exit application.
 pub fn on_destroy(hwnd: HWND) -> LRESULT {
     unsafe {
-        let ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut App;
-        if !ptr.is_null() {
-            drop(Box::from_raw(ptr));
-        }
         remove_tray_icon(hwnd);
         PostQuitMessage(0);
     }
     LRESULT(0)
 }
 
-/// WM_KEVA_RESPONSE: Forward worker responses to WebView.
-///
-/// # Safety
-///
-/// Should not be called concurrently.
-pub unsafe fn on_keva_response(hwnd: HWND) -> LRESULT {
-    // SAFETY: Called from wndproc which is single-threaded
-    let Some(app) = (unsafe { get_app(hwnd) }) else {
-        return LRESULT(0);
-    };
-    let Some(wv) = WEBVIEW.get() else {
-        return LRESULT(0);
-    };
-
-    while let Ok(response) = app.response_rx.try_recv() {
-        post_message(&wv.webview, &response);
-    }
-
-    LRESULT(0)
-}
-
 /// WM_SETTINGCHANGE: Detect system theme changes.
 pub fn on_settingchange(hwnd: HWND, lparam: LPARAM) -> LRESULT {
-    // lparam points to a wide string (PCWSTR) with the setting name
+    // lparam points to the setting name as a wide string
     if lparam.0 != 0 {
         let setting_ptr = lparam.0 as *const u16;
         let setting = PCWSTR::from_raw(setting_ptr);
 
+        // "ImmersiveColorSet" is broadcast when system theme changes
         if unsafe { setting.as_wide() == w!("ImmersiveColorSet").as_wide() } {
             let theme = Theme::detect_system();
             eprintln!("[Native] System theme changed: {:?}", theme);
 
-            // Update stored theme and trigger repaint
             set_current_theme(theme);
             unsafe {
                 let _ = RedrawWindow(Some(hwnd), None, None, RDW_INVALIDATE);
             }
 
-            // Send theme to WebView
             if let Some(wv) = WEBVIEW.get() {
                 let msg = OutgoingMessage::Theme {
                     theme: theme.as_str().to_string(),
@@ -340,5 +288,26 @@ pub fn on_settingchange(hwnd: HWND, lparam: LPARAM) -> LRESULT {
             }
         }
     }
+    LRESULT(0)
+}
+
+/// WM_WEBVIEW_MESSAGE: Forward JSON message to WebView (marshaled from forwarder thread).
+pub fn on_webview_message(lparam: LPARAM) -> LRESULT {
+    // LPARAM contains a Box<String> pointer from the forwarder thread
+    let ptr = lparam.0 as *mut String;
+    if ptr.is_null() {
+        return LRESULT(0);
+    }
+
+    // Reconstruct the Box and take ownership (will be dropped at end of scope)
+    let json = unsafe { Box::from_raw(ptr) };
+
+    if let Some(wv) = WEBVIEW.get() {
+        // Keep Vec alive until PostWebMessageAsJson returns
+        let wide: Vec<u16> = json.encode_utf16().chain(std::iter::once(0)).collect();
+        let msg_pwstr = windows::core::PWSTR(wide.as_ptr() as *mut u16);
+        let _ = unsafe { wv.webview.PostWebMessageAsJson(msg_pwstr) };
+    }
+
     LRESULT(0)
 }
