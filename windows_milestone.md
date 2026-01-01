@@ -166,11 +166,11 @@ protocol conventions. Each subsequent milestone will specify its required messag
 
 **Test Cases:**
 
-| TC       | Description                                       | Status |
-|----------|---------------------------------------------------|--------|
-| TC-M2-01 | App shows error if WebView2 runtime not installed | ❌      |
-| TC-M2-02 | Large message (>1MB) transfers correctly          | ❌      |
-| TC-M2-03 | Invalid message type logged and ignored           | ❌      |
+| TC       | Description                                     | Status |
+|----------|-------------------------------------------------|--------|
+| TC-M2-01 | WebView loads and displays UI                   | ❌      |
+| TC-M2-02 | Theme matches system dark/light mode            | ❌      |
+| TC-M2-03 | Native↔WebView messages work (key list appears) | ❌      |
 
 ---
 
@@ -200,9 +200,11 @@ Main Thread                     Worker Thread
 
 **Test Cases:**
 
-| TC       | Description                 | Status |
-|----------|-----------------------------|--------|
-| TC-M3-01 | App quits cleanly (no hang) | ❌      |
+| TC       | Description                                 | Status |
+|----------|---------------------------------------------|--------|
+| TC-M3-01 | App quits cleanly via Alt+F4 (no hang)      | ❌      |
+| TC-M3-02 | App quits cleanly via tray menu (no hang)   | ❌      |
+| TC-M3-03 | Creating key updates UI without freezing    | ❌      |
 
 ---
 
@@ -294,11 +296,11 @@ switch and app exit.
 
 **Save Behavior:**
 
-| Trigger                | File Write | mark_content_modified() |
-|------------------------|------------|-------------------------|
-| Debounced (500ms idle) | ✓          | ✓                       |
-| Key switch (if dirty)  | ✓          | ✓                       |
-| App exit (if dirty)    | ✓          | ✓                       |
+| Trigger                | File Write | touch() |
+|------------------------|------------|---------|
+| Debounced (500ms idle) | ✓          | ✓       |
+| Key switch (if dirty)  | ✓          | ✓       |
+| App exit (if dirty)    | ✓          | ✓       |
 
 **Exit Flow:**
 
@@ -406,8 +408,8 @@ and remove attachments via inline controls.
 
 | TC       | Description                                        | Status |
 |----------|----------------------------------------------------|--------|
-| TC-M8-01 | Attachments list displays files                    | ❌      |
-| TC-M8-02 | File size shown in human-readable format           | ❌      |
+| TC-M8-01 | Attachments list displays files with names         | ❌      |
+| TC-M8-02 | File size shown in human-readable format (KB/MB)   | ❌      |
 | TC-M8-03 | Image attachments show thumbnail                   | ❌      |
 | TC-M8-04 | Non-image attachments show type icon               | ❌      |
 | TC-M8-05 | Click [+ Add files] opens file picker              | ❌      |
@@ -532,14 +534,15 @@ delete button removes key and files. GC runs on window hide and periodically.
 
 **Test Cases:**
 
-| TC        | Description                               | Status |
-|-----------|-------------------------------------------|--------|
-| TC-M11-01 | Trash section shows trashed keys          | ❌      |
-| TC-M11-02 | Restore button moves key to active        | ❌      |
-| TC-M11-03 | Permanent delete removes key and files    | ❌      |
-| TC-M11-04 | Trashed key content is read-only          | ❌      |
-| TC-M11-05 | Drop onto trashed key rejected            | ❌      |
-| TC-M11-06 | GC trashing selected key clears selection | ❌      |
+| TC        | Description                                       | Status |
+|-----------|---------------------------------------------------|--------|
+| TC-M11-01 | Trash section shows trashed keys                  | ❌      |
+| TC-M11-02 | Restore button moves key to active                | ❌      |
+| TC-M11-03 | Permanent delete removes key and files            | ❌      |
+| TC-M11-04 | Trashed key content is read-only                  | ❌      |
+| TC-M11-05 | Drop onto trashed key rejected                    | ❌      |
+| TC-M11-06 | Arrow keys navigate within trash section          | ❌      |
+| TC-M11-07 | Click required to enter trash section from active | ❌      |
 
 ---
 
@@ -563,14 +566,15 @@ Applied immediately to running app.
 
 **Test Cases:**
 
-| TC        | Description                          | Status |
-|-----------|--------------------------------------|--------|
-| TC-M12-01 | Ctrl+, opens settings dialog         | ❌      |
-| TC-M12-02 | Tray menu opens settings             | ❌      |
-| TC-M12-03 | Theme change applies immediately     | ❌      |
-| TC-M12-04 | Settings saved to config.toml        | ❌      |
-| TC-M12-05 | Invalid config on launch shows popup | ❌      |
-| TC-M12-06 | Esc closes settings dialog           | ❌      |
+| TC        | Description                                   | Status |
+|-----------|-----------------------------------------------|--------|
+| TC-M12-01 | Ctrl+, opens settings dialog                  | ❌      |
+| TC-M12-02 | Tray menu opens settings                      | ❌      |
+| TC-M12-03 | Theme change applies immediately              | ❌      |
+| TC-M12-04 | Settings saved to config.toml                 | ❌      |
+| TC-M12-05 | Esc closes settings dialog                    | ❌      |
+| TC-M12-06 | Launch at login toggle creates/removes entry  | ❌      |
+| TC-M12-07 | TTL settings are editable                     | ❌      |
 
 ---
 
@@ -597,13 +601,12 @@ with other applications. Fallback: double-click exe to show window.
 
 **Test Cases:**
 
-| TC        | Description                                    | Status |
-|-----------|------------------------------------------------|--------|
-| TC-M13-01 | Ctrl+Alt+K shows window from any app           | ❌      |
-| TC-M13-02 | Hotkey works when window already visible       | ❌      |
-| TC-M13-03 | Custom hotkey can be configured                | ❌      |
-| TC-M13-04 | Conflict shows notification and opens settings | ❌      |
-| TC-M13-05 | Double-click exe shows window as fallback      | ❌      |
+| TC        | Description                                 | Status |
+|-----------|---------------------------------------------|--------|
+| TC-M13-01 | Ctrl+Alt+K shows window from any app        | ❌      |
+| TC-M13-02 | Hotkey works when window already visible    | ❌      |
+| TC-M13-03 | Custom hotkey can be configured in settings | ❌      |
+| TC-M13-04 | Double-click exe shows window as fallback   | ❌      |
 
 ---
 
@@ -648,11 +651,11 @@ subsequent launches. Handle monitor configuration changes gracefully.
 
 **Test Cases:**
 
-| TC        | Description                                   | Status |
-|-----------|-----------------------------------------------|--------|
-| TC-M15-01 | Position restored on next launch              | ❌      |
-| TC-M15-02 | Different position per monitor                | ❌      |
-| TC-M15-03 | Off-screen position centers on cursor monitor | ❌      |
+| TC        | Description                               | Status |
+|-----------|-------------------------------------------|--------|
+| TC-M15-01 | Position restored on next launch          | ❌      |
+| TC-M15-02 | Size restored on next launch              | ❌      |
+| TC-M15-03 | First launch centers on primary monitor   | ❌      |
 
 ---
 
@@ -680,12 +683,14 @@ config.toml with user preferences.
 
 **Test Cases:**
 
-| TC        | Description                           | Status |
-|-----------|---------------------------------------|--------|
-| TC-M16-01 | First launch shows welcome dialog     | ❌      |
-| TC-M16-02 | Checkbox checked registers login item | ❌      |
-| TC-M16-03 | Checkbox unchecked skips login item   | ❌      |
-| TC-M16-04 | Subsequent launches skip dialog       | ❌      |
+Setup: Delete config.toml before testing.
+
+| TC        | Description                                | Status |
+|-----------|--------------------------------------------|--------|
+| TC-M16-01 | First launch (no config) shows welcome     | ❌      |
+| TC-M16-02 | Get Started button closes dialog           | ❌      |
+| TC-M16-03 | Subsequent launches skip welcome dialog    | ❌      |
+| TC-M16-04 | Launch at login checkbox persists to config| ❌      |
 
 ---
 
@@ -705,10 +710,13 @@ host mapping. Ensure offline operation.
 
 **Test Cases:**
 
-| TC        | Description                         | Status |
-|-----------|-------------------------------------|--------|
-| TC-M17-01 | App runs without network            | ❌      |
-| TC-M17-02 | Monaco loads from bundled resources | ❌      |
+Setup: Disconnect network or use airplane mode.
+
+| TC        | Description                              | Status |
+|-----------|------------------------------------------|--------|
+| TC-M17-01 | App launches without network connection  | ❌      |
+| TC-M17-02 | Monaco editor functions without network  | ❌      |
+| TC-M17-03 | All UI assets load (no broken images)    | ❌      |
 
 ---
 
