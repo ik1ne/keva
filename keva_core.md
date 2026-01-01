@@ -34,20 +34,18 @@ Every key has exactly one markdown content file (path derived from key) plus zer
 
 ```rust
 struct Metadata {
-    created_at: SystemTime,
-    updated_at: SystemTime,
-    last_accessed: SystemTime,
-    trashed_at: Option<SystemTime>,
     lifecycle_state: LifecycleState,
 }
 ```
 
 ### LifecycleState
 
+Timestamps are embedded in the state variants for a cleaner model where each state owns its relevant timestamp.
+
 ```rust
 enum LifecycleState {
-    Active,
-    Trash,
+    Active { last_accessed: SystemTime },
+    Trash { trashed_at: SystemTime },
 }
 ```
 
@@ -107,7 +105,7 @@ Attachments stored at `blobs/{key_hash}/{filename}`.
 
 Generated previews stored at `thumbnails/{key_hash}/{filename}.thumb`.
 
-- Supported formats: png, jpg, jpeg, gif, webp, svg
+- Supported formats: png, jpg, jpeg, gif, webp
 - Version-controlled regeneration (see Thumbnail Versioning)
 - Missing thumbnail → fallback to icon in UI
 
@@ -118,30 +116,28 @@ Generated previews stored at `thumbnails/{key_hash}/{filename}.thumb`.
 const THUMB_VER: u32 = 1;
 ```
 
-Each Value stores `thumb_version`. On thumbnail access:
+Each Value stores `thumb_version`. On thumbnail access via `thumbnail_paths()`:
 
 ```rust
-fn get_thumbnail_path(key, filename) -> Option<PathBuf> {
+fn thumbnail_paths(key) -> HashMap<String, PathBuf> {
     let value = get(key);
+    let mut result = HashMap::new();
+
+    for attachment in &value.attachments {
+        if is_supported_image(&attachment.filename) {
+            // Regenerate if version outdated
+            if value.thumb_version < THUMB_VER {
+                let _ = generate_thumbnail(key, &attachment.filename);
+            }
+            result.insert(attachment.filename, thumbnail_path(key, &attachment.filename));
+        }
+    }
 
     if value.thumb_version < THUMB_VER {
-        // Regenerate all thumbnails for this key
-        for attachment in &value.attachments {
-            if is_supported_image(&attachment.filename) {
-                // Ignore failure - format might not be supported yet
-                let _ = try_generate_thumbnail(key, &attachment.filename);
-            }
-        }
-        // Update version regardless of individual success/failure
         update_thumb_version(key, THUMB_VER);
     }
 
-    let thumb_path = thumbnails_dir / key_hash / format!("{}.thumb", filename);
-    if thumb_path.exists() {
-        Some(thumb_path)
-    } else {
-        None
-    }
+    result
 }
 ```
 
@@ -150,6 +146,7 @@ Benefits:
 - Automatic upgrade on app update
 - No per-attachment thumbnail state tracking
 - Failed generations don't retry until next THUMB_VER bump
+- Bulk access returns all thumbnail paths at once
 
 ## Configuration
 
@@ -168,7 +165,7 @@ struct Config {
 ```rust
 impl KevaCore {
     /// Opens or creates storage at configured path
-    fn open(config: Config) -> Result<Self, StorageError>;
+    fn open(config: Config) -> Result<Self, KevaError>;
 }
 ```
 
@@ -177,25 +174,24 @@ impl KevaCore {
 ```rust
 impl KevaCore {
     /// Retrieve value by key (does NOT update last_accessed)
-    fn get(&self, key: &Key) -> Result<Option<Value>, StorageError>;
+    fn get(&self, key: &Key) -> Result<Option<Value>, KevaError>;
 
     /// List all Active keys
-    fn active_keys(&self) -> Result<Vec<Key>, StorageError>;
+    fn active_keys(&self) -> Result<Vec<Key>, KevaError>;
 
     /// List all Trash keys
-    fn trashed_keys(&self) -> Result<Vec<Key>, StorageError>;
+    fn trashed_keys(&self) -> Result<Vec<Key>, KevaError>;
 
-    /// Update last_accessed timestamp
-    fn touch(&mut self, key: &Key, now: SystemTime) -> Result<(), StorageError>;
+    /// Update last_accessed timestamp, returns updated Value
+    fn touch(&mut self, key: &Key, now: SystemTime) -> Result<Value, KevaError>;
 
-    /// Rename key (optionally overwrite existing)
+    /// Rename key. Returns DestinationExists error if target exists.
     fn rename(
         &mut self,
-        old: &Key,
-        new: &Key,
-        overwrite: bool,
+        old_key: &Key,
+        new_key: &Key,
         now: SystemTime,
-    ) -> Result<(), StorageError>;
+    ) -> Result<(), KevaError>;
 }
 ```
 
@@ -205,22 +201,15 @@ impl KevaCore {
 impl KevaCore {
     /// Get content file path for FileSystemHandle
     /// Path is derived: content/{key_hash}.md
-    /// Requires Value to ensure key exists (file guaranteed to exist)
-    fn get_content_path(&self, key: &Key, _value: &Value) -> PathBuf;
+    fn content_path(&self, key: &Key) -> PathBuf;
 
-    /// Create key with empty content.md
+    /// Create key with empty content.md, returns the new Value
     /// Returns error if key already exists
-    fn create(&mut self, key: &Key, now: SystemTime) -> Result<(), StorageError>;
-
-    /// Mark content as modified (updates updated_at and last_accessed)
-    /// Called by UI on debounced save, key switch, or app exit
-    fn mark_content_modified(
-        &mut self,
-        key: &Key,
-        now: SystemTime
-    ) -> Result<(), StorageError>;
+    fn create(&mut self, key: &Key, now: SystemTime) -> Result<Value, KevaError>;
 }
 ```
+
+Note: Content modification tracking is handled by calling `touch()` after saving content via FileSystemHandle.
 
 ### Attachment Operations
 
@@ -229,36 +218,34 @@ Note: To list attachments, use `get(key)?.attachments`.
 ```rust
 impl KevaCore {
     /// Get path to specific attachment
-    fn get_attachment_path(
-        &self,
-        key: &Key,
-        filename: &str
-    ) -> Result<PathBuf, StorageError>;
+    fn attachment_path(&self, key: &Key, filename: &str) -> PathBuf;
 
-    /// Add attachments with pre-resolved conflict decisions
+    /// Add attachments with optional conflict resolution per file.
+    /// If resolution is None, defaults to Rename on conflict.
+    /// Returns the updated Value.
     fn add_attachments(
         &mut self,
         key: &Key,
-        files: Vec<(PathBuf, ConflictResolution)>,
+        files: &[(PathBuf, Option<AttachmentConflictResolution>)],
         now: SystemTime,
-    ) -> Result<Vec<AddResult>, StorageError>;
+    ) -> Result<Value, KevaError>;
 
     /// Remove attachment by filename
     fn remove_attachment(
         &mut self,
         key: &Key,
         filename: &str,
-        now: SystemTime
-    ) -> Result<(), StorageError>;
+        now: SystemTime,
+    ) -> Result<(), KevaError>;
 
-    /// Rename attachment
+    /// Rename attachment. Returns DestinationExists if new_filename already exists.
     fn rename_attachment(
         &mut self,
         key: &Key,
         old_filename: &str,
         new_filename: &str,
         now: SystemTime,
-    ) -> Result<(), StorageError>;
+    ) -> Result<(), KevaError>;
 }
 ```
 
@@ -266,13 +253,13 @@ impl KevaCore {
 
 ```rust
 impl KevaCore {
-    /// Get thumbnail path, regenerating if version outdated
-    /// Returns None for unsupported formats or if generation failed
-    fn get_thumbnail_path(
+    /// Get thumbnail paths for all supported image attachments.
+    /// Regenerates thumbnails if version is outdated.
+    /// Returns filename → thumbnail path map.
+    fn thumbnail_paths(
         &mut self,
         key: &Key,
-        filename: &str
-    ) -> Result<Option<PathBuf>, StorageError>;
+    ) -> Result<HashMap<String, PathBuf>, KevaError>;
 }
 ```
 
@@ -281,13 +268,13 @@ impl KevaCore {
 ```rust
 impl KevaCore {
     /// Move key to Trash
-    fn trash(&mut self, key: &Key, now: SystemTime) -> Result<(), StorageError>;
+    fn trash(&mut self, key: &Key, now: SystemTime) -> Result<(), KevaError>;
 
     /// Restore key from Trash to Active
-    fn restore(&mut self, key: &Key, now: SystemTime) -> Result<(), StorageError>;
+    fn restore(&mut self, key: &Key, now: SystemTime) -> Result<(), KevaError>;
 
     /// Permanently delete key and all associated files
-    fn purge(&mut self, key: &Key) -> Result<(), StorageError>;
+    fn purge(&mut self, key: &Key) -> Result<(), KevaError>;
 }
 ```
 
@@ -298,39 +285,27 @@ impl KevaCore {
     /// Run garbage collection
     /// - Moves Active → Trash based on trash_ttl
     /// - Purges Trash items based on purge_ttl
-    /// - Cleans orphaned blob/thumbnail files
-    /// Returns list of keys that were trashed (for UI to handle)
-    fn maintenance(&mut self, now: SystemTime) -> Result<MaintenanceState, StorageError>;
+    /// - Cleans orphaned blob/thumbnail/content files
+    fn maintenance(&mut self, now: SystemTime) -> Result<MaintenanceOutcome, KevaError>;
 }
 ```
 
 ## Types
 
-### ConflictResolution
+### AttachmentConflictResolution
 
 ```rust
-enum ConflictResolution {
+enum AttachmentConflictResolution {
     Overwrite,  // Replace existing file
     Rename,     // Auto-generate "file (1).ext"
     Skip,       // Skip this file
 }
 ```
 
-### AddResult
+### MaintenanceOutcome
 
 ```rust
-enum AddResult {
-    Added { filename: String },
-    Renamed { original: String, actual: String },
-    Skipped { filename: String },
-    Overwritten { filename: String },
-}
-```
-
-### MaintenanceState
-
-```rust
-struct MaintenanceState {
+struct MaintenanceOutcome {
     keys_trashed: Vec<Key>,
     keys_purged: Vec<Key>,
     orphaned_files_removed: usize,
@@ -339,17 +314,15 @@ struct MaintenanceState {
 
 ## Errors
 
-### StorageError
+### KevaError
+
+Top-level error type. Most specific errors are in DatabaseError.
 
 ```rust
-enum StorageError {
+enum KevaError {
     Database(DatabaseError),
     FileStorage(FileStorageError),
-    KeyIsTrashed,           // Operation requires Active key
-    KeyExists,              // create() called on existing key
-    AlreadyTrashed,         // Key already in Trash
-    DestinationExists,      // Rename target exists (and overwrite=false)
-    AttachmentNotFound,     // Referenced attachment doesn't exist
+    DestinationExists,      // Rename target exists (key or attachment)
 }
 ```
 
@@ -357,11 +330,18 @@ enum StorageError {
 
 ```rust
 enum DatabaseError {
+    Redb(redb::DatabaseError),
+    TableError(redb::TableError),
+    StorageError(redb::StorageError),
+    TransactionError(redb::TransactionError),
+    CommitError(redb::CommitError),
+    Io(std::io::Error),
     NotFound,
-    Trashed,
-    NotTrashed,
-    EmptyInput,
-    Internal(redb::Error),
+    Trashed,                        // Operation requires Active key
+    NotTrashed,                     // restore() called on non-trashed key
+    AlreadyExists,                  // create() called on existing key
+    AttachmentNotFound(String),
+    AttachmentExists(String),
 }
 ```
 
@@ -372,6 +352,9 @@ enum FileStorageError {
     Io(std::io::Error),
     IsDirectory,
     NonUtf8FileName,
+    Image(image::ImageError),
+    Resize(fast_image_resize::ResizeError),
+    UnsupportedFormat,
 }
 ```
 
@@ -396,15 +379,16 @@ enum FileStorageError {
 
 ### Timestamp Updates
 
-| Operation                    | created_at | updated_at | last_accessed | trashed_at |
-|------------------------------|------------|------------|---------------|------------|
-| create()                     | Set        | Set        | Set           | -          |
-| mark_content_modified()      | -          | Set        | Set           | -          |
-| Add/remove/rename attachment | -          | Set        | Set           | -          |
-| rename()                     | -          | Set        | Set           | -          |
-| touch()                      | -          | -          | Set           | -          |
-| trash()                      | -          | -          | -             | Set        |
-| restore()                    | -          | -          | Set           | Clear      |
+The simplified timestamp model stores `last_accessed` in the Active state and `trashed_at` in the Trash state.
+
+| Operation                    | last_accessed | trashed_at |
+|------------------------------|---------------|------------|
+| create()                     | Set           | -          |
+| Add/remove/rename attachment | Set           | -          |
+| rename()                     | Set           | -          |
+| touch()                      | Set           | -          |
+| trash()                      | -             | Set        |
+| restore()                    | Set           | Clear      |
 
 ### Touch Semantics
 
@@ -412,16 +396,9 @@ enum FileStorageError {
 
 - Selecting key in left pane
 - Copying to clipboard
+- Content modification (debounced save, key switch, app exit)
 
 `get()` does NOT auto-touch. This allows reading without affecting TTL.
-
-### mark_content_modified Timing
-
-Called by UI on:
-
-- Debounced save (500ms after edit)
-- Key switch (if dirty)
-- App exit (if dirty)
 
 ## Thread Safety
 
