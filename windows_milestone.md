@@ -10,7 +10,7 @@ and includes test cases for verification.
 | M0  | keva_core Verification | Verify keva_core matches keva_core.md spec   | ✅      |
 | M1  | Window Skeleton        | Borderless window, resize, tray icon         | ✅      |
 | M2  | WebView + Bridge       | WebView2 hosting, postMessage, dark theme    | ✅      |
-| M3  | Worker Thread          | Main↔Worker mpsc, keva_core integration      | ❌      |
+| M3  | Worker Thread          | Main↔Worker mpsc, keva_core integration      | ✅      |
 | M4  | Search Engine          | Nucleo on main thread, progressive results   | ❌      |
 | M5  | Key List               | Left pane, create/rename/delete, selection   | ❌      |
 | M6  | Monaco Editor          | FileSystemHandle, markdown mode, auto-save   | ❌      |
@@ -166,15 +166,15 @@ protocol conventions. Each subsequent milestone will specify its required messag
 
 **Test Cases:**
 
-| TC       | Description                                            | Status |
-|----------|--------------------------------------------------------|--------|
-| TC-M2-01 | WebView loads and displays UI                          | ✅      |
-| TC-M2-02 | Initial theme matches system dark/light mode           | ✅      |
-| TC-M2-03 | Native↔WebView messages work (key list appears)        | ✅      |
-| TC-M2-04 | Changing system theme updates WebView immediately      | ✅      |
-| TC-M2-05 | Changing system theme updates window border color      | ✅      |
-| TC-M2-06 | Splash screen shows during initial load                | ✅      |
-| TC-M2-07 | Splash screen disappears after keys message received   | ✅      |
+| TC       | Description                                          | Status |
+|----------|------------------------------------------------------|--------|
+| TC-M2-01 | WebView loads and displays UI                        | ✅      |
+| TC-M2-02 | Initial theme matches system dark/light mode         | ✅      |
+| TC-M2-03 | Native↔WebView messages work (key list appears)      | ✅      |
+| TC-M2-04 | Changing system theme updates WebView immediately    | ✅      |
+| TC-M2-05 | Changing system theme updates window border color    | ✅      |
+| TC-M2-06 | Splash screen shows during initial load              | ✅      |
+| TC-M2-07 | Splash screen disappears after keys message received | ✅      |
 
 ---
 
@@ -204,11 +204,11 @@ Main Thread                     Worker Thread
 
 **Test Cases:**
 
-| TC       | Description                                 | Status |
-|----------|---------------------------------------------|--------|
-| TC-M3-01 | App quits cleanly via Alt+F4 (no hang)      | ❌      |
-| TC-M3-02 | App quits cleanly via tray menu (no hang)   | ❌      |
-| TC-M3-03 | Creating key updates UI without freezing    | ❌      |
+| TC       | Description                               | Status |
+|----------|-------------------------------------------|--------|
+| TC-M3-01 | App quits cleanly via Alt+F4 (no hang)    | ✅      |
+| TC-M3-02 | App quits cleanly via tray menu (no hang) | ✅      |
+| TC-M3-03 | Creating key updates UI without freezing  | ✅      |
 
 ---
 
@@ -570,15 +570,15 @@ Applied immediately to running app.
 
 **Test Cases:**
 
-| TC        | Description                                   | Status |
-|-----------|-----------------------------------------------|--------|
-| TC-M12-01 | Ctrl+, opens settings dialog                  | ❌      |
-| TC-M12-02 | Tray menu opens settings                      | ❌      |
-| TC-M12-03 | Theme change applies immediately              | ❌      |
-| TC-M12-04 | Settings saved to config.toml                 | ❌      |
-| TC-M12-05 | Esc closes settings dialog                    | ❌      |
-| TC-M12-06 | Launch at login toggle creates/removes entry  | ❌      |
-| TC-M12-07 | TTL settings are editable                     | ❌      |
+| TC        | Description                                  | Status |
+|-----------|----------------------------------------------|--------|
+| TC-M12-01 | Ctrl+, opens settings dialog                 | ❌      |
+| TC-M12-02 | Tray menu opens settings                     | ❌      |
+| TC-M12-03 | Theme change applies immediately             | ❌      |
+| TC-M12-04 | Settings saved to config.toml                | ❌      |
+| TC-M12-05 | Esc closes settings dialog                   | ❌      |
+| TC-M12-06 | Launch at login toggle creates/removes entry | ❌      |
+| TC-M12-07 | TTL settings are editable                    | ❌      |
 
 ---
 
@@ -655,11 +655,11 @@ subsequent launches. Handle monitor configuration changes gracefully.
 
 **Test Cases:**
 
-| TC        | Description                               | Status |
-|-----------|-------------------------------------------|--------|
-| TC-M15-01 | Position restored on next launch          | ❌      |
-| TC-M15-02 | Size restored on next launch              | ❌      |
-| TC-M15-03 | First launch centers on primary monitor   | ❌      |
+| TC        | Description                             | Status |
+|-----------|-----------------------------------------|--------|
+| TC-M15-01 | Position restored on next launch        | ❌      |
+| TC-M15-02 | Size restored on next launch            | ❌      |
+| TC-M15-03 | First launch centers on primary monitor | ❌      |
 
 ---
 
@@ -689,12 +689,12 @@ config.toml with user preferences.
 
 Setup: Delete config.toml before testing.
 
-| TC        | Description                                | Status |
-|-----------|--------------------------------------------|--------|
-| TC-M16-01 | First launch (no config) shows welcome     | ❌      |
-| TC-M16-02 | Get Started button closes dialog           | ❌      |
-| TC-M16-03 | Subsequent launches skip welcome dialog    | ❌      |
-| TC-M16-04 | Launch at login checkbox persists to config| ❌      |
+| TC        | Description                                 | Status |
+|-----------|---------------------------------------------|--------|
+| TC-M16-01 | First launch (no config) shows welcome      | ❌      |
+| TC-M16-02 | Get Started button closes dialog            | ❌      |
+| TC-M16-03 | Subsequent launches skip welcome dialog     | ❌      |
+| TC-M16-04 | Launch at login checkbox persists to config | ❌      |
 
 ---
 
@@ -716,11 +716,11 @@ host mapping. Ensure offline operation.
 
 Setup: Disconnect network or use airplane mode.
 
-| TC        | Description                              | Status |
-|-----------|------------------------------------------|--------|
-| TC-M17-01 | App launches without network connection  | ❌      |
-| TC-M17-02 | Monaco editor functions without network  | ❌      |
-| TC-M17-03 | All UI assets load (no broken images)    | ❌      |
+| TC        | Description                             | Status |
+|-----------|-----------------------------------------|--------|
+| TC-M17-01 | App launches without network connection | ❌      |
+| TC-M17-02 | Monaco editor functions without network | ❌      |
+| TC-M17-03 | All UI assets load (no broken images)   | ❌      |
 
 ---
 
