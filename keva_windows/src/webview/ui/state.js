@@ -24,11 +24,7 @@ const State = {
     },
 
     isKeyVisible: function (key) {
-        return this.data.keys.some(function (k) {
-                return k.name === key;
-            })
-            || this.data.trashedKeys.some(function (k) {
-                return k.name === key;
-            });
+        return this.data.keys.indexOf(key) !== -1
+            || this.data.trashedKeys.indexOf(key) !== -1;
     }
 };

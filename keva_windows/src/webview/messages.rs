@@ -37,7 +37,8 @@ pub enum OutgoingMessage {
         success: bool,
     },
     SearchResults {
-        keys: Vec<KeyInfo>,
+        active_keys: Vec<String>,
+        trashed_keys: Vec<String>,
         exact_match: ExactMatch,
     },
     Value {
@@ -54,13 +55,6 @@ pub enum ExactMatch {
     None,
     Active,
     Trashed,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct KeyInfo {
-    pub name: String,
-    pub trashed: bool,
 }
 
 #[derive(Debug, Serialize)]

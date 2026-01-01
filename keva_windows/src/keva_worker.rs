@@ -1,6 +1,6 @@
 //! Background worker thread for KevaCore and SearchEngine operations.
 
-use crate::webview::messages::{ExactMatch, KeyInfo, OutgoingMessage, ValueInfo};
+use crate::webview::messages::{ExactMatch, OutgoingMessage, ValueInfo};
 use keva_core::core::KevaCore;
 use keva_core::types::{Config, Key, SavedConfig};
 use keva_search::{SearchConfig, SearchEngine, SearchQuery};
@@ -166,19 +166,17 @@ fn send_search_results(
     current_query: &str,
     responses: &Sender<OutgoingMessage>,
 ) {
-    let mut keys: Vec<KeyInfo> = search
+    let active_keys: Vec<String> = search
         .active_results()
         .iter()
-        .map(|k| KeyInfo {
-            name: k.as_str().to_string(),
-            trashed: false,
-        })
+        .map(|k| k.as_str().to_string())
         .collect();
 
-    keys.extend(search.trashed_results().iter().map(|k| KeyInfo {
-        name: k.as_str().to_string(),
-        trashed: true,
-    }));
+    let trashed_keys: Vec<String> = search
+        .trashed_results()
+        .iter()
+        .map(|k| k.as_str().to_string())
+        .collect();
 
     let exact_match = Key::try_from(current_query)
         .ok()
@@ -193,7 +191,11 @@ fn send_search_results(
         })
         .unwrap_or(ExactMatch::None);
 
-    let _ = responses.send(OutgoingMessage::SearchResults { keys, exact_match });
+    let _ = responses.send(OutgoingMessage::SearchResults {
+        active_keys,
+        trashed_keys,
+        exact_match,
+    });
 }
 
 fn open_keva() -> KevaCore {

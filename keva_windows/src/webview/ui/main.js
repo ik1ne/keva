@@ -110,12 +110,8 @@ const Main = {
                     break;
 
                 case 'searchResults':
-                    State.data.keys = msg.keys.filter(function (k) {
-                        return !k.trashed;
-                    });
-                    State.data.trashedKeys = msg.keys.filter(function (k) {
-                        return k.trashed;
-                    });
+                    State.data.keys = msg.activeKeys;
+                    State.data.trashedKeys = msg.trashedKeys;
                     State.data.exactMatch = msg.exactMatch;
 
                     if (State.data.selectedKey && !State.isKeyVisible(State.data.selectedKey)) {
