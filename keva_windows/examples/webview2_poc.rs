@@ -14,10 +14,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::ffi::c_void;
-use std::sync::Mutex;
 use std::sync::mpsc::{self, Sender};
-
-use once_cell::sync::Lazy;
+use std::sync::{LazyLock, Mutex};
 
 // WebView2 COM types
 use webview2_com::Microsoft::Web::WebView2::Win32::{
@@ -44,7 +42,8 @@ const BTN_SHOW_FILES: u16 = 104;
 const CLASS_NAME: &str = "WebView2POC\0";
 
 /// Global channel for WebView messages
-static MESSAGE_CHANNEL: Lazy<Mutex<Option<Sender<String>>>> = Lazy::new(|| Mutex::new(None));
+static MESSAGE_CHANNEL: LazyLock<Mutex<Option<Sender<String>>>> =
+    LazyLock::new(|| Mutex::new(None));
 
 /// Global app state (needed for wndproc callback)
 static mut APP_HWND: isize = 0;
