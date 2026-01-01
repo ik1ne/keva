@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="splash" id="splash">
+    <div class="splash-text">Loading database...</div>
+</div>
+<div class="app">
+    <div class="search-bar">
+        <div class="search-icon">&#128269;</div>
+        <input type="text" class="search-input" id="search-input" placeholder="Search keys...">
+        <button class="search-action-btn" id="search-action-btn" title="Create or edit">&#43;</button>
+    </div>
+    <div class="main-content">
+        <div class="left-pane">
+            <div class="key-list" id="key-list"></div>
+            <div class="trash-section" id="trash-section">
+                <div class="trash-header">Trash (<span id="trash-count">0</span>)</div>
+                <div id="trash-list"></div>
+            </div>
+        </div>
+        <div class="right-pane">
+            <div id="editor-container"></div>
+            <div class="empty-state" id="empty-state">Select a key or type to search</div>
+        </div>
+    </div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+<script src="state.js"></script>
+<script src="api.js"></script>
+<script src="keylist.js"></script>
+<script src="editor.js"></script>
+<script src="main.js"></script>
+</body>
+</html>

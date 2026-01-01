@@ -7,7 +7,6 @@
 mod keva_worker;
 mod platform;
 mod render;
-mod templates;
 mod webview;
 
 use windows::Win32::UI::HiDpi::{

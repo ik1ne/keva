@@ -5,14 +5,14 @@ use super::messages::OutgoingMessage;
 use super::{WEBVIEW, WM_WEBVIEW_MESSAGE, WebView};
 use crate::keva_worker::Request;
 use crate::render::theme::Theme;
-use crate::templates::APP_HTML_W;
 use std::ffi::c_void;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
 use std::thread;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
-    CreateCoreWebView2Environment, ICoreWebView2, ICoreWebView2Controller,
-    ICoreWebView2Environment, ICoreWebView2Settings9, ICoreWebView2WebMessageReceivedEventArgs,
+    COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW, CreateCoreWebView2Environment, ICoreWebView2,
+    ICoreWebView2_3, ICoreWebView2Controller, ICoreWebView2Environment, ICoreWebView2Settings9,
+    ICoreWebView2WebMessageReceivedEventArgs,
 };
 use webview2_com::{
     CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
@@ -86,7 +86,17 @@ fn create_controller(
                         webview,
                     };
                     wv.set_bounds(x, y, width, height);
-                    let _ = wv.webview.NavigateToString(APP_HTML_W);
+
+                    // Map virtual host to source directory for file-based loading
+                    if let Ok(wv3) = wv.webview.cast::<ICoreWebView2_3>() {
+                        let _ = wv3.SetVirtualHostNameToFolderMapping(
+                            w!("keva.local"),
+                            w!("../../keva_windows/src/webview/ui"),
+                            COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW,
+                        );
+                    }
+                    let _ = wv.webview.Navigate(w!("https://keva.local/index.html"));
+
                     let script = match theme {
                         Theme::Dark => w!("document.documentElement.dataset.theme='dark';"),
                         Theme::Light => w!("document.documentElement.dataset.theme='light';"),
