@@ -166,11 +166,15 @@ protocol conventions. Each subsequent milestone will specify its required messag
 
 **Test Cases:**
 
-| TC       | Description                                     | Status |
-|----------|-------------------------------------------------|--------|
-| TC-M2-01 | WebView loads and displays UI                   | ❌      |
-| TC-M2-02 | Theme matches system dark/light mode            | ❌      |
-| TC-M2-03 | Native↔WebView messages work (key list appears) | ❌      |
+| TC       | Description                                            | Status |
+|----------|--------------------------------------------------------|--------|
+| TC-M2-01 | WebView loads and displays UI                          | ✅      |
+| TC-M2-02 | Initial theme matches system dark/light mode           | ✅      |
+| TC-M2-03 | Native↔WebView messages work (key list appears)        | ✅      |
+| TC-M2-04 | Changing system theme updates WebView immediately      | ✅      |
+| TC-M2-05 | Changing system theme updates window border color      | ✅      |
+| TC-M2-06 | Splash screen shows during initial load                | ✅      |
+| TC-M2-07 | Splash screen disappears after keys message received   | ✅      |
 
 ---
 
