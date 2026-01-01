@@ -3,8 +3,9 @@
 ## Related Documentation
 
 - `Spec.md` - Product specification and design decisions
-- `Planned.md` - Planned features and roadmap
-- `todo.md` - Current tasks
+- `windows_milestone.md` - Windows implementation milestones and test cases
+- `keva_core.md` - Core storage module specification
+- `keva_search.md` - Search engine module specification
 
 ## Cargo Commands
 
@@ -84,7 +85,7 @@ Extract raw `wparam`/`lparam` values into named variables that explain their mea
 ```rust
 // Good - reader understands the values without looking up Windows docs
 let cursor_x = (lparam.0 & 0xFFFF) as i16 as i32;
-let cursor_y = ((lparam.0 > > 16) & 0xFFFF) as i16 as i32;
+let cursor_y = ((lparam.0 >> 16) & 0xFFFF) as i16 as i32;
 let previous_window = lparam.0;
 let virtual_key = wparam.0 as u16;
 
