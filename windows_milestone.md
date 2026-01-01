@@ -117,15 +117,15 @@ without destroying it. Window stays on top to enable drag/drop from other apps.
 | TC-M1-06 | Esc hides window (process stays alive)     | ✅      |
 | TC-M1-07 | Window stays on top of other windows       | ✅      |
 | TC-M1-08 | Text is crisp at 150% DPI scaling          | ✅      |
-| TC-M1-09 | Alt+F4 quits application entirely          | ❌      |
-| TC-M1-10 | Corner drag resizes diagonally             | ❌      |
-| TC-M1-11 | Window respects minimum size (400x300)     | ❌      |
-| TC-M1-12 | Aero Snap to left edge (half-screen)       | ❌      |
-| TC-M1-13 | Aero Snap to right edge (half-screen)      | ❌      |
-| TC-M1-14 | Aero Snap to top edge (maximize)           | ❌      |
-| TC-M1-15 | Aero Snap to corner (quarter-screen)       | ❌      |
-| TC-M1-16 | Drag from maximized restores window        | ❌      |
-| TC-M1-17 | Resize border scales correctly at 150% DPI | ❌      |
+| TC-M1-09 | Alt+F4 quits application entirely          | ✅      |
+| TC-M1-10 | Corner drag resizes diagonally             | ✅      |
+| TC-M1-11 | Window respects minimum size (400x300)     | ✅      |
+| TC-M1-12 | Aero Snap to left edge (half-screen)       | ✅      |
+| TC-M1-13 | Aero Snap to right edge (half-screen)      | ✅      |
+| TC-M1-14 | Aero Snap to top edge (maximize)           | ✅      |
+| TC-M1-15 | Aero Snap to corner (quarter-screen)       | ✅      |
+| TC-M1-16 | Drag from maximized restores window        | ✅      |
+| TC-M1-17 | Resize border scales correctly at 150% DPI | ✅      |
 
 ---
 
