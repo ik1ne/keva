@@ -4,29 +4,55 @@ use crate::app::App;
 use crate::platform::tray::{
     IDM_LAUNCH_AT_LOGIN, IDM_QUIT, IDM_SETTINGS, IDM_SHOW, remove_tray_icon, show_tray_menu,
 };
-use crate::render::theme::{MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH};
+use crate::render::theme::{MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, Theme};
 use crate::webview::WEBVIEW;
 use crate::webview::bridge::post_message;
-use std::sync::atomic::{AtomicIsize, Ordering};
+use crate::webview::messages::OutgoingMessage;
+use std::sync::atomic::{AtomicIsize, AtomicU8, Ordering};
 use windows::Win32::{
-    Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM},
+    Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM},
     Graphics::Dwm::{DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND, DwmSetWindowAttribute},
+    Graphics::Gdi::{
+        BeginPaint, CreateSolidBrush, DeleteObject, EndPaint, FillRect, PAINTSTRUCT,
+        RDW_INVALIDATE, RedrawWindow,
+    },
     UI::{
         HiDpi::GetDpiForSystem,
         Input::KeyboardAndMouse::VK_ESCAPE,
         WindowsAndMessaging::{
-            GWLP_USERDATA, GetSystemMetrics, GetWindowLongPtrW, GetWindowRect, IsWindowVisible,
-            MINMAXINFO, NCCALCSIZE_PARAMS, PostMessageW, PostQuitMessage, SM_CXPADDEDBORDER,
-            SM_CXSIZEFRAME, SM_CYSIZEFRAME, SW_HIDE, SW_SHOW, SWP_FRAMECHANGED, SWP_NOMOVE,
-            SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, SetForegroundWindow, SetWindowPos,
-            ShowWindow, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_LBUTTONUP, WM_RBUTTONUP,
-            WVR_VALIDRECTS,
+            GWLP_USERDATA, GetClientRect, GetSystemMetrics, GetWindowLongPtrW, GetWindowRect,
+            IsWindowVisible, MINMAXINFO, NCCALCSIZE_PARAMS, PostMessageW, PostQuitMessage,
+            SM_CXPADDEDBORDER, SM_CXSIZEFRAME, SM_CYSIZEFRAME, SW_HIDE, SW_SHOW, SWP_FRAMECHANGED,
+            SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, SetForegroundWindow,
+            SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_LBUTTONUP,
+            WM_RBUTTONUP, WVR_VALIDRECTS,
         },
     },
 };
+use windows::core::PCWSTR;
+use windows_strings::w;
 
 /// Stores the previously focused window to restore on Esc.
 pub static PREV_FOREGROUND: AtomicIsize = AtomicIsize::new(0);
+
+/// Stores the current theme (0 = Dark, 1 = Light).
+static CURRENT_THEME: AtomicU8 = AtomicU8::new(0);
+
+/// Sets the current theme for border painting.
+pub fn set_current_theme(theme: Theme) {
+    let value = match theme {
+        Theme::Dark => 0,
+        Theme::Light => 1,
+    };
+    CURRENT_THEME.store(value, Ordering::Relaxed);
+}
+
+fn get_current_theme() -> Theme {
+    match CURRENT_THEME.load(Ordering::Relaxed) {
+        0 => Theme::Dark,
+        _ => Theme::Light,
+    }
+}
 
 /// Scales a logical pixel value to physical pixels based on system DPI.
 pub fn scale_for_dpi(logical: i32, dpi: u32) -> i32 {
@@ -103,6 +129,7 @@ pub fn on_nccalcsize(wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     }
 
     // wparam == TRUE: Window is being resized.
+
     // Nullify the source/dest rectangles to prevent BitBlt jitter
     // when resizing from top/left edges.
     let params = lparam.0 as *mut NCCALCSIZE_PARAMS;
@@ -221,6 +248,38 @@ pub fn on_size(wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     LRESULT(0)
 }
 
+/// WM_PAINT: Paint border regions around WebView.
+pub fn on_paint(hwnd: HWND) -> LRESULT {
+    unsafe {
+        let mut ps = PAINTSTRUCT::default();
+        let hdc = BeginPaint(hwnd, &mut ps);
+
+        // Get border color based on current theme
+        let bg_color = match get_current_theme() {
+            Theme::Dark => COLORREF(0x001a1a1a),  // #1a1a1a
+            Theme::Light => COLORREF(0x00ffffff), // #ffffff
+        };
+        let brush = CreateSolidBrush(bg_color);
+
+        // Get client rect and border sizes
+        let mut client_rect = RECT::default();
+        let _ = GetClientRect(hwnd, &mut client_rect);
+
+        // Paint the whole client area, since WebView renders over the window background
+        let left = RECT {
+            left: 0,
+            top: 0,
+            right: client_rect.right,
+            bottom: client_rect.bottom,
+        };
+        FillRect(hdc, &left, brush);
+
+        let _ = DeleteObject(brush.into());
+        let _ = EndPaint(hwnd, &ps);
+    }
+    LRESULT(0)
+}
+
 /// WM_DESTROY: Clean up app state.
 pub fn on_destroy(hwnd: HWND) -> LRESULT {
     unsafe {
@@ -252,5 +311,34 @@ pub unsafe fn on_keva_response(hwnd: HWND) -> LRESULT {
         post_message(&wv.webview, &response);
     }
 
+    LRESULT(0)
+}
+
+/// WM_SETTINGCHANGE: Detect system theme changes.
+pub fn on_settingchange(hwnd: HWND, lparam: LPARAM) -> LRESULT {
+    // lparam points to a wide string (PCWSTR) with the setting name
+    if lparam.0 != 0 {
+        let setting_ptr = lparam.0 as *const u16;
+        let setting = PCWSTR::from_raw(setting_ptr);
+
+        if unsafe { setting.as_wide() == w!("ImmersiveColorSet").as_wide() } {
+            let theme = Theme::detect_system();
+            eprintln!("[Native] System theme changed: {:?}", theme);
+
+            // Update stored theme and trigger repaint
+            set_current_theme(theme);
+            unsafe {
+                let _ = RedrawWindow(Some(hwnd), None, None, RDW_INVALIDATE);
+            }
+
+            // Send theme to WebView
+            if let Some(wv) = WEBVIEW.get() {
+                let msg = OutgoingMessage::Theme {
+                    theme: theme.as_str().to_string(),
+                };
+                post_message(&wv.webview, &msg);
+            }
+        }
+    }
     LRESULT(0)
 }

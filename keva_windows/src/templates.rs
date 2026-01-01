@@ -2,7 +2,7 @@
 
 use windows_strings::PCWSTR;
 
-/// w! macro that works on &str
+/// w! macro that works on &[u8]
 macro_rules! w_from_bytes {
     ($s:expr) => {{
         const OUTPUT_LEN: usize = windows_strings::utf16_len($s) + 1;
@@ -31,5 +31,5 @@ macro_rules! w_from_bytes {
     }};
 }
 
-pub const APP_HTML: &[u8] = include_bytes!("ui_html/app.html");
+const APP_HTML: &[u8] = include_bytes!("ui_html/app.html");
 pub const APP_HTML_W: PCWSTR = w_from_bytes!(APP_HTML);

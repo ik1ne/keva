@@ -18,6 +18,7 @@ pub enum IncomingMessage {
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum OutgoingMessage {
+    Theme { theme: String },
     Keys { keys: Vec<KeyInfo> },
     Value { value: Option<ValueInfo> },
     Shutdown,
@@ -33,6 +34,11 @@ pub struct KeyInfo {
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum ValueInfo {
-    Text { content: String },
-    Files { count: usize },
+    Text {
+        content: String,
+    },
+    #[expect(dead_code)]
+    Files {
+        count: usize,
+    },
 }

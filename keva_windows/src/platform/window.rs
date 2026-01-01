@@ -5,19 +5,18 @@ use crate::keva_worker::{self, WM_KEVA_RESPONSE, WM_SHUTDOWN_COMPLETE};
 use crate::platform::{
     handlers::{
         get_resize_border, on_activate, on_command, on_create, on_destroy, on_getminmaxinfo,
-        on_keva_response, on_keydown, on_nccalcsize, on_size, on_trayicon, scale_for_dpi,
+        on_keva_response, on_keydown, on_nccalcsize, on_paint, on_settingchange, on_size,
+        on_trayicon, scale_for_dpi, set_current_theme,
     },
     hit_test::hit_test,
     tray::{WM_TRAYICON, add_tray_icon},
 };
-use crate::render::theme::{WINDOW_HEIGHT, WINDOW_WIDTH};
-use crate::templates::APP_HTML_W;
+use crate::render::theme::{Theme, WINDOW_HEIGHT, WINDOW_WIDTH};
 use crate::webview::init_webview;
 use crate::webview::{WEBVIEW, bridge::post_message, messages::OutgoingMessage};
 use windows::{
     Win32::{
-        Foundation::{COLORREF, HWND, LPARAM, LRESULT, TRUE, WPARAM},
-        Graphics::Gdi::{CreateSolidBrush, ValidateRect},
+        Foundation::{HWND, LPARAM, LRESULT, TRUE, WPARAM},
         System::LibraryLoader::GetModuleHandleW,
         UI::{
             HiDpi::GetDpiForSystem,
@@ -27,7 +26,7 @@ use windows::{
                 SM_CXSCREEN, SM_CYSCREEN, SW_SHOW, SWP_NOCOPYBITS, SetForegroundWindow,
                 SetWindowLongPtrW, ShowWindow, TranslateMessage, WINDOWPOS, WM_ACTIVATE, WM_CLOSE,
                 WM_COMMAND, WM_CREATE, WM_DESTROY, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_KEYDOWN,
-                WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT, WM_SIZE,
+                WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT, WM_SETTINGCHANGE, WM_SIZE,
                 WM_WINDOWPOSCHANGING, WNDCLASSW, WS_CLIPCHILDREN, WS_EX_APPWINDOW, WS_EX_TOPMOST,
                 WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP, WS_SIZEBOX, WS_SYSMENU,
             },
@@ -42,14 +41,15 @@ pub fn run() -> Result<()> {
         let instance = GetModuleHandleW(None)?;
         let class_name = w!("KevaWindowClass");
 
-        // Dark background for resize border areas
-        let bg_brush = CreateSolidBrush(COLORREF(0x001a1a1a)); // #1a1a1a in BGR
+        // Detect system theme for initial background color
+        let initial_theme = Theme::detect_system();
+        set_current_theme(initial_theme);
+        eprintln!("[Native] Initial theme: {:?}", initial_theme);
 
         let wc = WNDCLASSW {
             lpfnWndProc: Some(wndproc),
             hInstance: instance.into(),
             hCursor: LoadCursorW(None, IDC_ARROW)?,
-            hbrBackground: bg_brush,
             lpszClassName: class_name,
             ..Default::default()
         };
@@ -106,10 +106,8 @@ pub fn run() -> Result<()> {
             border_y,
             window_width - 2 * border_x,
             window_height - 2 * border_y,
+            initial_theme,
             request_tx,
-            move |wv| {
-                let _ = wv.webview.NavigateToString(APP_HTML_W);
-            },
         );
 
         // Create system tray icon
@@ -172,10 +170,8 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             LRESULT(0)
         }
         WM_SIZE => on_size(wparam, lparam),
-        WM_PAINT => {
-            let _ = unsafe { ValidateRect(Some(hwnd), None) };
-            LRESULT(0)
-        }
+        WM_SETTINGCHANGE => on_settingchange(hwnd, lparam),
+        WM_PAINT => on_paint(hwnd),
         WM_DESTROY => on_destroy(hwnd),
         _ => unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) },
     }

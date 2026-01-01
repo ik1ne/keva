@@ -3,12 +3,13 @@
 use super::bridge::handle_webview_message;
 use super::{WEBVIEW, WebView};
 use crate::keva_worker::Request;
+use crate::render::theme::Theme;
+use crate::templates::APP_HTML_W;
 use std::ffi::c_void;
 use std::sync::mpsc::Sender;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
-    COREWEBVIEW2_COLOR, CreateCoreWebView2Environment, ICoreWebView2, ICoreWebView2Controller,
-    ICoreWebView2Controller2, ICoreWebView2Environment, ICoreWebView2Settings9,
-    ICoreWebView2WebMessageReceivedEventArgs,
+    CreateCoreWebView2Environment, ICoreWebView2, ICoreWebView2Controller,
+    ICoreWebView2Environment, ICoreWebView2Settings9, ICoreWebView2WebMessageReceivedEventArgs,
 };
 use webview2_com::{
     CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
@@ -16,24 +17,23 @@ use webview2_com::{
 };
 use windows::Win32::Foundation::HWND;
 use windows::Win32::System::Com::CoTaskMemFree;
-use windows::core::{Interface, PWSTR};
+use windows::core::{Interface, PWSTR, w};
 
 /// Initializes a WebView2 at the specified position.
-/// WebView2 creation is async because it may need to download the runtime.
 pub fn init_webview(
     hwnd: HWND,
     x: i32,
     y: i32,
     width: i32,
     height: i32,
+    theme: Theme,
     request_tx: Sender<Request>,
-    on_ready: impl FnOnce(&WebView) + 'static,
 ) {
     unsafe {
         let _ = CreateCoreWebView2Environment(
             &CreateCoreWebView2EnvironmentCompletedHandler::create(Box::new(move |_error, env| {
                 let Some(env) = env else { return Ok(()) };
-                create_controller(hwnd, x, y, width, height, env, request_tx, on_ready);
+                create_controller(hwnd, x, y, width, height, theme, env, request_tx);
                 Ok(())
             })),
         );
@@ -47,9 +47,9 @@ fn create_controller(
     y: i32,
     width: i32,
     height: i32,
+    theme: Theme,
     env: ICoreWebView2Environment,
     request_tx: Sender<Request>,
-    on_ready: impl FnOnce(&WebView) + 'static,
 ) {
     unsafe {
         let _ = env.CreateCoreWebView2Controller(
@@ -63,18 +63,6 @@ fn create_controller(
                         return Ok(());
                     };
 
-                    // Set dark background color to prevent white flash during resize
-                    // #1a1a1a = RGB(26, 26, 26)
-                    if let Ok(controller2) = controller.cast::<ICoreWebView2Controller2>() {
-                        let dark_bg = COREWEBVIEW2_COLOR {
-                            A: 255,
-                            R: 26,
-                            G: 26,
-                            B: 26,
-                        };
-                        let _ = controller2.SetDefaultBackgroundColor(dark_bg);
-                    }
-
                     // Ensure WebView is visible
                     let _ = controller.SetIsVisible(true);
 
@@ -83,7 +71,12 @@ fn create_controller(
                         webview,
                     };
                     wv.set_bounds(x, y, width, height);
-                    on_ready(&wv);
+                    let _ = wv.webview.NavigateToString(APP_HTML_W);
+                    let script = match theme {
+                        Theme::Dark => w!("document.documentElement.dataset.theme='dark';"),
+                        Theme::Light => w!("document.documentElement.dataset.theme='light';"),
+                    };
+                    let _ = wv.webview.ExecuteScript(script, None);
                     WEBVIEW
                         .set(wv)
                         .unwrap_or_else(|_| panic!("Failed to set webview"));

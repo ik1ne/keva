@@ -9,12 +9,42 @@
             box-sizing: border-box;
         }
 
+        :root {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #252526;
+            --bg-tertiary: #2d2d2d;
+            --bg-input: #3c3c3c;
+            --bg-hover: #2a2d2e;
+            --bg-selected: #094771;
+            --bg-header: #1e1e1e;
+            --text-primary: #d4d4d4;
+            --text-secondary: #969696;
+            --text-muted: #808080;
+            --border-color: #3c3c3c;
+            --accent-color: #007acc;
+        }
+
+        :root[data-theme="light"] {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f3f3f3;
+            --bg-tertiary: #e8e8e8;
+            --bg-input: #ffffff;
+            --bg-hover: #e8e8e8;
+            --bg-selected: #0060c0;
+            --bg-header: #f0f0f0;
+            --text-primary: #1e1e1e;
+            --text-secondary: #616161;
+            --text-muted: #767676;
+            --border-color: #d4d4d4;
+            --accent-color: #0066b8;
+        }
+
         html, body {
             height: 100%;
             overflow: hidden;
-            background: #1a1a1a;
+            background: var(--bg-primary);
             font-family: 'Segoe UI', sans-serif;
-            color: #d4d4d4;
+            color: var(--text-primary);
             user-select: none;
         }
 
@@ -37,13 +67,13 @@
         .search-icon {
             width: 40px;
             height: 40px;
-            background: #2d2d2d;
+            background: var(--bg-tertiary);
             border-radius: 4px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 18px;
-            color: #969696;
+            color: var(--text-secondary);
             flex-shrink: 0;
             -webkit-app-region: drag;
             app-region: drag;
@@ -51,11 +81,11 @@
 
         .search-input {
             flex: 1;
-            background: #3c3c3c;
-            border: 1px solid #3c3c3c;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
             border-radius: 4px;
             padding: 8px 12px;
-            color: #d4d4d4;
+            color: var(--text-primary);
             font-size: 14px;
             outline: none;
             -webkit-app-region: no-drag;
@@ -63,31 +93,31 @@
         }
 
         .search-input:focus {
-            border-color: #007acc;
+            border-color: var(--accent-color);
         }
 
         .search-input::placeholder {
-            color: #808080;
+            color: var(--text-muted);
         }
 
         .search-action-btn {
             width: 40px;
             height: 40px;
-            background: #2d2d2d;
+            background: var(--bg-tertiary);
             border: none;
             border-radius: 4px;
             display: none;
             align-items: center;
             justify-content: center;
             font-size: 18px;
-            color: #969696;
+            color: var(--text-secondary);
             cursor: pointer;
             flex-shrink: 0;
         }
 
         .search-action-btn:hover {
-            background: #3c3c3c;
-            color: #d4d4d4;
+            background: var(--bg-input);
+            color: var(--text-primary);
         }
 
         .search-action-btn.visible {
@@ -104,8 +134,8 @@
         .left-pane {
             width: 250px;
             min-width: 150px;
-            background: #252526;
-            border-right: 1px solid #3c3c3c;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
             overflow: hidden;
@@ -126,11 +156,12 @@
         }
 
         .key-item:hover {
-            background: #2a2d2e;
+            background: var(--bg-hover);
         }
 
         .key-item.selected {
-            background: #094771;
+            background: var(--bg-selected);
+            color: #ffffff;
         }
 
         .key-name {
@@ -151,19 +182,19 @@
         .key-action-btn {
             background: none;
             border: none;
-            color: #808080;
+            color: var(--text-muted);
             cursor: pointer;
             padding: 2px 4px;
             font-size: 12px;
         }
 
         .key-action-btn:hover {
-            color: #d4d4d4;
+            color: var(--text-primary);
         }
 
         .trash-section {
             display: none;
-            border-top: 1px solid #3c3c3c;
+            border-top: 1px solid var(--border-color);
             max-height: 120px;
             overflow-y: auto;
         }
@@ -171,8 +202,8 @@
         .trash-header {
             padding: 8px 16px;
             font-size: 12px;
-            color: #808080;
-            background: #1e1e1e;
+            color: var(--text-muted);
+            background: var(--bg-header);
             position: sticky;
             top: 0;
         }
@@ -183,11 +214,11 @@
             display: flex;
             align-items: center;
             font-size: 13px;
-            color: #808080;
+            color: var(--text-muted);
         }
 
         .trash-item:hover {
-            background: #2a2d2e;
+            background: var(--bg-hover);
         }
 
         .trash-icon {
@@ -212,12 +243,40 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #808080;
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .splash {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--bg-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            z-index: 9999;
+            transition: opacity 0.15s ease-out;
+        }
+
+        .splash.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .splash-text {
+            color: var(--text-muted);
             font-size: 14px;
         }
     </style>
 </head>
 <body>
+<div class="splash" id="splash">
+    <div class="splash-text">Loading database...</div>
+</div>
 <div class="app">
     <div class="search-bar">
         <div class="search-icon">&#128269;</div>
@@ -391,11 +450,34 @@
         }
     }
 
+    let currentTheme = 'dark';
+    const splash = document.getElementById('splash');
+
+    function hideSplash() {
+        if (splash && !splash.classList.contains('hidden')) {
+            splash.classList.add('hidden');
+            setTimeout(() => splash.remove(), 150);
+        }
+    }
+
+    function applyTheme(theme) {
+        currentTheme = theme;
+        document.documentElement.setAttribute('data-theme', theme);
+        if (editor) {
+            monaco.editor.setTheme(theme === 'light' ? 'vs' : 'vs-dark');
+        }
+    }
+
     window.chrome.webview.addEventListener('message', event => {
         const msg = event.data;
 
         switch (msg.type) {
+            case 'theme':
+                applyTheme(msg.theme);
+                break;
+
             case 'keys':
+                hideSplash();
                 keys = msg.keys.filter(k => !k.trashed);
                 trashedKeys = msg.keys.filter(k => k.trashed);
                 renderKeyList();

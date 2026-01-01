@@ -1,7 +1,9 @@
 //! WebView message bridge.
 
 use super::messages::{IncomingMessage, OutgoingMessage};
+use super::WEBVIEW;
 use crate::keva_worker::Request;
+use crate::render::theme::Theme;
 use std::sync::mpsc::Sender;
 use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2;
 use webview2_com::pwstr_from_str;
@@ -19,6 +21,14 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
     match message {
         IncomingMessage::Ready => {
             eprintln!("[Native] Received 'ready' from WebView");
+            if let Some(wv) = WEBVIEW.get() {
+                let theme = Theme::detect_system();
+                eprintln!("[Native] Detected system theme: {:?}", theme);
+                let msg = OutgoingMessage::Theme {
+                    theme: theme.as_str().to_string(),
+                };
+                post_message(&wv.webview, &msg);
+            }
             let _ = request_tx.send(Request::GetKeys);
         }
         IncomingMessage::Select { key } => {
