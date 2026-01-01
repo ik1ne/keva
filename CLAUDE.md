@@ -136,6 +136,27 @@ pub fn touch(...) -> Result<(), Error>;
 
 Document error conditions explicitly when a function can fail in multiple ways.
 
+### Platform-Specific Comments
+
+Keep comments that explain platform-specific behavior (Win32, WebView2, etc.) for readers unfamiliar with those APIs:
+
+```rust
+// Good - explains Win32-specific behavior
+// WM_NCCALCSIZE with wparam=TRUE: system is calculating client area during resize
+if wparam.0 != 0 { ... }
+
+// Good - explains why this pattern is needed
+// PostWebMessageAsJson is thread-safe, can be called from any thread
+wv.webview.PostWebMessageAsJson(msg);
+
+// Bad - obvious from context
+// Create the window
+CreateWindowExW(...);
+```
+
+Omit comments that restate what the code does, but keep comments that explain *why* or provide
+platform knowledge that isn't obvious from the code.
+
 ## Unit Testing
 
 ### Test Organization
