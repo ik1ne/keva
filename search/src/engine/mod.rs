@@ -1,5 +1,3 @@
-//! Search engine with dual indexes for Active and Trash keys.
-
 mod index;
 mod query;
 
@@ -12,72 +10,60 @@ use std::sync::Arc;
 pub use index::SearchResults;
 pub use query::SearchQuery;
 
-/// Search engine using two independent fuzzy indexes:
-/// - Active index
-/// - Trash index
-///
-/// This is designed for non-blocking GUI integration. The notify callback
-/// is invoked when Nucleo's background worker has new results ready.
 pub struct SearchEngine {
     active: Index,
     trash: Index,
     config: SearchConfig,
-    active_finished: bool,
-    trashed_finished: bool,
 }
 
-/// Create operations.
 impl SearchEngine {
-    /// Creates a new search engine with initial keys and a notification callback.
-    ///
-    /// The `notify` callback is invoked by Nucleo's background worker when new
-    /// results are ready. This is typically used to trigger a UI repaint.
+    /// The `notify` callback is invoked by Nucleo's background worker when new results are ready.
     pub fn new(
         active: Vec<Key>,
         trashed: Vec<Key>,
         config: SearchConfig,
         notify: Arc<dyn Fn() + Send + Sync>,
     ) -> Self {
-        let rebuild_threshold = config.rebuild_threshold;
-
         Self {
-            active: Index::new(active, rebuild_threshold, notify.clone()),
-            trash: Index::new(trashed, rebuild_threshold, notify),
+            active: Index::new(
+                active,
+                config.rebuild_threshold,
+                config.active_result_limit,
+                notify.clone(),
+            ),
+            trash: Index::new(
+                trashed,
+                config.rebuild_threshold,
+                config.trashed_result_limit,
+                notify,
+            ),
             config,
-            active_finished: true,
-            trashed_finished: true,
         }
     }
 }
 
 /// Mutation operations.
 impl SearchEngine {
-    /// Adds a key as active.
     pub fn add_active(&mut self, key: Key) {
-        // Ensure it isn't considered present in trash.
         self.trash.remove(&key);
         self.active.insert(key);
     }
 
-    /// Moves a key from active to trashed.
     pub fn trash(&mut self, key: &Key) {
         self.active.remove(key);
         self.trash.insert(key.clone());
     }
 
-    /// Moves a key from trashed to active.
     pub fn restore(&mut self, key: &Key) {
         self.trash.remove(key);
         self.active.insert(key.clone());
     }
 
-    /// Removes a key from both indexes (purge).
     pub fn remove(&mut self, key: &Key) {
         self.active.remove(key);
         self.trash.remove(key);
     }
 
-    /// Renames a key within whichever index it is currently present in.
     pub fn rename(&mut self, old: &Key, new: Key) {
         if self.active.is_present(old) {
             self.active.remove(old);
@@ -93,11 +79,6 @@ impl SearchEngine {
 
 /// Search operations.
 impl SearchEngine {
-    /// Sets the search pattern.
-    ///
-    /// This reconfigures the Nucleo pattern for both indexes. The search runs
-    /// asynchronously on Nucleo's background threadpool. Call `tick()` to
-    /// drive the search forward.
     pub fn set_query(&mut self, query: SearchQuery) {
         let SearchQuery::Fuzzy(ref pattern) = query;
 
@@ -117,32 +98,23 @@ impl SearchEngine {
             .set_pattern(pattern, case_matching, normalization);
         self.trash
             .set_pattern(pattern, case_matching, normalization);
-
-        self.active_finished = false;
-        self.trashed_finished = false;
     }
 
-    /// Drives the search forward without blocking.
-    ///
-    /// This calls `tick()` on both indexes, which returns immediately.
-    /// Call this from the GUI event loop (e.g., after receiving a notify callback
-    /// or on each frame while `!is_finished()`).
-    pub fn tick(&mut self) {
-        self.active_finished = self.active.tick();
-        self.trashed_finished = self.trash.tick();
+    /// Returns true if results may have changed.
+    pub fn tick(&mut self) -> bool {
+        let active_changed = self.active.tick();
+        let trash_changed = self.trash.tick();
+        active_changed || trash_changed
     }
 
-    /// Returns true if both indexes have finished searching.
-    pub fn is_finished(&self) -> bool {
-        self.active_finished && self.trashed_finished
+    pub fn is_done(&self) -> bool {
+        self.active.is_done() && self.trash.is_done()
     }
 
-    /// Returns active search results for zero-copy iteration.
     pub fn active_results(&self) -> SearchResults<'_> {
         self.active.results()
     }
 
-    /// Returns trashed search results for zero-copy iteration.
     pub fn trashed_results(&self) -> SearchResults<'_> {
         self.trash.results()
     }
@@ -150,11 +122,7 @@ impl SearchEngine {
 
 /// Maintenance operations.
 impl SearchEngine {
-    /// Performs search index maintenance.
-    ///
     /// Triggers index rebuild if pending deletions exceed the threshold.
-    /// Call this during `KevaCore::maintenance(...)` to avoid heavy work
-    /// during active UI interactions.
     pub fn maintenance_compact(&mut self) {
         self.active.rebuild_if_needed();
         self.trash.rebuild_if_needed();

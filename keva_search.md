@@ -34,12 +34,14 @@ struct Index {
     injected_keys: HashSet<Key>,
     tombstones: HashSet<Key>,
     pending_deletions: usize,
+    rebuild_threshold: usize,
     result_limit: usize,
     at_threshold: bool,
+    current_pattern: String,
 }
 ```
 
-Wraps Nucleo with tombstone-based deletion and threshold tracking.
+Wraps Nucleo with tombstone-based deletion, threshold tracking, and pattern caching for append optimization.
 
 ### SearchResults
 
@@ -193,7 +195,13 @@ fn tick(&mut self) -> bool {
 
     let status = self.nucleo.tick(0);  // Non-blocking
 
-    if self.results_count() >= self.result_limit || !status.running {
+    // Count results excluding tombstones
+    let result_count = self.nucleo.snapshot()
+        .matched_items(..)
+        .filter(|item| !self.tombstones.contains(item.data))
+        .count();
+
+    if result_count >= self.result_limit || !status.running {
         self.at_threshold = true;
     }
 
@@ -248,6 +256,21 @@ fn iter(&self) -> impl Iterator<Item = &Key> {
         .matched_items(..)
         .filter(|item| !self.tombstones.contains(item.data))
         .map(|item| item.data)
+}
+```
+
+## Pattern Append Optimization
+
+When the new search pattern extends the previous one (e.g., "fo" → "foo"), Nucleo can reuse previous matching work:
+
+```rust
+fn set_pattern(&mut self, pattern: &str, ...) {
+    let append = !self.current_pattern.is_empty()
+        && pattern.starts_with(&self.current_pattern);
+
+    self.nucleo.pattern.reparse(0, pattern, case_matching, normalization, append);
+    self.current_pattern = pattern.to_string();
+    self.at_threshold = false;  // Reset threshold for new search
 }
 ```
 

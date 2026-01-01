@@ -1,26 +1,19 @@
-//! Search configuration types.
-
-/// Case matching behavior for search.
 #[derive(Debug, Clone, Copy, Default)]
 pub enum CaseMatching {
-    /// Always case sensitive.
     Sensitive,
-    /// Always case insensitive.
     Insensitive,
-    /// Smart case: case-insensitive unless query contains uppercase.
+    /// Case-insensitive unless query contains uppercase.
     #[default]
     Smart,
 }
 
-/// Configuration for search behavior.
 #[derive(Debug, Clone)]
 pub struct SearchConfig {
-    /// How to match case in search queries.
     pub case_matching: CaseMatching,
-    /// Whether to apply Unicode normalization.
     pub unicode_normalization: bool,
-    /// Number of pending deletions before triggering index rebuild.
     pub rebuild_threshold: usize,
+    pub active_result_limit: usize,
+    pub trashed_result_limit: usize,
 }
 
 impl Default for SearchConfig {
@@ -29,6 +22,8 @@ impl Default for SearchConfig {
             case_matching: CaseMatching::default(),
             unicode_normalization: true,
             rebuild_threshold: 100,
+            active_result_limit: 100,
+            trashed_result_limit: 20,
         }
     }
 }
