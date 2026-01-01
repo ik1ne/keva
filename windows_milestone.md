@@ -7,7 +7,7 @@ and includes test cases for verification.
 
 | #   | Milestone              | Description                                  | Status |
 |-----|------------------------|----------------------------------------------|--------|
-| M0  | keva_core Verification | Verify keva_core matches keva_core.md spec   | ❌      |
+| M0  | keva_core Verification | Verify keva_core matches keva_core.md spec   | ✅      |
 | M1  | Window Skeleton        | Borderless window, resize, tray icon         | ✅      |
 | M2  | WebView + Bridge       | WebView2 hosting, postMessage, dark theme    | ✅      |
 | M3  | Worker Thread          | Main↔Worker mpsc, keva_core integration      | ❌      |
@@ -66,22 +66,22 @@ complete when both crates compile with the specified API surface and pass their 
 
 | TC       | Description                                                              | Status |
 |----------|--------------------------------------------------------------------------|--------|
-| TC-M0-01 | keva_core compiles with specified API surface                            | ❌      |
-| TC-M0-02 | keva_core storage structure matches spec (content/, blobs/, thumbnails/) | ❌      |
-| TC-M0-03 | keva_core Key validation enforces constraints (1-256 chars, trimmed)     | ❌      |
-| TC-M0-04 | keva_core attachment conflict resolution works (Overwrite/Rename/Skip)   | ❌      |
-| TC-M0-05 | keva_core thumbnail versioning triggers regeneration                     | ❌      |
-| TC-M0-06 | keva_core 1GB file limit enforced                                        | ❌      |
-| TC-M0-07 | keva_core lifecycle transitions correct (Active→Trash→Purge)             | ❌      |
-| TC-M0-08 | keva_core timestamp updates match spec                                   | ❌      |
-| TC-M0-09 | keva_core test suite passes                                              | ❌      |
-| TC-M0-10 | keva_search compiles with specified API surface                          | ❌      |
-| TC-M0-11 | keva_search dual-index architecture (active/trashed)                     | ❌      |
-| TC-M0-12 | keva_search tombstone-based deletion works                               | ❌      |
-| TC-M0-13 | keva_search stop-at-threshold behavior (100 active, 20 trashed)          | ❌      |
-| TC-M0-14 | keva_search index compaction triggers at rebuild_threshold               | ❌      |
-| TC-M0-15 | keva_search smart case matching works                                    | ❌      |
-| TC-M0-16 | keva_search test suite passes                                            | ❌      |
+| TC-M0-01 | keva_core compiles with specified API surface                            | ✅      |
+| TC-M0-02 | keva_core storage structure matches spec (content/, blobs/, thumbnails/) | ✅      |
+| TC-M0-03 | keva_core Key validation enforces constraints (1-256 chars, trimmed)     | ✅      |
+| TC-M0-04 | keva_core attachment conflict resolution works (Overwrite/Rename/Skip)   | ✅      |
+| TC-M0-05 | keva_core thumbnail versioning triggers regeneration                     | ✅      |
+| TC-M0-06 | keva_core 1GB file limit enforced                                        | ✅      |
+| TC-M0-07 | keva_core lifecycle transitions correct (Active→Trash→Purge)             | ✅      |
+| TC-M0-08 | keva_core timestamp updates match spec                                   | ✅      |
+| TC-M0-09 | keva_core test suite passes                                              | ✅      |
+| TC-M0-10 | keva_search compiles with specified API surface                          | ✅      |
+| TC-M0-11 | keva_search dual-index architecture (active/trashed)                     | ✅      |
+| TC-M0-12 | keva_search tombstone-based deletion works                               | ✅      |
+| TC-M0-13 | keva_search stop-at-threshold behavior (100 active, 20 trashed)          | ✅      |
+| TC-M0-14 | keva_search index compaction triggers at rebuild_threshold               | ✅      |
+| TC-M0-15 | keva_search smart case matching works                                    | ✅      |
+| TC-M0-16 | keva_search test suite passes                                            | ✅      |
 
 ---
 

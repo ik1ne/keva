@@ -4,7 +4,7 @@
 
 use crate::webview::messages::{KeyInfo, OutgoingMessage, ValueInfo};
 use keva_core::core::KevaCore;
-use keva_core::types::{ClipData, Config, Key, SavedConfig, TextContent};
+use keva_core::types::{Config, Key, SavedConfig};
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
@@ -69,20 +69,14 @@ fn handle_request(keva: &mut KevaCore, request: Request) -> Option<OutgoingMessa
         Request::GetKeys => Some(get_keys_response(keva)),
         Request::GetValue { key: key_str } => {
             let now = SystemTime::now();
-            let result = (|| {
+            let value = (|| {
                 let key = Key::try_from(key_str.as_str()).ok()?;
                 let _ = keva.touch(&key, now);
-                keva.get(&key).ok().flatten()
+                let _value = keva.get(&key).ok().flatten()?;
+                let content_path = keva.content_path(&key);
+                let content = std::fs::read_to_string(content_path).unwrap_or_default();
+                Some(ValueInfo::Text { content })
             })();
-
-            let value = result.map(|v| match v.clip_data {
-                ClipData::Text(TextContent::Inlined(s)) => ValueInfo::Text { content: s },
-                ClipData::Text(TextContent::BlobStored { path }) => {
-                    let content = std::fs::read_to_string(path).unwrap_or_default();
-                    ValueInfo::Text { content }
-                }
-                ClipData::Files(files) => ValueInfo::Files { count: files.len() },
-            });
 
             Some(OutgoingMessage::Value { value })
         }
@@ -92,15 +86,19 @@ fn handle_request(keva: &mut KevaCore, request: Request) -> Option<OutgoingMessa
         } => {
             let now = SystemTime::now();
             if let Ok(key) = Key::try_from(key_str.as_str()) {
-                let _ = keva.upsert_text(&key, &content, now);
-                eprintln!("[KevaWorker] Saved key: {}", key_str);
+                let content_path = keva.content_path(&key);
+                if std::fs::write(&content_path, &content).is_ok() {
+                    let _ = keva.touch(&key, now);
+                    eprintln!("[KevaWorker] Saved key: {}", key_str);
+                }
             }
             None
         }
         Request::Create { key: key_str } => {
             let now = SystemTime::now();
-            if let Ok(key) = Key::try_from(key_str.as_str()) {
-                let _ = keva.upsert_text(&key, "", now);
+            if let Ok(key) = Key::try_from(key_str.as_str())
+                && keva.create(&key, now).is_ok()
+            {
                 eprintln!("[KevaWorker] Created key: {}", key_str);
             }
             // Return updated key list
@@ -137,7 +135,6 @@ fn open_keva() -> KevaCore {
         saved: SavedConfig {
             trash_ttl: Duration::from_secs(30 * 24 * 60 * 60), // 30 days
             purge_ttl: Duration::from_secs(7 * 24 * 60 * 60),  // 7 days
-            inline_threshold_bytes: 1024 * 1024,               // 1MB
         },
     };
 
