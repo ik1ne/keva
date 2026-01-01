@@ -406,6 +406,7 @@ Each active key displays on hover/selection:
 - **Rename button (pen icon):** Opens inline editor to modify key.
     - If rename target exists: confirmation prompt, target key is permanently overwritten (no restoration)
     - Invalid key names (empty, >256 chars) rejected with inline error message
+    - Renamed key maintains its position in the list (no re-search); removed only when search query changes
 - **Delete button (trash icon):** Deletes the key
 
 **Trashed Key Controls:**

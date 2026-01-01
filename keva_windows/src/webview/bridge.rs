@@ -43,6 +43,20 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
         IncomingMessage::Create { key } => {
             let _ = request_tx.send(Request::Create { key });
         }
+        IncomingMessage::Rename {
+            old_key,
+            new_key,
+            force,
+        } => {
+            let _ = request_tx.send(Request::Rename {
+                old_key,
+                new_key,
+                force,
+            });
+        }
+        IncomingMessage::Trash { key } => {
+            let _ = request_tx.send(Request::Trash { key });
+        }
         IncomingMessage::Hide => {
             let _ = unsafe { ShowWindow(parent_hwnd, SW_HIDE) };
         }

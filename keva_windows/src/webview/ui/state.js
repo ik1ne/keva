@@ -10,15 +10,22 @@ const State = {
         isDirty: false,
         isShuttingDown: false,
         pendingSelectKey: null,
+        focusEditorOnLoad: false,
         currentTheme: 'dark',
     },
 
     setSelectedKey: function (key, isTrashed) {
+        if (this.data.isDirty && this.data.selectedKey && this.data.selectedKey !== key) {
+            Editor.forceSave();
+        }
         this.data.selectedKey = key;
         this.data.isSelectedTrashed = isTrashed;
     },
 
     clearSelection: function () {
+        if (this.data.isDirty && this.data.selectedKey) {
+            Editor.forceSave();
+        }
         this.data.selectedKey = null;
         this.data.isSelectedTrashed = false;
     },

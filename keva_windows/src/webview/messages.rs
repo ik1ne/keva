@@ -15,6 +15,8 @@ pub enum IncomingMessage {
     Select { key: String },
     Save { key: String, content: String },
     Create { key: String },
+    Rename { old_key: String, new_key: String, force: bool },
+    Trash { key: String },
     Hide,
     ShutdownAck,
 }
@@ -45,7 +47,21 @@ pub enum OutgoingMessage {
         key: String,
         value: Option<ValueInfo>,
     },
+    RenameResult {
+        old_key: String,
+        new_key: String,
+        result: RenameResultType,
+    },
     Shutdown,
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum RenameResultType {
+    Success,
+    DestinationExists,
+    InvalidKey,
+    NotFound,
 }
 
 /// Exact match status for current search query.

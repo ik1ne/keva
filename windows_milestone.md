@@ -11,8 +11,8 @@ and includes test cases for verification.
 | M1  | Window Skeleton        | Borderless window, resize, tray icon         | ✅      |
 | M2  | WebView + Bridge       | WebView2 hosting, postMessage, dark theme    | ✅      |
 | M3  | Worker Thread          | Main↔Worker mpsc, keva_core integration      | ✅      |
-| M4  | Search Engine          | Nucleo on main thread, progressive results   | ❌      |
-| M5  | Key List               | Left pane, create/rename/delete, selection   | ❌      |
+| M4  | Search Engine          | Nucleo on main thread, progressive results   | ✅      |
+| M5  | Key List               | Left pane, create/rename/delete, selection   | ✅      |
 | M6  | Monaco Editor          | FileSystemHandle, markdown mode, auto-save   | ❌      |
 | M7  | Four-State Focus       | Focus model, keyboard navigation, dimming    | ❌      |
 | M8  | Attachments Panel      | File list, thumbnails, drag to Monaco        | ❌      |
@@ -26,6 +26,7 @@ and includes test cases for verification.
 | M16 | First-Run Dialog       | Welcome message, launch at login checkbox    | ❌      |
 | M17 | Monaco Bundling        | Embed resources, single exe                  | ❌      |
 | M18 | Installer              | WiX/MSIX, uninstaller, data deletion prompt  | ❌      |
+| M19 | Layout Polish          | Resizable panes, layout persistence          | ❌      |
 
 ---
 
@@ -233,11 +234,11 @@ updates.
 
 | TC       | Description                                     | Status |
 |----------|-------------------------------------------------|--------|
-| TC-M4-01 | Type in search bar, matching keys appear        | ❌      |
-| TC-M4-02 | Empty search shows all keys                     | ❌      |
-| TC-M4-03 | Results stop changing after threshold reached   | ❌      |
-| TC-M4-04 | "abc" matches "ABC"; "Abc" does not match "abc" | ❌      |
-| TC-M4-05 | Trashed keys appear in separate section         | ❌      |
+| TC-M4-01 | Type in search bar, matching keys appear        | ✅      |
+| TC-M4-02 | Empty search shows all keys                     | ✅      |
+| TC-M4-03 | Results stop changing after threshold reached   | ✅      |
+| TC-M4-04 | "abc" matches "ABC"; "Abc" does not match "abc" | ✅      |
+| TC-M4-05 | Trashed keys appear in separate section         | ✅      |
 
 ---
 
@@ -256,6 +257,7 @@ bottom shows trashed keys separately.
 - Trash section at bottom with fixed height (~2.5 rows)
 - Long key names: truncate with ellipsis
 - Inline error message for invalid rename (empty, >256 chars)
+- Rename updates key in place (maintains position); list only refreshes on search query change
 
 **Key Interactions:**
 
@@ -269,17 +271,30 @@ bottom shows trashed keys separately.
 
 | TC       | Description                                         | Status |
 |----------|-----------------------------------------------------|--------|
-| TC-M5-01 | Keys display in left pane                           | ❌      |
-| TC-M5-02 | Click key selects it, content shown in right pane   | ❌      |
-| TC-M5-03 | Arrow keys navigate key list                        | ❌      |
-| TC-M5-04 | Enter in search bar with no match creates new key   | ❌      |
-| TC-M5-05 | Enter in search bar with exact match selects key    | ❌      |
-| TC-M5-06 | Rename key via inline editor                        | ❌      |
-| TC-M5-07 | Rename to existing key shows overwrite confirmation | ❌      |
-| TC-M5-08 | Rename validation rejects empty or >256 chars       | ❌      |
-| TC-M5-09 | Delete key moves to trash                           | ❌      |
-| TC-M5-10 | Trash section shows at bottom with trashed keys     | ❌      |
-| TC-M5-11 | Long key name truncates with ellipsis               | ❌      |
+| TC-M5-01 | Keys display in left pane                           | ✅      |
+| TC-M5-02 | Click key selects it, content shown in right pane   | ✅      |
+| TC-M5-03 | Arrow keys navigate key list                        | ✅      |
+| TC-M5-04 | Enter in search bar with no match creates key, focuses editor | ✅      |
+| TC-M5-05 | Enter in search bar with exact match selects key, focuses editor | ✅      |
+| TC-M5-06 | Rename key via inline editor                        | ✅      |
+| TC-M5-07 | Rename to existing key shows overwrite confirmation | ✅      |
+| TC-M5-08 | Rename validation rejects empty or >256 chars, keeps focus | ✅      |
+| TC-M5-09 | Delete key moves to trash                           | ✅      |
+| TC-M5-10 | Trash section shows at bottom with trashed keys     | ✅      |
+| TC-M5-11 | Long key name truncates with ellipsis               | ✅      |
+| TC-M5-12 | Up arrow from first key returns focus to search bar | ✅      |
+| TC-M5-13 | Renamed key maintains position in list (no re-sort) | ✅      |
+| TC-M5-14 | Escape during rename cancels without hiding window  | ✅      |
+| TC-M5-15 | Search action button shows ➕ (no match) or ✏️ (match) | ✅      |
+| TC-M5-16 | Clicking action button creates/selects key, focuses editor | ✅      |
+| TC-M5-17 | Rename overwrite updates selection and reloads content | ✅      |
+| TC-M5-18 | Unsaved changes saved when selection changes (typing or key switch) | ✅      |
+| TC-M5-19 | Up arrow in search bar does nothing | ✅      |
+| TC-M5-20 | Enter on selected key in left pane focuses editor | ✅      |
+| TC-M5-21 | Clicking trashed key shows content as read-only | ✅      |
+| TC-M5-22 | Down arrow from last key stays on last key | ✅      |
+| TC-M5-23 | Renaming key to same name cancels rename (no change) | ✅      |
+| TC-M5-24 | Key action buttons (rename/delete) appear on hover | ✅      |
 
 ---
 
@@ -758,5 +773,33 @@ Uninstaller removes files and optionally data.
 | TC-M18-06 | "Yes" deletes data directory          | ❌      |
 | TC-M18-07 | "No" preserves data directory         | ❌      |
 | TC-M18-08 | Upgrade install preserves user data   | ❌      |
+
+---
+
+## M19: Layout Polish
+
+**Goal:** Resizable panes with persistent layout preferences.
+
+**Description:** Add draggable divider between left and right panes. User can resize by dragging. Width persists across
+sessions. Handle window resize gracefully by clamping pane width to valid range.
+
+**Implementation Notes:**
+
+- Drag handle between left and right panes (4-6px wide)
+- Cursor changes to `col-resize` on hover
+- Left pane: min 150px, max 50% of window width
+- On window resize: clamp left pane width if exceeds max
+- Persist width to config (not ratio)
+
+**Test Cases:**
+
+| TC        | Description                                    | Status |
+|-----------|------------------------------------------------|--------|
+| TC-M19-01 | Drag divider resizes left pane                 | ❌      |
+| TC-M19-02 | Left pane respects minimum width (150px)       | ❌      |
+| TC-M19-03 | Left pane respects maximum width (50% window)  | ❌      |
+| TC-M19-04 | Pane width persists after restart              | ❌      |
+| TC-M19-05 | Window resize clamps pane width if needed      | ❌      |
+| TC-M19-06 | Cursor shows col-resize on divider hover       | ❌      |
 
 ---

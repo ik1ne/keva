@@ -1,6 +1,6 @@
 //! Background worker thread for KevaCore and SearchEngine operations.
 
-use crate::webview::messages::{ExactMatch, OutgoingMessage, ValueInfo};
+use crate::webview::messages::{ExactMatch, OutgoingMessage, RenameResultType, ValueInfo};
 use keva_core::core::KevaCore;
 use keva_core::types::{Config, Key, SavedConfig};
 use keva_search::{SearchConfig, SearchEngine, SearchQuery};
@@ -25,6 +25,14 @@ pub enum Request {
         content: String,
     },
     Create {
+        key: String,
+    },
+    Rename {
+        old_key: String,
+        new_key: String,
+        force: bool,
+    },
+    Trash {
         key: String,
     },
     Search {
@@ -132,6 +140,61 @@ fn worker_loop(
 
                 if success {
                     // Refresh search to include newly created key
+                    search.set_query(SearchQuery::Fuzzy(current_query.clone()));
+                    search.tick();
+                    send_search_results(&search, &current_query, &responses);
+                }
+            }
+
+            Request::Rename {
+                old_key: old_key_str,
+                new_key: new_key_str,
+                force,
+            } => {
+                let now = SystemTime::now();
+                let result = (|| {
+                    let old_key = Key::try_from(old_key_str.as_str())
+                        .map_err(|_| RenameResultType::NotFound)?;
+                    let new_key = Key::try_from(new_key_str.as_str())
+                        .map_err(|_| RenameResultType::InvalidKey)?;
+
+                    // Check if destination exists
+                    if keva.get(&new_key).ok().flatten().is_some() {
+                        if force {
+                            // Force mode: purge destination first
+                            let _ = keva.purge(&new_key);
+                            search.remove(&new_key);
+                        } else {
+                            return Err(RenameResultType::DestinationExists);
+                        }
+                    }
+
+                    // Perform rename
+                    keva.rename(&old_key, &new_key, now)
+                        .map_err(|_| RenameResultType::NotFound)?;
+                    search.rename(&old_key, new_key);
+
+                    Ok(())
+                })();
+
+                let result_type = match result {
+                    Ok(()) => RenameResultType::Success,
+                    Err(e) => e,
+                };
+
+                let _ = responses.send(OutgoingMessage::RenameResult {
+                    old_key: old_key_str,
+                    new_key: new_key_str,
+                    result: result_type,
+                });
+            }
+
+            Request::Trash { key: key_str } => {
+                let now = SystemTime::now();
+                if let Ok(key) = Key::try_from(key_str.as_str())
+                    && keva.trash(&key, now).is_ok()
+                {
+                    search.trash(&key);
                     search.set_query(SearchQuery::Fuzzy(current_query.clone()));
                     search.tick();
                     send_search_results(&search, &current_query, &responses);

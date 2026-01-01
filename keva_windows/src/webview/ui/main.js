@@ -64,8 +64,11 @@ const Main = {
             if (!query) return;
 
             if (State.data.exactMatch !== 'none') {
+                State.data.focusEditorOnLoad = true;
                 KeyList.requestSelect(query);
             } else {
+                State.data.pendingSelectKey = query;
+                State.data.focusEditorOnLoad = true;
                 Api.send({type: 'create', key: query});
             }
             self.dom.searchInput.value = '';
@@ -78,11 +81,54 @@ const Main = {
                 const query = self.dom.searchInput.value.trim();
                 if (query) {
                     if (State.data.exactMatch !== 'none') {
+                        State.data.focusEditorOnLoad = true;
                         KeyList.requestSelect(query);
                     } else {
                         State.data.pendingSelectKey = query;
+                        State.data.focusEditorOnLoad = true;
                         Api.send({type: 'create', key: query});
                     }
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                const firstItem = document.querySelector('.key-item');
+                if (firstItem) {
+                    const keyName = firstItem.dataset.key;
+                    if (keyName) KeyList.requestSelect(keyName);
+                    firstItem.focus();
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+            }
+        });
+
+        // Key list keyboard navigation
+        this.dom.keyList.addEventListener('keydown', function (e) {
+            const focused = document.activeElement;
+            if (!focused || !focused.classList.contains('key-item')) return;
+
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (Editor.instance) {
+                    Editor.instance.focus();
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                const next = focused.nextElementSibling;
+                if (next && next.classList.contains('key-item')) {
+                    const keyName = next.dataset.key;
+                    if (keyName) KeyList.requestSelect(keyName);
+                    next.focus();
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                const prev = focused.previousElementSibling;
+                if (prev && prev.classList.contains('key-item')) {
+                    const keyName = prev.dataset.key;
+                    if (keyName) KeyList.requestSelect(keyName);
+                    prev.focus();
+                } else {
+                    self.dom.searchInput.focus();
                 }
             }
         });
@@ -124,8 +170,13 @@ const Main = {
                     self.updateSearchButton();
 
                     if (State.data.pendingSelectKey) {
-                        KeyList.requestSelect(State.data.pendingSelectKey);
-                        State.data.pendingSelectKey = null;
+                        // Only process if key exists in results (handles race with async search)
+                        if (State.data.keys.indexOf(State.data.pendingSelectKey) !== -1) {
+                            KeyList.requestSelect(State.data.pendingSelectKey);
+                            const item = document.querySelector('.key-item[data-key="' + CSS.escape(State.data.pendingSelectKey) + '"]');
+                            if (item) item.focus();
+                            State.data.pendingSelectKey = null;
+                        }
                     }
                     break;
 
@@ -134,12 +185,16 @@ const Main = {
                     if (msg.value) {
                         if (msg.value.type === 'text') {
                             Editor.show(msg.value.content);
+                            if (State.data.focusEditorOnLoad && Editor.instance) {
+                                Editor.instance.focus();
+                            }
                         } else if (msg.value.type === 'files') {
                             Editor.showEmpty(msg.value.count + ' file(s)');
                         }
                     } else {
                         Editor.showEmpty('Key not found');
                     }
+                    State.data.focusEditorOnLoad = false;
                     break;
 
                 case 'keyCreated':
@@ -147,6 +202,10 @@ const Main = {
                         alert('Key already exists: ' + msg.key);
                         State.data.pendingSelectKey = null;
                     }
+                    break;
+
+                case 'renameResult':
+                    KeyList.handleRenameResult(msg.oldKey, msg.newKey, msg.result);
                     break;
 
                 case 'shutdown':

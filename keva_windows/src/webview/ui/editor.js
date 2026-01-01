@@ -67,7 +67,6 @@ const Editor = {
             this.instance.setValue(content || '');
             this.instance.updateOptions({readOnly: State.data.isSelectedTrashed});
             State.data.isDirty = false;
-            this.instance.focus();
         }
     },
 

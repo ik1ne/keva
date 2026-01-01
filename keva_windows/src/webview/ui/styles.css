@@ -159,6 +159,10 @@ html, body {
     color: #ffffff;
 }
 
+.key-item:focus {
+    outline: none;
+}
+
 .key-name {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -218,6 +222,100 @@ html, body {
 
 .trash-icon {
     margin-right: 8px;
+}
+
+/* Inline rename editor */
+.key-item.editing {
+    padding: 4px 16px;
+}
+
+.key-item.editing .key-name,
+.key-item.editing .key-actions {
+    display: none;
+}
+
+.rename-input {
+    flex: 1;
+    background: var(--bg-input);
+    border: 1px solid var(--accent-color);
+    border-radius: 2px;
+    padding: 4px 8px;
+    color: var(--text-primary);
+    font-size: 14px;
+    outline: none;
+}
+
+.rename-input.invalid {
+    border-color: #f44336;
+}
+
+.rename-error {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    top: 100%;
+    background: #f44336;
+    color: white;
+    padding: 4px 8px;
+    font-size: 12px;
+    border-radius: 2px;
+    z-index: 10;
+}
+
+/* Confirmation dialog */
+.dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.dialog {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    min-width: 300px;
+    max-width: 400px;
+}
+
+.dialog-message {
+    margin-bottom: 16px;
+    color: var(--text-primary);
+}
+
+.dialog-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.dialog-btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.dialog-btn-primary {
+    background: var(--accent-color);
+    color: white;
+}
+
+.dialog-btn-secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.dialog-btn:hover {
+    opacity: 0.9;
 }
 
 .right-pane {
