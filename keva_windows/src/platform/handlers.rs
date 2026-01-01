@@ -273,8 +273,6 @@ pub fn on_settingchange(hwnd: HWND, lparam: LPARAM) -> LRESULT {
         // "ImmersiveColorSet" is broadcast when system theme changes
         if unsafe { setting.as_wide() == w!("ImmersiveColorSet").as_wide() } {
             let theme = Theme::detect_system();
-            eprintln!("[Native] System theme changed: {:?}", theme);
-
             set_current_theme(theme);
             unsafe {
                 let _ = RedrawWindow(Some(hwnd), None, None, RDW_INVALIDATE);

@@ -18,7 +18,6 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
 
     match message {
         IncomingMessage::Ready => {
-            eprintln!("[Bridge] WebView ready");
             // Send theme directly (synchronous, UI thread)
             if let Some(wv) = WEBVIEW.get() {
                 let theme = Theme::detect_system();
@@ -48,7 +47,6 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
             let _ = unsafe { ShowWindow(parent_hwnd, SW_HIDE) };
         }
         IncomingMessage::ShutdownAck => {
-            eprintln!("[Bridge] ShutdownAck, sending to worker");
             let _ = request_tx.send(Request::Shutdown);
         }
     }

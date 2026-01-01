@@ -44,7 +44,6 @@ pub fn run() -> Result<()> {
 
         let initial_theme = Theme::detect_system();
         set_current_theme(initial_theme);
-        eprintln!("[Native] Initial theme: {:?}", initial_theme);
 
         let wc = WNDCLASSW {
             lpfnWndProc: Some(wndproc),

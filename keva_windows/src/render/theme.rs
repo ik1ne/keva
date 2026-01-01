@@ -37,11 +37,6 @@ impl Theme {
         let brightness = 5 * foreground.G as u32 + 2 * foreground.R as u32 + foreground.B as u32;
         let is_foreground_light = brightness > 8 * 128;
 
-        eprintln!(
-            "[Theme] Foreground: RGB({}, {}, {}), brightness={}, is_light={}",
-            foreground.R, foreground.G, foreground.B, brightness, is_foreground_light
-        );
-
         if is_foreground_light {
             Theme::Dark // Light foreground = dark mode
         } else {

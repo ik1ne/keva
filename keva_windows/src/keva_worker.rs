@@ -49,15 +49,8 @@ pub fn start(hwnd: HWND, response_tx: Sender<OutgoingMessage>) -> Sender<Request
         let hwnd = HWND(hwnd_raw as *mut _);
 
         let keva = open_keva();
-        eprintln!("[Worker] Database at {}", get_data_path().display());
-
         let active_keys = keva.active_keys().unwrap_or_default();
         let trashed_keys = keva.trashed_keys().unwrap_or_default();
-        eprintln!(
-            "[Worker] Loaded {} active, {} trashed keys",
-            active_keys.len(),
-            trashed_keys.len()
-        );
 
         let notify = Arc::new(move || {
             let _ = notify_tx.send(Request::SearchTick);
@@ -67,7 +60,6 @@ pub fn start(hwnd: HWND, response_tx: Sender<OutgoingMessage>) -> Sender<Request
         worker_loop(keva, search, request_rx, response_tx, hwnd);
     });
 
-    eprintln!("[Worker] Started");
     request_tx
 }
 
@@ -115,7 +107,6 @@ fn worker_loop(
                     let content_path = keva.content_path(&key);
                     if std::fs::write(&content_path, &content).is_ok() {
                         let _ = keva.touch(&key, now);
-                        eprintln!("[Worker] Saved: {}", key_str);
                     }
                 }
             }
@@ -127,7 +118,6 @@ fn worker_loop(
                     .and_then(|key| {
                         if keva.create(&key, now).is_ok() {
                             search.add_active(key);
-                            eprintln!("[Worker] Created: {}", key_str);
                             Some(())
                         } else {
                             None
@@ -163,7 +153,6 @@ fn worker_loop(
             }
 
             Request::Shutdown => {
-                eprintln!("[Worker] Shutdown received");
                 let _ =
                     unsafe { PostMessageW(Some(hwnd), WM_SHUTDOWN_COMPLETE, WPARAM(0), LPARAM(0)) };
                 break;
