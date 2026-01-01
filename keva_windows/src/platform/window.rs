@@ -10,8 +10,8 @@ use crate::platform::{
     hit_test::hit_test,
     tray::{WM_TRAYICON, add_tray_icon},
 };
-use crate::webview::WM_WEBVIEW_MESSAGE;
 use crate::render::theme::{Theme, WINDOW_HEIGHT, WINDOW_WIDTH};
+use crate::webview::WM_WEBVIEW_MESSAGE;
 use crate::webview::init_webview;
 use crate::webview::messages::OutgoingMessage;
 use crate::webview::{WEBVIEW, bridge::post_message};

@@ -520,7 +520,13 @@ mod thumbnail_generation {
         assert!(matches!(result, Err(FileStorageError::UnsupportedFormat)));
     }
 
-    fn create_test_image(storage: &FileStorage, key_hash: &Path, filename: &str, width: u32, height: u32) {
+    fn create_test_image(
+        storage: &FileStorage,
+        key_hash: &Path,
+        filename: &str,
+        width: u32,
+        height: u32,
+    ) {
         let img = image::RgbImage::from_fn(width, height, |x, y| {
             image::Rgb([(x % 256) as u8, (y % 256) as u8, 128])
         });
@@ -540,7 +546,9 @@ mod thumbnail_generation {
         let key_hash = Path::new("test_hash");
 
         create_test_image(&storage, key_hash, "landscape.png", 400, 300);
-        storage.generate_thumbnail(key_hash, "landscape.png").unwrap();
+        storage
+            .generate_thumbnail(key_hash, "landscape.png")
+            .unwrap();
 
         let thumb_path = storage.thumbnail_path(key_hash, "landscape.png");
         assert!(thumb_path.exists());
@@ -557,7 +565,9 @@ mod thumbnail_generation {
         let key_hash = Path::new("test_hash");
 
         create_test_image(&storage, key_hash, "portrait.png", 300, 600);
-        storage.generate_thumbnail(key_hash, "portrait.png").unwrap();
+        storage
+            .generate_thumbnail(key_hash, "portrait.png")
+            .unwrap();
 
         let thumb = open_thumbnail(&storage.thumbnail_path(key_hash, "portrait.png"));
         // 300x600 scaled to fit 200px max -> 100x200

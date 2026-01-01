@@ -116,7 +116,10 @@ fn seed_attachment_keys(keva: &mut KevaCore, now: SystemTime, base_path: &PathBu
 
                 match keva.add_attachments(&key, &attachments, now) {
                     Ok(value) => {
-                        println!("  Created: my-files ({} attachments)", value.attachments.len())
+                        println!(
+                            "  Created: my-files ({} attachments)",
+                            value.attachments.len()
+                        )
                     }
                     Err(e) => println!("  Failed to add attachments ({})", e),
                 }

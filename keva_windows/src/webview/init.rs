@@ -125,7 +125,12 @@ fn start_forwarder_thread(hwnd: HWND, response_rx: Receiver<OutgoingMessage>) {
             let boxed = Box::new(json);
             let ptr = Box::into_raw(boxed);
             unsafe {
-                let _ = PostMessageW(Some(hwnd), WM_WEBVIEW_MESSAGE, WPARAM(0), LPARAM(ptr as isize));
+                let _ = PostMessageW(
+                    Some(hwnd),
+                    WM_WEBVIEW_MESSAGE,
+                    WPARAM(0),
+                    LPARAM(ptr as isize),
+                );
             }
         }
     });
