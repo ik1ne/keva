@@ -598,10 +598,8 @@ If config.toml is missing: created with defaults, no popup.
 
 Each key stores:
 
-- **created_at:** When the key was first created.
-- **updated_at:** When the value was last modified.
-- **last_accessed:** When the key was last viewed, copied to clipboard, or value was modified.
-- **trashed_at:** When the key was moved to Trash (if applicable).
+- **last_accessed:** When the key was last viewed, copied to clipboard, or value was modified (Active state).
+- **trashed_at:** When the key was moved to Trash (Trash state).
 
 ### TTL Calculation
 

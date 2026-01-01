@@ -41,16 +41,17 @@ complete when both crates compile with the specified API surface and pass their 
 
 **keva_core Key APIs:**
 
-| Category    | APIs                                                                                       |
-|-------------|--------------------------------------------------------------------------------------------|
-| Lifecycle   | `open(config)`                                                                             |
-| Key Ops     | `get()`, `active_keys()`, `trashed_keys()`, `touch()`, `rename()`                          |
-| Content     | `get_content_path()`, `create()`, `mark_content_modified()`                                |
-| Attachments | `get_attachment_path()`, `add_attachments()`, `remove_attachment()`, `rename_attachment()` |
-| Thumbnails  | `get_thumbnail_path()` with `THUMB_VER` check                                              |
-| Trash       | `trash()`, `restore()`, `purge()`                                                          |
-| Clipboard   | `read_clipboard()`, `copy_text_to_clipboard()`, `copy_attachments_to_clipboard()`          |
-| Maintenance | `maintenance()`                                                                            |
+| Category    | APIs                                                                                   |
+|-------------|----------------------------------------------------------------------------------------|
+| Lifecycle   | `open(config)`                                                                         |
+| Key Ops     | `get()`, `active_keys()`, `trashed_keys()`, `touch()`, `rename()`                      |
+| Content     | `content_path()`, `create()`                                                           |
+| Attachments | `attachment_path()`, `add_attachments()`, `remove_attachment()`, `rename_attachment()` |
+| Thumbnails  | `thumbnail_paths()`                                                                    |
+| Trash       | `trash()`, `restore()`, `purge()`                                                      |
+| Maintenance | `maintenance()`                                                                        |
+
+Note: Clipboard operations are platform-specific and implemented in keva_windows (M9).
 
 **keva_search Key APIs:**
 
@@ -71,17 +72,16 @@ complete when both crates compile with the specified API surface and pass their 
 | TC-M0-03 | keva_core Key validation enforces constraints (1-256 chars, trimmed)     | ✅      |
 | TC-M0-04 | keva_core attachment conflict resolution works (Overwrite/Rename/Skip)   | ✅      |
 | TC-M0-05 | keva_core thumbnail versioning triggers regeneration                     | ✅      |
-| TC-M0-06 | keva_core 1GB file limit enforced                                        | ✅      |
-| TC-M0-07 | keva_core lifecycle transitions correct (Active→Trash→Purge)             | ✅      |
-| TC-M0-08 | keva_core timestamp updates match spec                                   | ✅      |
-| TC-M0-09 | keva_core test suite passes                                              | ✅      |
-| TC-M0-10 | keva_search compiles with specified API surface                          | ✅      |
-| TC-M0-11 | keva_search dual-index architecture (active/trashed)                     | ✅      |
-| TC-M0-12 | keva_search tombstone-based deletion works                               | ✅      |
-| TC-M0-13 | keva_search stop-at-threshold behavior (100 active, 20 trashed)          | ✅      |
-| TC-M0-14 | keva_search index compaction triggers at rebuild_threshold               | ✅      |
-| TC-M0-15 | keva_search smart case matching works                                    | ✅      |
-| TC-M0-16 | keva_search test suite passes                                            | ✅      |
+| TC-M0-06 | keva_core lifecycle transitions correct (Active→Trash→Purge)             | ✅      |
+| TC-M0-07 | keva_core timestamp updates (last_accessed, trashed_at)                  | ✅      |
+| TC-M0-08 | keva_core test suite passes (163 tests)                                  | ✅      |
+| TC-M0-09 | keva_search compiles with specified API surface                          | ✅      |
+| TC-M0-10 | keva_search dual-index architecture (active/trashed)                     | ✅      |
+| TC-M0-11 | keva_search tombstone-based deletion works                               | ✅      |
+| TC-M0-12 | keva_search stop-at-threshold behavior (100 active, 20 trashed)          | ✅      |
+| TC-M0-13 | keva_search index compaction triggers at rebuild_threshold               | ✅      |
+| TC-M0-14 | keva_search smart case matching works                                    | ✅      |
+| TC-M0-15 | keva_search test suite passes (35 tests)                                 | ✅      |
 
 ---
 
