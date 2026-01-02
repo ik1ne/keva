@@ -359,6 +359,16 @@ switch and app exit.
 | TC-M6-10 | Theme switch updates Monaco theme (dark/light)                 | ✅      |
 | TC-M6-11 | New key starts with empty content and placeholder              | ✅      |
 | TC-M6-12 | Content persists after app restart                             | ✅      |
+| TC-M6-13 | Large file (>1MB) loads in plaintext mode with reduced features| ✅      |
+| TC-M6-14 | Write error shows banner with retry button (see note)          | ✅      |
+| TC-M6-15 | Re-selecting same key does not reload content                  | ✅      |
+
+**TC-M6-14 Test Procedure:**
+1. Create a key with some content
+2. Find the content file in `%LOCALAPPDATA%\keva\content\` and mark it as read-only
+3. Edit and save - error banner should appear
+4. Uncheck read-only on the file
+5. Press retry - save should succeed and banner should disappear
 
 ---
 
