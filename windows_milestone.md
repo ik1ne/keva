@@ -13,7 +13,7 @@ and includes test cases for verification.
 | M3  | Worker Thread          | Main↔Worker mpsc, keva_core integration      | ✅      |
 | M4  | Search Engine          | Nucleo on main thread, progressive results   | ✅      |
 | M5  | Key List               | Left pane, create/rename/delete, selection   | ✅      |
-| M6  | Monaco Editor          | FileSystemHandle, markdown mode, auto-save   | ❌      |
+| M6  | Monaco Editor          | FileSystemHandle, markdown mode, auto-save   | ✅      |
 | M7  | Four-State Focus       | Focus model, keyboard navigation, dimming    | ❌      |
 | M8  | Attachments Panel      | File list, thumbnails, drag to Monaco        | ❌      |
 | M9  | Clipboard              | Native read, paste intercept, copy shortcuts | ❌      |
@@ -347,18 +347,18 @@ switch and app exit.
  
 | TC       | Description                                                    | Status |
 |----------|----------------------------------------------------------------|--------|
-| TC-M6-01 | Monaco editor loads with markdown highlighting                 | ❌      |
-| TC-M6-02 | Selecting key loads content into editor                        | ❌      |
-| TC-M6-03 | Edits persist after switching away and back                    | ❌      |
-| TC-M6-04 | Placeholder shows when content empty                           | ❌      |
-| TC-M6-05 | Rapid key switching does not lose unsaved edits                | ❌      |
-| TC-M6-06 | Quitting app does not lose unsaved edits                       | ❌      |
-| TC-M6-07 | Trashed key shows "Restore from trash to edit" on type attempt | ❌      |
-| TC-M6-08 | Trashed key content is read-only (cannot edit)                 | ❌      |
-| TC-M6-09 | Active key content is editable                                 | ❌      |
-| TC-M6-10 | Theme switch updates Monaco theme (dark/light)                 | ❌      |
-| TC-M6-11 | New key starts with empty content and placeholder              | ❌      |
-| TC-M6-12 | Content persists after app restart                             | ❌      |
+| TC-M6-01 | Monaco editor loads with markdown highlighting                 | ✅      |
+| TC-M6-02 | Selecting key loads content into editor                        | ✅      |
+| TC-M6-03 | Edits persist after switching away and back                    | ✅      |
+| TC-M6-04 | Placeholder shows when content empty                           | ✅      |
+| TC-M6-05 | Rapid key switching does not lose unsaved edits                | ✅      |
+| TC-M6-06 | Quitting app does not lose unsaved edits                       | ✅      |
+| TC-M6-07 | Trashed key shows "Restore from trash to edit" on type attempt | ✅      |
+| TC-M6-08 | Trashed key content is read-only (cannot edit)                 | ✅      |
+| TC-M6-09 | Active key content is editable                                 | ✅      |
+| TC-M6-10 | Theme switch updates Monaco theme (dark/light)                 | ✅      |
+| TC-M6-11 | New key starts with empty content and placeholder              | ✅      |
+| TC-M6-12 | Content persists after app restart                             | ✅      |
 
 ---
 
