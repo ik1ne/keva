@@ -2,6 +2,18 @@
 
 const Main = {
     dom: null,
+    messageHandlers: null,
+
+    selectOrCreateKey: function (query) {
+        if (State.data.exactMatch !== 'none') {
+            State.data.focusEditorOnLoad = true;
+            KeyList.requestSelect(query);
+        } else {
+            State.data.pendingSelectKey = query;
+            State.data.focusEditorOnLoad = true;
+            Api.send({type: 'create', key: query});
+        }
+    },
 
     init: function () {
         const self = this;
@@ -37,7 +49,8 @@ const Main = {
         // Set up event handlers
         this.setupEventHandlers();
 
-        // Set up message handler
+        // Set up message handlers
+        this.initMessageHandlers();
         this.setupMessageHandler();
 
         // Initial state
@@ -63,14 +76,7 @@ const Main = {
             const query = self.dom.searchInput.value.trim();
             if (!query) return;
 
-            if (State.data.exactMatch !== 'none') {
-                State.data.focusEditorOnLoad = true;
-                KeyList.requestSelect(query);
-            } else {
-                State.data.pendingSelectKey = query;
-                State.data.focusEditorOnLoad = true;
-                Api.send({type: 'create', key: query});
-            }
+            self.selectOrCreateKey(query);
             self.dom.searchInput.value = '';
             self.updateSearchButton();
         });
@@ -80,14 +86,7 @@ const Main = {
             if (e.key === 'Enter') {
                 const query = self.dom.searchInput.value.trim();
                 if (query) {
-                    if (State.data.exactMatch !== 'none') {
-                        State.data.focusEditorOnLoad = true;
-                        KeyList.requestSelect(query);
-                    } else {
-                        State.data.pendingSelectKey = query;
-                        State.data.focusEditorOnLoad = true;
-                        Api.send({type: 'create', key: query});
-                    }
+                    self.selectOrCreateKey(query);
                 }
             } else if (e.key === 'ArrowDown') {
                 e.preventDefault();
@@ -141,87 +140,96 @@ const Main = {
         });
     },
 
+    initMessageHandlers: function () {
+        const self = this;
+
+        this.messageHandlers = {
+            coreReady: function () {
+                self.hideSplash();
+            },
+
+            theme: function (msg) {
+                Editor.applyTheme(msg.theme);
+            },
+
+            searchResults: function (msg) {
+                State.data.keys = msg.activeKeys;
+                State.data.trashedKeys = msg.trashedKeys;
+                State.data.exactMatch = msg.exactMatch;
+
+                if (State.data.selectedKey && !State.isKeyVisible(State.data.selectedKey)) {
+                    State.clearSelection();
+                    Editor.showEmpty();
+                }
+
+                KeyList.render();
+                KeyList.renderTrash();
+                self.updateSearchButton();
+
+                if (State.data.pendingSelectKey) {
+                    // Only process if key exists in results (handles race with async search)
+                    if (State.data.keys.indexOf(State.data.pendingSelectKey) !== -1) {
+                        KeyList.requestSelect(State.data.pendingSelectKey);
+                        const item = document.querySelector('.key-item[data-key="' + CSS.escape(State.data.pendingSelectKey) + '"]');
+                        if (item) item.focus();
+                        State.data.pendingSelectKey = null;
+                    }
+                }
+            },
+
+            value: function (msg) {
+                if (msg.key !== State.data.selectedKey) return;
+                if (msg.value) {
+                    if (msg.value.type === 'text') {
+                        Editor.show(msg.value.content);
+                        if (State.data.focusEditorOnLoad && Editor.instance) {
+                            Editor.instance.focus();
+                        }
+                    } else if (msg.value.type === 'files') {
+                        Editor.showEmpty(msg.value.count + ' file(s)');
+                    }
+                } else {
+                    Editor.showEmpty('Key not found');
+                }
+                State.data.focusEditorOnLoad = false;
+            },
+
+            keyCreated: function (msg) {
+                if (!msg.success) {
+                    alert('Key already exists: ' + msg.key);
+                    State.data.pendingSelectKey = null;
+                }
+            },
+
+            renameResult: function (msg) {
+                KeyList.handleRenameResult(msg.oldKey, msg.newKey, msg.result);
+            },
+
+            shutdown: function () {
+                if (State.data.isShuttingDown) {
+                    Api.send({type: 'shutdownAck'});
+                    return;
+                }
+                State.data.isShuttingDown = true;
+                self.showShutdownOverlay();
+                Editor.forceSave();
+                Api.send({type: 'shutdownAck'});
+            },
+
+            focus: function () {
+                self.dom.searchInput.focus();
+            }
+        };
+    },
+
     setupMessageHandler: function () {
         const self = this;
 
         window.chrome.webview.addEventListener('message', function (event) {
             const msg = event.data;
-            switch (msg.type) {
-                case 'coreReady':
-                    self.hideSplash();
-                    break;
-
-                case 'theme':
-                    Editor.applyTheme(msg.theme);
-                    break;
-
-                case 'searchResults':
-                    State.data.keys = msg.activeKeys;
-                    State.data.trashedKeys = msg.trashedKeys;
-                    State.data.exactMatch = msg.exactMatch;
-
-                    if (State.data.selectedKey && !State.isKeyVisible(State.data.selectedKey)) {
-                        State.clearSelection();
-                        Editor.showEmpty();
-                    }
-
-                    KeyList.render();
-                    KeyList.renderTrash();
-                    self.updateSearchButton();
-
-                    if (State.data.pendingSelectKey) {
-                        // Only process if key exists in results (handles race with async search)
-                        if (State.data.keys.indexOf(State.data.pendingSelectKey) !== -1) {
-                            KeyList.requestSelect(State.data.pendingSelectKey);
-                            const item = document.querySelector('.key-item[data-key="' + CSS.escape(State.data.pendingSelectKey) + '"]');
-                            if (item) item.focus();
-                            State.data.pendingSelectKey = null;
-                        }
-                    }
-                    break;
-
-                case 'value':
-                    if (msg.key !== State.data.selectedKey) break;
-                    if (msg.value) {
-                        if (msg.value.type === 'text') {
-                            Editor.show(msg.value.content);
-                            if (State.data.focusEditorOnLoad && Editor.instance) {
-                                Editor.instance.focus();
-                            }
-                        } else if (msg.value.type === 'files') {
-                            Editor.showEmpty(msg.value.count + ' file(s)');
-                        }
-                    } else {
-                        Editor.showEmpty('Key not found');
-                    }
-                    State.data.focusEditorOnLoad = false;
-                    break;
-
-                case 'keyCreated':
-                    if (!msg.success) {
-                        alert('Key already exists: ' + msg.key);
-                        State.data.pendingSelectKey = null;
-                    }
-                    break;
-
-                case 'renameResult':
-                    KeyList.handleRenameResult(msg.oldKey, msg.newKey, msg.result);
-                    break;
-
-                case 'shutdown':
-                    if (State.data.isShuttingDown) {
-                        Api.send({type: 'shutdownAck'});
-                        break;
-                    }
-                    State.data.isShuttingDown = true;
-                    self.showShutdownOverlay();
-                    Editor.forceSave();
-                    Api.send({type: 'shutdownAck'});
-                    break;
-
-                case 'focus':
-                    self.dom.searchInput.focus();
-                    break;
+            const handler = self.messageHandlers[msg.type];
+            if (handler) {
+                handler(msg);
             }
         });
     },
