@@ -1,7 +1,7 @@
 //! Background worker thread for KevaCore and SearchEngine operations.
 
 use crate::webview::messages::{ExactMatch, OutgoingMessage, RenameResultType};
-use crate::webview::{FileHandleRequest, WM_SEND_FILE_HANDLE};
+use crate::webview::{FileHandleRequest, wm};
 use keva_core::core::KevaCore;
 use keva_core::types::{Config, Key, LifecycleState, SavedConfig};
 use keva_search::{SearchConfig, SearchEngine, SearchQuery};
@@ -11,9 +11,7 @@ use std::sync::mpsc::{self, Sender};
 use std::thread;
 use std::time::{Duration, SystemTime};
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
-use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_APP};
-
-pub const WM_SHUTDOWN_COMPLETE: u32 = WM_APP + 1;
+use windows::Win32::UI::WindowsAndMessaging::PostMessageW;
 
 pub enum Request {
     /// WebView is ready - respond with CoreReady after init is done.
@@ -91,168 +89,181 @@ fn worker_loop(
     for request in requests {
         match request {
             Request::WebviewReady => {
-                // Worker is initialized - signal WebView to hide splash
                 let _ = responses.send(OutgoingMessage::CoreReady);
             }
-
-            Request::GetValue { key: key_str } => {
-                let now = SystemTime::now();
-                let result = (|| {
-                    let key = Key::try_from(key_str.as_str()).ok()?;
-                    let value = keva.get(&key).ok().flatten()?;
-                    let read_only =
-                        matches!(value.metadata.lifecycle_state, LifecycleState::Trash { .. });
-                    // Only touch active keys
-                    if !read_only {
-                        let _ = keva.touch(&key, now);
-                    }
-                    let content_path = keva.content_path(&key);
-                    Some((content_path, read_only))
-                })();
-
-                if let Some((content_path, read_only)) = result {
-                    // Post directly to UI thread, bypassing forwarder.
-                    // FileSystemHandle creation requires the UI thread, so routing through
-                    // the forwarder would just add an unnecessary thread hop.
-                    let request = Box::new(FileHandleRequest {
-                        key: key_str,
-                        content_path,
-                        read_only,
-                    });
-                    unsafe {
-                        let _ = PostMessageW(
-                            Some(hwnd),
-                            WM_SEND_FILE_HANDLE,
-                            WPARAM(0),
-                            LPARAM(Box::into_raw(request) as isize),
-                        );
-                    }
-                }
-                // If key not found, send nothing - JS will handle timeout/no response
+            Request::GetValue { key } => {
+                let _ = handle_get_value(&mut keva, &key, hwnd);
             }
-
-            Request::Save {
-                key: key_str,
-                content,
-            } => {
-                let now = SystemTime::now();
-                if let Ok(key) = Key::try_from(key_str.as_str()) {
-                    let content_path = keva.content_path(&key);
-                    if std::fs::write(&content_path, &content).is_ok() {
-                        let _ = keva.touch(&key, now);
-                    }
-                }
+            Request::Save { key, content } => {
+                handle_save(&mut keva, &key, &content);
             }
-
-            Request::Create { key: key_str } => {
-                let now = SystemTime::now();
-                let success = Key::try_from(key_str.as_str())
-                    .ok()
-                    .and_then(|key| {
-                        if keva.create(&key, now).is_ok() {
-                            search.add_active(key);
-                            Some(())
-                        } else {
-                            None
-                        }
-                    })
-                    .is_some();
-
-                let _ = responses.send(OutgoingMessage::KeyCreated {
-                    key: key_str,
-                    success,
-                });
-
-                if success {
-                    // Refresh search to include newly created key
-                    search.set_query(SearchQuery::Fuzzy(current_query.clone()));
-                    search.tick();
-                    send_search_results(&search, &current_query, &responses);
-                }
+            Request::Create { key } => {
+                handle_create(&mut keva, &mut search, &key, &current_query, &responses);
             }
-
             Request::Rename {
-                old_key: old_key_str,
-                new_key: new_key_str,
+                old_key,
+                new_key,
                 force,
             } => {
-                let now = SystemTime::now();
-                let result = (|| {
-                    let old_key = Key::try_from(old_key_str.as_str())
-                        .map_err(|_| RenameResultType::NotFound)?;
-                    let new_key = Key::try_from(new_key_str.as_str())
-                        .map_err(|_| RenameResultType::InvalidKey)?;
-
-                    // Check if destination exists
-                    if keva.get(&new_key).ok().flatten().is_some() {
-                        if force {
-                            // Force mode: purge destination first
-                            let _ = keva.purge(&new_key);
-                            search.remove(&new_key);
-                        } else {
-                            return Err(RenameResultType::DestinationExists);
-                        }
-                    }
-
-                    // Perform rename
-                    keva.rename(&old_key, &new_key, now)
-                        .map_err(|_| RenameResultType::NotFound)?;
-                    search.rename(&old_key, new_key);
-
-                    Ok(())
-                })();
-
-                let result_type = match result {
-                    Ok(()) => RenameResultType::Success,
-                    Err(e) => e,
-                };
-
-                let _ = responses.send(OutgoingMessage::RenameResult {
-                    old_key: old_key_str,
-                    new_key: new_key_str,
-                    result: result_type,
-                });
+                handle_rename(
+                    &mut keva,
+                    &mut search,
+                    &old_key,
+                    &new_key,
+                    force,
+                    &responses,
+                );
             }
-
-            Request::Trash { key: key_str } => {
-                let now = SystemTime::now();
-                if let Ok(key) = Key::try_from(key_str.as_str())
-                    && keva.trash(&key, now).is_ok()
-                {
-                    search.trash(&key);
-                    search.set_query(SearchQuery::Fuzzy(current_query.clone()));
-                    search.tick();
-                    send_search_results(&search, &current_query, &responses);
-                }
+            Request::Trash { key } => {
+                handle_trash(&mut keva, &mut search, &key, &current_query, &responses);
             }
-
             Request::Search { query } => {
                 current_query = query.clone();
                 search.set_query(SearchQuery::Fuzzy(query));
-                // Immediately tick and send results for responsiveness
                 search.tick();
                 send_search_results(&search, &current_query, &responses);
             }
-
             Request::SearchTick => {
                 if search.tick() {
                     send_search_results(&search, &current_query, &responses);
                 }
             }
-
-            Request::Touch { key: key_str } => {
-                let now = SystemTime::now();
-                if let Ok(key) = Key::try_from(key_str.as_str()) {
-                    let _ = keva.touch(&key, now);
+            Request::Touch { key } => {
+                if let Ok(key) = Key::try_from(key.as_str()) {
+                    let _ = keva.touch(&key, SystemTime::now());
                 }
             }
-
             Request::Shutdown => {
-                let _ =
-                    unsafe { PostMessageW(Some(hwnd), WM_SHUTDOWN_COMPLETE, WPARAM(0), LPARAM(0)) };
+                unsafe {
+                    let _ = PostMessageW(Some(hwnd), wm::SHUTDOWN_COMPLETE, WPARAM(0), LPARAM(0));
+                }
                 break;
             }
         }
+    }
+}
+
+fn handle_get_value(keva: &mut KevaCore, key_str: &str, hwnd: HWND) -> Option<()> {
+    let now = SystemTime::now();
+    let key = Key::try_from(key_str).ok()?;
+    let value = keva.get(&key).ok().flatten()?;
+    let read_only = matches!(value.metadata.lifecycle_state, LifecycleState::Trash { .. });
+    if !read_only {
+        let _ = keva.touch(&key, now);
+    }
+
+    // Post directly to UI thread, bypassing forwarder.
+    // FileSystemHandle creation requires the UI thread, so routing through
+    // the forwarder would just add an unnecessary thread hop.
+    let request = Box::new(FileHandleRequest {
+        key: key_str.to_string(),
+        content_path: keva.content_path(&key),
+        read_only,
+    });
+    unsafe {
+        let _ = PostMessageW(
+            Some(hwnd),
+            wm::SEND_FILE_HANDLE,
+            WPARAM(0),
+            LPARAM(Box::into_raw(request) as isize),
+        );
+    }
+    Some(())
+}
+
+fn handle_save(keva: &mut KevaCore, key_str: &str, content: &str) {
+    if let Ok(key) = Key::try_from(key_str) {
+        let content_path = keva.content_path(&key);
+        if std::fs::write(&content_path, content).is_ok() {
+            let _ = keva.touch(&key, SystemTime::now());
+        }
+    }
+}
+
+fn handle_create(
+    keva: &mut KevaCore,
+    search: &mut SearchEngine,
+    key_str: &str,
+    current_query: &str,
+    responses: &Sender<OutgoingMessage>,
+) {
+    let success = try_create(keva, search, key_str).is_some();
+
+    let _ = responses.send(OutgoingMessage::KeyCreated {
+        key: key_str.to_string(),
+        success,
+    });
+
+    if success {
+        search.set_query(SearchQuery::Fuzzy(current_query.to_string()));
+        search.tick();
+        send_search_results(search, current_query, responses);
+    }
+}
+
+fn try_create(keva: &mut KevaCore, search: &mut SearchEngine, key_str: &str) -> Option<()> {
+    let key = Key::try_from(key_str).ok()?;
+    keva.create(&key, SystemTime::now()).ok()?;
+    search.add_active(key);
+    Some(())
+}
+
+fn handle_rename(
+    keva: &mut KevaCore,
+    search: &mut SearchEngine,
+    old_key_str: &str,
+    new_key_str: &str,
+    force: bool,
+    responses: &Sender<OutgoingMessage>,
+) {
+    let result = try_rename(keva, search, old_key_str, new_key_str, force);
+    let _ = responses.send(OutgoingMessage::RenameResult {
+        old_key: old_key_str.to_string(),
+        new_key: new_key_str.to_string(),
+        result: result.unwrap_or_else(|e| e),
+    });
+}
+
+fn try_rename(
+    keva: &mut KevaCore,
+    search: &mut SearchEngine,
+    old_key_str: &str,
+    new_key_str: &str,
+    force: bool,
+) -> Result<RenameResultType, RenameResultType> {
+    let old_key = Key::try_from(old_key_str).map_err(|_| RenameResultType::NotFound)?;
+    let new_key = Key::try_from(new_key_str).map_err(|_| RenameResultType::InvalidKey)?;
+
+    if keva.get(&new_key).ok().flatten().is_some() {
+        if force {
+            let _ = keva.purge(&new_key);
+            search.remove(&new_key);
+        } else {
+            return Err(RenameResultType::DestinationExists);
+        }
+    }
+
+    keva.rename(&old_key, &new_key, SystemTime::now())
+        .map_err(|_| RenameResultType::NotFound)?;
+    search.rename(&old_key, new_key);
+    Ok(RenameResultType::Success)
+}
+
+fn handle_trash(
+    keva: &mut KevaCore,
+    search: &mut SearchEngine,
+    key_str: &str,
+    current_query: &str,
+    responses: &Sender<OutgoingMessage>,
+) {
+    let now = SystemTime::now();
+    if let Ok(key) = Key::try_from(key_str)
+        && keva.trash(&key, now).is_ok()
+    {
+        search.trash(&key);
+        search.set_query(SearchQuery::Fuzzy(current_query.to_string()));
+        search.tick();
+        send_search_results(search, current_query, responses);
     }
 }
 

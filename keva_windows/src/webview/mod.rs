@@ -12,15 +12,8 @@ use webview2_com::Microsoft::Web::WebView2::Win32::{
 };
 use webview2_com::pwstr_from_str;
 use windows::Win32::Foundation::RECT;
-use windows::Win32::UI::WindowsAndMessaging::WM_APP;
 
-/// Posted by forwarder thread to marshal PostWebMessageAsJson to UI thread.
-/// LPARAM contains a Box<String> pointer to the JSON message.
-pub const WM_WEBVIEW_MESSAGE: u32 = WM_APP + 2;
-
-/// Posted by forwarder thread to send FileSystemHandle to WebView.
-/// LPARAM contains a Box<FileHandleRequest> pointer.
-pub const WM_SEND_FILE_HANDLE: u32 = WM_APP + 3;
+pub mod wm;
 
 /// Request data for sending a FileSystemHandle to WebView.
 pub struct FileHandleRequest {

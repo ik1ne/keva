@@ -2,7 +2,7 @@
 
 use super::bridge::handle_webview_message;
 use super::messages::OutgoingMessage;
-use super::{WEBVIEW, WM_WEBVIEW_MESSAGE, WebView};
+use super::{WEBVIEW, WebView, wm};
 use crate::keva_worker::Request;
 use crate::render::theme::Theme;
 use std::ffi::c_void;
@@ -125,7 +125,7 @@ fn create_controller(
 /// Spawns a thread that forwards worker responses to WebView via UI thread.
 ///
 /// WebView2 requires PostWebMessageAsJson to be called from the UI thread.
-/// This thread serializes messages and posts WM_WEBVIEW_MESSAGE to marshal
+/// This thread serializes messages and posts wm::WEBVIEW_MESSAGE to marshal
 /// the call to the UI thread's wndproc.
 fn start_forwarder_thread(hwnd: HWND, response_rx: Receiver<OutgoingMessage>) {
     let hwnd_raw = hwnd.0 as isize;
@@ -137,7 +137,7 @@ fn start_forwarder_thread(hwnd: HWND, response_rx: Receiver<OutgoingMessage>) {
             unsafe {
                 let _ = PostMessageW(
                     Some(hwnd),
-                    WM_WEBVIEW_MESSAGE,
+                    wm::WEBVIEW_MESSAGE,
                     WPARAM(0),
                     LPARAM(ptr as isize),
                 );

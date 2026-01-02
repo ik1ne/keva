@@ -1,6 +1,6 @@
 //! Window creation and message handling.
 
-use crate::keva_worker::{self, WM_SHUTDOWN_COMPLETE};
+use crate::keva_worker;
 use crate::platform::{
     handlers::{
         get_resize_border, on_activate, on_command, on_create, on_destroy, on_getminmaxinfo,
@@ -11,10 +11,8 @@ use crate::platform::{
     tray::{WM_TRAYICON, add_tray_icon},
 };
 use crate::render::theme::{Theme, WINDOW_HEIGHT, WINDOW_WIDTH};
-use crate::webview::init_webview;
 use crate::webview::messages::OutgoingMessage;
-use crate::webview::{WEBVIEW, bridge::post_message};
-use crate::webview::{WM_SEND_FILE_HANDLE, WM_WEBVIEW_MESSAGE};
+use crate::webview::{WEBVIEW, bridge::post_message, init_webview, wm};
 use std::sync::mpsc;
 use windows::{
     Win32::{
@@ -154,12 +152,12 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             .unwrap_or_else(|| unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }),
         WM_TRAYICON => on_trayicon(hwnd, lparam),
         WM_COMMAND => on_command(hwnd, wparam),
-        WM_SHUTDOWN_COMPLETE => {
+        wm::SHUTDOWN_COMPLETE => {
             unsafe { PostQuitMessage(0) };
             LRESULT(0)
         }
-        WM_WEBVIEW_MESSAGE => on_webview_message(lparam),
-        WM_SEND_FILE_HANDLE => on_send_file_handle(lparam),
+        wm::WEBVIEW_MESSAGE => on_webview_message(lparam),
+        wm::SEND_FILE_HANDLE => on_send_file_handle(lparam),
         WM_CLOSE => {
             if let Some(wv) = WEBVIEW.get() {
                 post_message(&wv.webview, &OutgoingMessage::Shutdown);
