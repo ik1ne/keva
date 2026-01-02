@@ -344,26 +344,27 @@ switch and app exit.
 ```
 
 **Test Cases:**
- 
-| TC       | Description                                                    | Status |
-|----------|----------------------------------------------------------------|--------|
-| TC-M6-01 | Monaco editor loads with markdown highlighting                 | ✅      |
-| TC-M6-02 | Selecting key loads content into editor                        | ✅      |
-| TC-M6-03 | Edits persist after switching away and back                    | ✅      |
-| TC-M6-04 | Placeholder shows when content empty                           | ✅      |
-| TC-M6-05 | Rapid key switching does not lose unsaved edits                | ✅      |
-| TC-M6-06 | Quitting app does not lose unsaved edits                       | ✅      |
-| TC-M6-07 | Trashed key shows "Restore from trash to edit" on type attempt | ✅      |
-| TC-M6-08 | Trashed key content is read-only (cannot edit)                 | ✅      |
-| TC-M6-09 | Active key content is editable                                 | ✅      |
-| TC-M6-10 | Theme switch updates Monaco theme (dark/light)                 | ✅      |
-| TC-M6-11 | New key starts with empty content and placeholder              | ✅      |
-| TC-M6-12 | Content persists after app restart                             | ✅      |
-| TC-M6-13 | Large file (>1MB) loads in plaintext mode with reduced features| ✅      |
-| TC-M6-14 | Write error shows banner with retry button (see note)          | ✅      |
-| TC-M6-15 | Re-selecting same key does not reload content                  | ✅      |
+
+| TC       | Description                                                     | Status |
+|----------|-----------------------------------------------------------------|--------|
+| TC-M6-01 | Monaco editor loads with markdown highlighting                  | ✅      |
+| TC-M6-02 | Selecting key loads content into editor                         | ✅      |
+| TC-M6-03 | Edits persist after switching away and back                     | ✅      |
+| TC-M6-04 | Placeholder shows when content empty                            | ✅      |
+| TC-M6-05 | Rapid key switching does not lose unsaved edits                 | ✅      |
+| TC-M6-06 | Quitting app does not lose unsaved edits                        | ✅      |
+| TC-M6-07 | Trashed key shows "Restore from trash to edit" on type attempt  | ✅      |
+| TC-M6-08 | Trashed key content is read-only (cannot edit)                  | ✅      |
+| TC-M6-09 | Active key content is editable                                  | ✅      |
+| TC-M6-10 | Theme switch updates Monaco theme (dark/light)                  | ✅      |
+| TC-M6-11 | New key starts with empty content and placeholder               | ✅      |
+| TC-M6-12 | Content persists after app restart                              | ✅      |
+| TC-M6-13 | Large file (>1MB) loads in plaintext mode with reduced features | ✅      |
+| TC-M6-14 | Write error shows banner with retry button (see note)           | ✅      |
+| TC-M6-15 | Re-selecting same key does not reload content                   | ✅      |
 
 **TC-M6-14 Test Procedure:**
+
 1. Create a key with some content
 2. Find the content file in `%LOCALAPPDATA%\keva\content\` and mark it as read-only
 3. Edit and save - error banner should appear
@@ -383,7 +384,6 @@ at a time. Visual indicators for active/inactive state. Keyboard navigation betw
 
 - Active pane: cursor visible, full highlight
 - Inactive pane: no cursor, dimmed
-- Tab order: search → left → right top → right bottom
 - Esc from any pane: hide window (unless modal open)
 
 **Focus States:**
@@ -397,17 +397,16 @@ at a time. Visual indicators for active/inactive state. Keyboard navigation betw
 
 **Test Cases:**
 
-| TC       | Description                                | Status |
-|----------|--------------------------------------------|--------|
-| TC-M7-01 | Only one pane shows active state           | ❌      |
-| TC-M7-02 | Click pane activates it                    | ❌      |
-| TC-M7-03 | Down arrow from search focuses left pane   | ❌      |
-| TC-M7-04 | Enter from left pane focuses right top     | ❌      |
-| TC-M7-05 | Inactive panes show dimmed styling         | ❌      |
-| TC-M7-06 | Left pane selection persists when inactive | ❌      |
-| TC-M7-07 | Tab key cycles through panes               | ❌      |
-| TC-M7-08 | Shift+Tab reverse cycles                   | ❌      |
-| TC-M7-09 | Ctrl+S focuses search bar from any pane    | ❌      |
+| TC       | Description                                                  | Status |
+|----------|--------------------------------------------------------------|--------|
+| TC-M7-01 | Only one pane shows active state                             | ❌      |
+| TC-M7-02 | Click pane activates it                                      | ❌      |
+| TC-M7-03 | Down arrow from search focuses left pane                     | ❌      |
+| TC-M7-04 | Enter from left pane focuses right top                       | ❌      |
+| TC-M7-05 | Inactive panes show dimmed styling                           | ❌      |
+| TC-M7-06 | Left pane selection persists when inactive                   | ❌      |
+| TC-M7-07 | Ctrl+S focuses search bar from any pane                      | ❌      |
+| TC-M7-08 | Clicking key in list while right pane is focused selects key | ❌      |
 
 ---
 
