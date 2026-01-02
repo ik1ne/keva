@@ -269,32 +269,32 @@ bottom shows trashed keys separately.
 
 **Test Cases:**
 
-| TC       | Description                                         | Status |
-|----------|-----------------------------------------------------|--------|
-| TC-M5-01 | Keys display in left pane                           | ✅      |
-| TC-M5-02 | Click key selects it, content shown in right pane   | ✅      |
-| TC-M5-03 | Arrow keys navigate key list                        | ✅      |
-| TC-M5-04 | Enter in search bar with no match creates key, focuses editor | ✅      |
-| TC-M5-05 | Enter in search bar with exact match selects key, focuses editor | ✅      |
-| TC-M5-06 | Rename key via inline editor                        | ✅      |
-| TC-M5-07 | Rename to existing key shows overwrite confirmation | ✅      |
-| TC-M5-08 | Rename validation rejects empty or >256 chars, keeps focus | ✅      |
-| TC-M5-09 | Delete key moves to trash                           | ✅      |
-| TC-M5-10 | Trash section shows at bottom with trashed keys     | ✅      |
-| TC-M5-11 | Long key name truncates with ellipsis               | ✅      |
-| TC-M5-12 | Up arrow from first key returns focus to search bar | ✅      |
-| TC-M5-13 | Renamed key maintains position in list (no re-sort) | ✅      |
-| TC-M5-14 | Escape during rename cancels without hiding window  | ✅      |
-| TC-M5-15 | Search action button shows ➕ (no match) or ✏️ (match) | ✅      |
-| TC-M5-16 | Clicking action button creates/selects key, focuses editor | ✅      |
-| TC-M5-17 | Rename overwrite updates selection and reloads content | ✅      |
+| TC       | Description                                                         | Status |
+|----------|---------------------------------------------------------------------|--------|
+| TC-M5-01 | Keys display in left pane                                           | ✅      |
+| TC-M5-02 | Click key selects it, content shown in right pane                   | ✅      |
+| TC-M5-03 | Arrow keys navigate key list                                        | ✅      |
+| TC-M5-04 | Enter in search bar with no match creates key, focuses editor       | ✅      |
+| TC-M5-05 | Enter in search bar with exact match selects key, focuses editor    | ✅      |
+| TC-M5-06 | Rename key via inline editor                                        | ✅      |
+| TC-M5-07 | Rename to existing key shows overwrite confirmation                 | ✅      |
+| TC-M5-08 | Rename validation rejects empty or >256 chars, keeps focus          | ✅      |
+| TC-M5-09 | Delete key moves to trash                                           | ✅      |
+| TC-M5-10 | Trash section shows at bottom with trashed keys                     | ✅      |
+| TC-M5-11 | Long key name truncates with ellipsis                               | ✅      |
+| TC-M5-12 | Up arrow from first key returns focus to search bar                 | ✅      |
+| TC-M5-13 | Renamed key maintains position in list (no re-sort)                 | ✅      |
+| TC-M5-14 | Escape during rename cancels without hiding window                  | ✅      |
+| TC-M5-15 | Search action button shows ➕ (no match) or ✏️ (match)               | ✅      |
+| TC-M5-16 | Clicking action button creates/selects key, focuses editor          | ✅      |
+| TC-M5-17 | Rename overwrite updates selection and reloads content              | ✅      |
 | TC-M5-18 | Unsaved changes saved when selection changes (typing or key switch) | ✅      |
-| TC-M5-19 | Up arrow in search bar does nothing | ✅      |
-| TC-M5-20 | Enter on selected key in left pane focuses editor | ✅      |
-| TC-M5-21 | Clicking trashed key shows content as read-only | ✅      |
-| TC-M5-22 | Down arrow from last key stays on last key | ✅      |
-| TC-M5-23 | Renaming key to same name cancels rename (no change) | ✅      |
-| TC-M5-24 | Key action buttons (rename/delete) appear on hover | ✅      |
+| TC-M5-19 | Up arrow in search bar does nothing                                 | ✅      |
+| TC-M5-20 | Enter on selected key in left pane focuses editor                   | ✅      |
+| TC-M5-21 | Clicking trashed key shows content as read-only                     | ✅      |
+| TC-M5-22 | Down arrow from last key stays on last key                          | ✅      |
+| TC-M5-23 | Renaming key to same name cancels rename (no change)                | ✅      |
+| TC-M5-24 | Key action buttons (rename/delete) appear on hover                  | ✅      |
 
 ---
 
@@ -344,15 +344,21 @@ switch and app exit.
 ```
 
 **Test Cases:**
-
-| TC       | Description                                     | Status |
-|----------|-------------------------------------------------|--------|
-| TC-M6-01 | Monaco editor loads with markdown highlighting  | ❌      |
-| TC-M6-02 | Selecting key loads content into editor         | ❌      |
-| TC-M6-03 | Edits persist after switching away and back     | ❌      |
-| TC-M6-04 | Placeholder shows when content empty            | ❌      |
-| TC-M6-05 | Rapid key switching does not lose unsaved edits | ❌      |
-| TC-M6-06 | Quitting app does not lose unsaved edits        | ❌      |
+ 
+| TC       | Description                                                    | Status |
+|----------|----------------------------------------------------------------|--------|
+| TC-M6-01 | Monaco editor loads with markdown highlighting                 | ❌      |
+| TC-M6-02 | Selecting key loads content into editor                        | ❌      |
+| TC-M6-03 | Edits persist after switching away and back                    | ❌      |
+| TC-M6-04 | Placeholder shows when content empty                           | ❌      |
+| TC-M6-05 | Rapid key switching does not lose unsaved edits                | ❌      |
+| TC-M6-06 | Quitting app does not lose unsaved edits                       | ❌      |
+| TC-M6-07 | Trashed key shows "Restore from trash to edit" on type attempt | ❌      |
+| TC-M6-08 | Trashed key content is read-only (cannot edit)                 | ❌      |
+| TC-M6-09 | Active key content is editable                                 | ❌      |
+| TC-M6-10 | Theme switch updates Monaco theme (dark/light)                 | ❌      |
+| TC-M6-11 | New key starts with empty content and placeholder              | ❌      |
+| TC-M6-12 | Content persists after app restart                             | ❌      |
 
 ---
 
@@ -793,13 +799,13 @@ sessions. Handle window resize gracefully by clamping pane width to valid range.
 
 **Test Cases:**
 
-| TC        | Description                                    | Status |
-|-----------|------------------------------------------------|--------|
-| TC-M19-01 | Drag divider resizes left pane                 | ❌      |
-| TC-M19-02 | Left pane respects minimum width (150px)       | ❌      |
-| TC-M19-03 | Left pane respects maximum width (50% window)  | ❌      |
-| TC-M19-04 | Pane width persists after restart              | ❌      |
-| TC-M19-05 | Window resize clamps pane width if needed      | ❌      |
-| TC-M19-06 | Cursor shows col-resize on divider hover       | ❌      |
+| TC        | Description                                   | Status |
+|-----------|-----------------------------------------------|--------|
+| TC-M19-01 | Drag divider resizes left pane                | ❌      |
+| TC-M19-02 | Left pane respects minimum width (150px)      | ❌      |
+| TC-M19-03 | Left pane respects maximum width (50% window) | ❌      |
+| TC-M19-04 | Pane width persists after restart             | ❌      |
+| TC-M19-05 | Window resize clamps pane width if needed     | ❌      |
+| TC-M19-06 | Cursor shows col-resize on divider hover      | ❌      |
 
 ---

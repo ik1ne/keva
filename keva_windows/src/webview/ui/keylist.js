@@ -42,6 +42,10 @@ const KeyList = {
     },
 
     requestSelect: function (keyName) {
+        if (keyName === State.data.selectedKey) {
+            return;
+        }
+
         const isTrashed = State.data.trashedKeys.indexOf(keyName) !== -1;
         State.setSelectedKey(keyName, isTrashed);
         this.updateSelection();

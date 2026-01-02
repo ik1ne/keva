@@ -177,21 +177,18 @@ const Main = {
                 }
             },
 
-            value: function (msg) {
+            value: async function (msg, event) {
                 if (msg.key !== State.data.selectedKey) return;
-                if (msg.value) {
-                    if (msg.value.type === 'text') {
-                        Editor.show(msg.value.content);
-                        if (State.data.focusEditorOnLoad && Editor.instance) {
-                            Editor.instance.focus();
-                        }
-                    } else if (msg.value.type === 'files') {
-                        Editor.showEmpty(msg.value.count + ' file(s)');
-                    }
+
+                // Check for FileSystemHandle in additionalObjects
+                if (event.additionalObjects && event.additionalObjects.length > 0) {
+                    const handle = event.additionalObjects[0];
+                    await Editor.showWithHandle(handle, msg.key, msg.readOnly);
                 } else {
-                    Editor.showEmpty('Key not found');
+                    // No handle received - show error
+                    console.error('[Main] No FileSystemHandle in message');
+                    Editor.showError('Failed to access content');
                 }
-                State.data.focusEditorOnLoad = false;
             },
 
             keyCreated: function (msg) {
@@ -205,14 +202,14 @@ const Main = {
                 KeyList.handleRenameResult(msg.oldKey, msg.newKey, msg.result);
             },
 
-            shutdown: function () {
+            shutdown: async function () {
                 if (State.data.isShuttingDown) {
                     Api.send({type: 'shutdownAck'});
                     return;
                 }
                 State.data.isShuttingDown = true;
                 self.showShutdownOverlay();
-                Editor.forceSave();
+                await Editor.forceSave();
                 Api.send({type: 'shutdownAck'});
             },
 
@@ -225,11 +222,11 @@ const Main = {
     setupMessageHandler: function () {
         const self = this;
 
-        window.chrome.webview.addEventListener('message', function (event) {
+        window.chrome.webview.addEventListener('message', async function (event) {
             const msg = event.data;
             const handler = self.messageHandlers[msg.type];
             if (handler) {
-                handler(msg);
+                await handler(msg, event);
             }
         });
     },

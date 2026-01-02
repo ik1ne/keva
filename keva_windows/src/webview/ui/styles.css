@@ -329,6 +329,7 @@ html, body {
     flex: 1;
     display: none;
     overflow: hidden;
+    position: relative;
 }
 
 .empty-state {
@@ -363,4 +364,42 @@ html, body {
 .splash-text {
     color: var(--text-muted);
     font-size: 14px;
+}
+
+/* Write error banner */
+.write-error-banner {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: #f44336;
+    color: white;
+    font-size: 13px;
+}
+
+.write-error-banner button {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 4px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.write-error-banner button:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Editor placeholder */
+.editor-placeholder {
+    position: absolute;
+    top: 0;
+    left: 64px;
+    color: var(--text-muted);
+    pointer-events: none;
+    font-family: Consolas, 'Courier New', monospace;
+    font-size: 14px;
+    line-height: 19px;
+    z-index: 1;
 }

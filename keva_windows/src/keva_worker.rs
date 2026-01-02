@@ -1,8 +1,9 @@
 //! Background worker thread for KevaCore and SearchEngine operations.
 
-use crate::webview::messages::{ExactMatch, OutgoingMessage, RenameResultType, ValueInfo};
+use crate::webview::messages::{ExactMatch, OutgoingMessage, RenameResultType};
+use crate::webview::{FileHandleRequest, WM_SEND_FILE_HANDLE};
 use keva_core::core::KevaCore;
-use keva_core::types::{Config, Key, SavedConfig};
+use keva_core::types::{Config, Key, LifecycleState, SavedConfig};
 use keva_search::{SearchConfig, SearchEngine, SearchQuery};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -39,6 +40,10 @@ pub enum Request {
         query: String,
     },
     SearchTick,
+    /// Update timestamp after content save via FileSystemHandle.
+    Touch {
+        key: String,
+    },
     Shutdown,
 }
 
@@ -92,18 +97,38 @@ fn worker_loop(
 
             Request::GetValue { key: key_str } => {
                 let now = SystemTime::now();
-                let value = (|| {
+                let result = (|| {
                     let key = Key::try_from(key_str.as_str()).ok()?;
-                    let _ = keva.touch(&key, now);
-                    let _value = keva.get(&key).ok().flatten()?;
+                    let value = keva.get(&key).ok().flatten()?;
+                    let read_only =
+                        matches!(value.metadata.lifecycle_state, LifecycleState::Trash { .. });
+                    // Only touch active keys
+                    if !read_only {
+                        let _ = keva.touch(&key, now);
+                    }
                     let content_path = keva.content_path(&key);
-                    let content = std::fs::read_to_string(content_path).unwrap_or_default();
-                    Some(ValueInfo::Text { content })
+                    Some((content_path, read_only))
                 })();
-                let _ = responses.send(OutgoingMessage::Value {
-                    key: key_str,
-                    value,
-                });
+
+                if let Some((content_path, read_only)) = result {
+                    // Post directly to UI thread, bypassing forwarder.
+                    // FileSystemHandle creation requires the UI thread, so routing through
+                    // the forwarder would just add an unnecessary thread hop.
+                    let request = Box::new(FileHandleRequest {
+                        key: key_str,
+                        content_path,
+                        read_only,
+                    });
+                    unsafe {
+                        let _ = PostMessageW(
+                            Some(hwnd),
+                            WM_SEND_FILE_HANDLE,
+                            WPARAM(0),
+                            LPARAM(Box::into_raw(request) as isize),
+                        );
+                    }
+                }
+                // If key not found, send nothing - JS will handle timeout/no response
             }
 
             Request::Save {
@@ -212,6 +237,13 @@ fn worker_loop(
             Request::SearchTick => {
                 if search.tick() {
                     send_search_results(&search, &current_query, &responses);
+                }
+            }
+
+            Request::Touch { key: key_str } => {
+                let now = SystemTime::now();
+                if let Ok(key) = Key::try_from(key_str.as_str()) {
+                    let _ = keva.touch(&key, now);
                 }
             }
 

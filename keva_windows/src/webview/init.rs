@@ -68,6 +68,7 @@ fn create_controller(
     response_rx: Receiver<OutgoingMessage>,
 ) {
     unsafe {
+        let env_for_webview = env.clone();
         let _ = env.CreateCoreWebView2Controller(
             hwnd,
             &CreateCoreWebView2ControllerCompletedHandler::create(Box::new(
@@ -84,6 +85,7 @@ fn create_controller(
                     let wv = WebView {
                         controller,
                         webview,
+                        env: env_for_webview.clone(),
                     };
                     wv.set_bounds(x, y, width, height);
 
@@ -95,7 +97,7 @@ fn create_controller(
                             COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW,
                         );
                     }
-                    let _ = wv.webview.Navigate(w!("https://keva.local/index.html"));
+                    let _ = wv.webview.Navigate(w!("http://keva.local/index.html"));
 
                     let script = match theme {
                         Theme::Dark => w!("document.documentElement.dataset.theme='dark';"),
@@ -131,9 +133,7 @@ fn start_forwarder_thread(hwnd: HWND, response_rx: Receiver<OutgoingMessage>) {
         let hwnd = HWND(hwnd_raw as *mut _);
         for msg in response_rx {
             let json = serde_json::to_string(&msg).expect("Failed to serialize message");
-            // Box the JSON string and leak it - UI thread will reconstruct and drop
-            let boxed = Box::new(json);
-            let ptr = Box::into_raw(boxed);
+            let ptr = Box::into_raw(Box::new(json));
             unsafe {
                 let _ = PostMessageW(
                     Some(hwnd),

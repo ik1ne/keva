@@ -57,6 +57,9 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
         IncomingMessage::Trash { key } => {
             let _ = request_tx.send(Request::Trash { key });
         }
+        IncomingMessage::Touch { key } => {
+            let _ = request_tx.send(Request::Touch { key });
+        }
         IncomingMessage::Hide => {
             let _ = unsafe { ShowWindow(parent_hwnd, SW_HIDE) };
         }

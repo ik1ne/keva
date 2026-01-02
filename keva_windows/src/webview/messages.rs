@@ -11,12 +11,30 @@ use serde::{Deserialize, Serialize};
 )]
 pub enum IncomingMessage {
     Ready,
-    Search { query: String },
-    Select { key: String },
-    Save { key: String, content: String },
-    Create { key: String },
-    Rename { old_key: String, new_key: String, force: bool },
-    Trash { key: String },
+    Search {
+        query: String,
+    },
+    Select {
+        key: String,
+    },
+    Save {
+        key: String,
+        content: String,
+    },
+    Create {
+        key: String,
+    },
+    Rename {
+        old_key: String,
+        new_key: String,
+        force: bool,
+    },
+    Trash {
+        key: String,
+    },
+    Touch {
+        key: String,
+    },
     Hide,
     ShutdownAck,
 }
@@ -43,10 +61,6 @@ pub enum OutgoingMessage {
         trashed_keys: Vec<String>,
         exact_match: ExactMatch,
     },
-    Value {
-        key: String,
-        value: Option<ValueInfo>,
-    },
     RenameResult {
         old_key: String,
         new_key: String,
@@ -71,20 +85,4 @@ pub enum ExactMatch {
     None,
     Active,
     Trashed,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(
-    tag = "type",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
-pub enum ValueInfo {
-    Text {
-        content: String,
-    },
-    #[expect(dead_code)]
-    Files {
-        count: usize,
-    },
 }
