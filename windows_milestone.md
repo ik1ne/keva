@@ -15,18 +15,20 @@ and includes test cases for verification.
 | M5  | Key List               | Left pane, create/rename/delete, selection   | ✅      |
 | M6  | Monaco Editor          | FileSystemHandle, markdown mode, auto-save   | ✅      |
 | M7  | Four-State Focus       | Focus model, keyboard navigation, dimming    | ✅      |
-| M8  | Attachments Panel      | File list, thumbnails, drag to Monaco        | ❌      |
-| M9  | Clipboard              | Native read, paste intercept, copy shortcuts | ❌      |
-| M10 | Edit/Preview Toggle    | Markdown renderer, att: link transform       | ❌      |
-| M11 | Trash                  | Trash section, restore, GC triggers          | ❌      |
-| M12 | Settings               | Dialog, config persistence, theme            | ❌      |
-| M13 | Global Hotkey          | Ctrl+Alt+K registration, conflict detection  | ❌      |
-| M14 | Single Instance        | Named mutex, activate existing window        | ❌      |
-| M15 | Window Position Memory | Per-monitor position, off-screen check       | ❌      |
-| M16 | First-Run Dialog       | Welcome message, launch at login checkbox    | ❌      |
-| M17 | Monaco Bundling        | Embed resources, single exe                  | ❌      |
-| M18 | Installer              | WiX/MSIX, uninstaller, data deletion prompt  | ❌      |
-| M19 | Layout Polish          | Resizable panes, layout persistence          | ❌      |
+| M8  | Attachments Display    | File list, sizes, icons, thumbnails, picker  | ❌      |
+| M9  | Attachment Operations  | Remove with warning, inline rename           | ❌      |
+| M10 | Attachment Drag & Drop | Drag to Monaco, file drop, multi-file batch  | ❌      |
+| M11 | Clipboard              | Native read, paste intercept, copy shortcuts | ❌      |
+| M12 | Edit/Preview Toggle    | Markdown renderer, att: link transform       | ❌      |
+| M13 | Trash                  | Trash section, restore, GC triggers          | ❌      |
+| M14 | Settings               | Dialog, config persistence, theme            | ❌      |
+| M15 | Global Hotkey          | Ctrl+Alt+K registration, conflict detection  | ❌      |
+| M16 | Single Instance        | Named mutex, activate existing window        | ❌      |
+| M17 | Window Position Memory | Per-monitor position, off-screen check       | ❌      |
+| M18 | First-Run Dialog       | Welcome message, launch at login checkbox    | ❌      |
+| M19 | Monaco Bundling        | Embed resources, single exe                  | ❌      |
+| M20 | Installer              | WiX/MSIX, uninstaller, data deletion prompt  | ❌      |
+| M21 | Layout Polish          | Resizable panes, layout persistence          | ❌      |
 
 ---
 
@@ -52,7 +54,7 @@ complete when both crates compile with the specified API surface and pass their 
 | Trash       | `trash()`, `restore()`, `purge()`                                                      |
 | Maintenance | `maintenance()`                                                                        |
 
-Note: Clipboard operations are platform-specific and implemented in keva_windows (M9).
+Note: Clipboard operations are platform-specific and implemented in keva_windows (M11).
 
 **keva_search Key APIs:**
 
@@ -416,25 +418,96 @@ at a time. Visual indicators for active/inactive state. Keyboard navigation betw
 
 ---
 
-## M8: Attachments Panel
+## M8: Attachments Display
 
-**Goal:** Right bottom pane for file attachments.
+**Goal:** Display attachments with file picker for adding files.
 
-**Description:** Display attachment list with filename, size, type icon. Generate and display thumbnails for images.
-Support multi-select with Shift/Ctrl click. Add files via button or drop. Drag attachment to Monaco inserts link. Rename
-and remove attachments via inline controls.
+**Description:** Right bottom pane displays attachment list with filename, size, and type icon. Generate and display
+thumbnails for images. Add files via [+ Add files] button that opens native file picker. Handle duplicate filenames
+with conflict dialog. Empty state shows centered add button.
 
 **Implementation Notes:**
 
 - Thumbnail generation on import (worker thread)
 - Supported thumbnail formats: png, jpg, jpeg, gif, webp, svg
 - Thumbnail stored as {filename}.thumb
-- [X] button per attachment for removal
-- [✏️] button for inline rename
-- Warning dialog if removing referenced attachment
+- File size formatting: bytes → KB/MB/GB
+- Type icons for non-image files (📄 document, 🎵 audio, 🎬 video, etc.)
 - Empty state: show only [+ Add files] button centered
-- Duplicate dialog: "'{filename}' already exists." with [Overwrite] [Rename] [Skip] [Cancel]
-- Multi-file drop: adds "☐ Apply to all (N remaining)" checkbox
+- Duplicate dialog: "'{filename}' already exists." with [Overwrite] [Rename] [Cancel]
+- File >1GB rejected with error message
+- Native file picker via Win32 `GetOpenFileNameW` or IFileOpenDialog
+
+**Test Cases:**
+
+| TC       | Description                                      | Status |
+|----------|--------------------------------------------------|--------|
+| TC-M8-01 | Attachments list displays files with names       | ❌      |
+| TC-M8-02 | File size shown in human-readable format (KB/MB) | ❌      |
+| TC-M8-03 | Image attachments show thumbnail                 | ❌      |
+| TC-M8-04 | Non-image attachments show type icon             | ❌      |
+| TC-M8-05 | Click [+ Add files] opens file picker            | ❌      |
+| TC-M8-06 | Duplicate filename shows conflict dialog         | ❌      |
+| TC-M8-07 | File >1GB rejected with error message            | ❌      |
+| TC-M8-08 | Empty panel shows [+ Add files] centered         | ❌      |
+| TC-M8-09 | Multi-select with Ctrl+click                     | ❌      |
+| TC-M8-10 | Shift+click range selection works                | ❌      |
+
+---
+
+## M9: Attachment Operations
+
+**Goal:** Remove and rename attachments with appropriate dialogs.
+
+**Description:** Each attachment has [X] remove button and [✏️] rename button. Remove shows warning if attachment is
+referenced in markdown. Rename uses inline editor with conflict handling for duplicate names.
+
+**Implementation Notes:**
+
+- [X] button per attachment for removal
+- [✏️] button for inline rename (similar to key rename in M5)
+- Warning dialog if removing referenced attachment: "'{filename}' is referenced in your notes. Delete anyway?"
+- Rename conflict dialog: "'{filename}' already exists." with [Overwrite] [Rename] [Cancel]
+- Invalid rename (empty name) rejected with inline error
+- Buttons appear on hover (like key action buttons)
+
+**Reference Detection:**
+
+```
+1. Get current markdown content
+2. Search for pattern: [any text](att:{filename})
+3. If found, show warning dialog before removal
+```
+
+**Test Cases:**
+
+| TC       | Description                                       | Status |
+|----------|---------------------------------------------------|--------|
+| TC-M9-01 | [X] button removes attachment                     | ❌      |
+| TC-M9-02 | Warning shown when removing referenced attachment | ❌      |
+| TC-M9-03 | Rename attachment via inline editor               | ❌      |
+| TC-M9-04 | Rename to existing filename shows conflict dialog | ❌      |
+| TC-M9-05 | Empty rename rejected with inline error           | ❌      |
+| TC-M9-06 | Action buttons appear on hover                    | ❌      |
+| TC-M9-07 | Escape cancels rename without hiding window       | ❌      |
+
+---
+
+## M10: Attachment Drag & Drop
+
+**Goal:** Drag attachments to Monaco and drop files onto attachments pane.
+
+**Description:** Drag attachment from panel to Monaco inserts markdown link at drop position. Drop files from Explorer
+onto attachments pane adds them. Multi-file operations show "Apply to all" checkbox for batch conflict resolution.
+
+**Implementation Notes:**
+
+- Drag from attachments panel: set dataTransfer with filename
+- Drop on Monaco: insert `[filename](att:filename)` at cursor position
+- Drop files onto attachments pane: add to current key's attachments
+- Multi-file with duplicates: "☐ Apply to all (N remaining)" checkbox
+- Multi-file dialog buttons: [Overwrite] [Rename] [Skip] [Cancel All]
+- Drop onto trashed key: rejected (show error)
 
 **Drag to Monaco:**
 
@@ -446,27 +519,18 @@ and remove attachments via inline controls.
 
 **Test Cases:**
 
-| TC       | Description                                        | Status |
-|----------|----------------------------------------------------|--------|
-| TC-M8-01 | Attachments list displays files with names         | ❌      |
-| TC-M8-02 | File size shown in human-readable format (KB/MB)   | ❌      |
-| TC-M8-03 | Image attachments show thumbnail                   | ❌      |
-| TC-M8-04 | Non-image attachments show type icon               | ❌      |
-| TC-M8-05 | Click [+ Add files] opens file picker              | ❌      |
-| TC-M8-06 | Multi-select with Ctrl+click                       | ❌      |
-| TC-M8-07 | Drag attachment to Monaco inserts link             | ❌      |
-| TC-M8-08 | [X] button removes attachment                      | ❌      |
-| TC-M8-09 | Warning shown when removing referenced attachment  | ❌      |
-| TC-M8-10 | Rename attachment via inline editor                | ❌      |
-| TC-M8-11 | Rename to existing filename shows conflict dialog  | ❌      |
-| TC-M8-12 | Duplicate filename on drop shows conflict dialog   | ❌      |
-| TC-M8-13 | File >1GB rejected with error message              | ❌      |
-| TC-M8-14 | Multi-file drop with "Apply to all" checkbox works | ❌      |
-| TC-M8-15 | Empty panel shows [+ Add files] centered           | ❌      |
+| TC        | Description                                        | Status |
+|-----------|----------------------------------------------------|--------|
+| TC-M10-01 | Drag attachment to Monaco inserts link             | ❌      |
+| TC-M10-02 | Drop files onto attachments pane adds them         | ❌      |
+| TC-M10-03 | Multi-file drop with duplicates shows batch dialog | ❌      |
+| TC-M10-04 | "Apply to all" checkbox applies to remaining files | ❌      |
+| TC-M10-05 | Drop onto trashed key rejected                     | ❌      |
+| TC-M10-06 | Drag multiple selected attachments to Monaco       | ❌      |
 
 ---
 
-## M9: Clipboard
+## M11: Clipboard
 
 **Goal:** Native clipboard integration with paste interception.
 
@@ -492,23 +556,23 @@ paste and requests clipboard from native. Context-aware paste behavior. Copy sho
 
 **Test Cases:**
 
-| TC       | Description                                          | Status |
-|----------|------------------------------------------------------|--------|
-| TC-M9-01 | Paste text into search bar                           | ❌      |
-| TC-M9-02 | Paste text into Monaco                               | ❌      |
-| TC-M9-03 | Paste files adds attachments + inserts links         | ❌      |
-| TC-M9-04 | Ctrl+C in Monaco copies selected text                | ❌      |
-| TC-M9-05 | Ctrl+C in attachments copies selected files          | ❌      |
-| TC-M9-06 | Ctrl+Alt+T copies markdown, hides window             | ❌      |
-| TC-M9-07 | Ctrl+Alt+R copies rendered HTML, hides window        | ❌      |
-| TC-M9-08 | Ctrl+Alt+F copies attachments, hides window          | ❌      |
-| TC-M9-09 | "Nothing to copy" shown when no target key           | ❌      |
-| TC-M9-10 | Paste files into search bar does nothing             | ❌      |
-| TC-M9-11 | Paste text into attachments panel shows confirmation | ❌      |
+| TC        | Description                                          | Status |
+|-----------|------------------------------------------------------|--------|
+| TC-M11-01 | Paste text into search bar                           | ❌      |
+| TC-M11-02 | Paste text into Monaco                               | ❌      |
+| TC-M11-03 | Paste files adds attachments + inserts links         | ❌      |
+| TC-M11-04 | Ctrl+C in Monaco copies selected text                | ❌      |
+| TC-M11-05 | Ctrl+C in attachments copies selected files          | ❌      |
+| TC-M11-06 | Ctrl+Alt+T copies markdown, hides window             | ❌      |
+| TC-M11-07 | Ctrl+Alt+R copies rendered HTML, hides window        | ❌      |
+| TC-M11-08 | Ctrl+Alt+F copies attachments, hides window          | ❌      |
+| TC-M11-09 | "Nothing to copy" shown when no target key           | ❌      |
+| TC-M11-10 | Paste files into search bar does nothing             | ❌      |
+| TC-M11-11 | Paste text into attachments panel shows confirmation | ❌      |
 
 ---
 
-## M10: Edit/Preview Toggle
+## M12: Edit/Preview Toggle
 
 **Goal:** Toggle between markdown editing and rendered preview.
 
@@ -539,18 +603,18 @@ shows rendered markdown with inline images. Attachment links (att:filename) tran
 
 | TC        | Description                                  | Status |
 |-----------|----------------------------------------------|--------|
-| TC-M10-01 | Edit tab shows Monaco editor                 | ❌      |
-| TC-M10-02 | Preview tab shows rendered markdown          | ❌      |
-| TC-M10-03 | att: image links display inline              | ❌      |
-| TC-M10-04 | att: non-image links are clickable           | ❌      |
-| TC-M10-05 | Preview updates when switching from Edit     | ❌      |
-| TC-M10-06 | Preview is read-only (no cursor, no editing) | ❌      |
-| TC-M10-07 | Broken att: link shows placeholder           | ❌      |
-| TC-M10-08 | External links open in default browser       | ❌      |
+| TC-M12-01 | Edit tab shows Monaco editor                 | ❌      |
+| TC-M12-02 | Preview tab shows rendered markdown          | ❌      |
+| TC-M12-03 | att: image links display inline              | ❌      |
+| TC-M12-04 | att: non-image links are clickable           | ❌      |
+| TC-M12-05 | Preview updates when switching from Edit     | ❌      |
+| TC-M12-06 | Preview is read-only (no cursor, no editing) | ❌      |
+| TC-M12-07 | Broken att: link shows placeholder           | ❌      |
+| TC-M12-08 | External links open in default browser       | ❌      |
 
 ---
 
-## M11: Trash
+## M13: Trash
 
 **Goal:** Trash section with restore and permanent delete.
 
@@ -576,17 +640,17 @@ delete button removes key and files. GC runs on window hide and periodically.
 
 | TC        | Description                                       | Status |
 |-----------|---------------------------------------------------|--------|
-| TC-M11-01 | Trash section shows trashed keys                  | ❌      |
-| TC-M11-02 | Restore button moves key to active                | ❌      |
-| TC-M11-03 | Permanent delete removes key and files            | ❌      |
-| TC-M11-04 | Trashed key content is read-only                  | ❌      |
-| TC-M11-05 | Drop onto trashed key rejected                    | ❌      |
-| TC-M11-06 | Arrow keys navigate within trash section          | ❌      |
-| TC-M11-07 | Click required to enter trash section from active | ❌      |
+| TC-M13-01 | Trash section shows trashed keys                  | ❌      |
+| TC-M13-02 | Restore button moves key to active                | ❌      |
+| TC-M13-03 | Permanent delete removes key and files            | ❌      |
+| TC-M13-04 | Trashed key content is read-only                  | ❌      |
+| TC-M13-05 | Drop onto trashed key rejected                    | ❌      |
+| TC-M13-06 | Arrow keys navigate within trash section          | ❌      |
+| TC-M13-07 | Click required to enter trash section from active | ❌      |
 
 ---
 
-## M12: Settings
+## M14: Settings
 
 **Goal:** Settings dialog with persistent configuration.
 
@@ -608,17 +672,17 @@ Applied immediately to running app.
 
 | TC        | Description                                  | Status |
 |-----------|----------------------------------------------|--------|
-| TC-M12-01 | Ctrl+, opens settings dialog                 | ❌      |
-| TC-M12-02 | Tray menu opens settings                     | ❌      |
-| TC-M12-03 | Theme change applies immediately             | ❌      |
-| TC-M12-04 | Settings saved to config.toml                | ❌      |
-| TC-M12-05 | Esc closes settings dialog                   | ❌      |
-| TC-M12-06 | Launch at login toggle creates/removes entry | ❌      |
-| TC-M12-07 | TTL settings are editable                    | ❌      |
+| TC-M14-01 | Ctrl+, opens settings dialog                 | ❌      |
+| TC-M14-02 | Tray menu opens settings                     | ❌      |
+| TC-M14-03 | Theme change applies immediately             | ❌      |
+| TC-M14-04 | Settings saved to config.toml                | ❌      |
+| TC-M14-05 | Esc closes settings dialog                   | ❌      |
+| TC-M14-06 | Launch at login toggle creates/removes entry | ❌      |
+| TC-M14-07 | TTL settings are editable                    | ❌      |
 
 ---
 
-## M13: Global Hotkey
+## M15: Global Hotkey
 
 **Goal:** System-wide Ctrl+Alt+K to show window.
 
@@ -643,14 +707,14 @@ with other applications. Fallback: double-click exe to show window.
 
 | TC        | Description                                 | Status |
 |-----------|---------------------------------------------|--------|
-| TC-M13-01 | Ctrl+Alt+K shows window from any app        | ❌      |
-| TC-M13-02 | Hotkey works when window already visible    | ❌      |
-| TC-M13-03 | Custom hotkey can be configured in settings | ❌      |
-| TC-M13-04 | Double-click exe shows window as fallback   | ❌      |
+| TC-M15-01 | Ctrl+Alt+K shows window from any app        | ❌      |
+| TC-M15-02 | Hotkey works when window already visible    | ❌      |
+| TC-M15-03 | Custom hotkey can be configured in settings | ❌      |
+| TC-M15-04 | Double-click exe shows window as fallback   | ❌      |
 
 ---
 
-## M14: Single Instance
+## M16: Single Instance
 
 **Goal:** Ensure only one instance runs at a time.
 
@@ -669,13 +733,13 @@ launching new.
 
 | TC        | Description                             | Status |
 |-----------|-----------------------------------------|--------|
-| TC-M14-01 | Second launch activates existing window | ❌      |
-| TC-M14-02 | Second launch exits after activation    | ❌      |
-| TC-M14-03 | Works when existing window is hidden    | ❌      |
+| TC-M16-01 | Second launch activates existing window | ❌      |
+| TC-M16-02 | Second launch exits after activation    | ❌      |
+| TC-M16-03 | Works when existing window is hidden    | ❌      |
 
 ---
 
-## M15: Window Position Memory
+## M17: Window Position Memory
 
 **Goal:** Remember window position per monitor.
 
@@ -693,13 +757,13 @@ subsequent launches. Handle monitor configuration changes gracefully.
 
 | TC        | Description                             | Status |
 |-----------|-----------------------------------------|--------|
-| TC-M15-01 | Position restored on next launch        | ❌      |
-| TC-M15-02 | Size restored on next launch            | ❌      |
-| TC-M15-03 | First launch centers on primary monitor | ❌      |
+| TC-M17-01 | Position restored on next launch        | ❌      |
+| TC-M17-02 | Size restored on next launch            | ❌      |
+| TC-M17-03 | First launch centers on primary monitor | ❌      |
 
 ---
 
-## M16: First-Run Dialog
+## M18: First-Run Dialog
 
 **Goal:** Welcome experience on first launch.
 
@@ -727,14 +791,14 @@ Setup: Delete config.toml before testing.
 
 | TC        | Description                                 | Status |
 |-----------|---------------------------------------------|--------|
-| TC-M16-01 | First launch (no config) shows welcome      | ❌      |
-| TC-M16-02 | Get Started button closes dialog            | ❌      |
-| TC-M16-03 | Subsequent launches skip welcome dialog     | ❌      |
-| TC-M16-04 | Launch at login checkbox persists to config | ❌      |
+| TC-M18-01 | First launch (no config) shows welcome      | ❌      |
+| TC-M18-02 | Get Started button closes dialog            | ❌      |
+| TC-M18-03 | Subsequent launches skip welcome dialog     | ❌      |
+| TC-M18-04 | Launch at login checkbox persists to config | ❌      |
 
 ---
 
-## M17: Monaco Bundling
+## M19: Monaco Bundling
 
 **Goal:** Embed Monaco and resources in single executable.
 
@@ -754,13 +818,13 @@ Setup: Disconnect network or use airplane mode.
 
 | TC        | Description                             | Status |
 |-----------|-----------------------------------------|--------|
-| TC-M17-01 | App launches without network connection | ❌      |
-| TC-M17-02 | Monaco editor functions without network | ❌      |
-| TC-M17-03 | All UI assets load (no broken images)   | ❌      |
+| TC-M19-01 | App launches without network connection | ❌      |
+| TC-M19-02 | Monaco editor functions without network | ❌      |
+| TC-M19-03 | All UI assets load (no broken images)   | ❌      |
 
 ---
 
-## M18: Installer
+## M20: Installer
 
 **Goal:** Professional installer with clean uninstall.
 
@@ -786,18 +850,18 @@ Uninstaller removes files and optionally data.
 
 | TC        | Description                           | Status |
 |-----------|---------------------------------------|--------|
-| TC-M18-01 | Installer completes without error     | ❌      |
-| TC-M18-02 | App appears in Start Menu             | ❌      |
-| TC-M18-03 | App appears in Add/Remove Programs    | ❌      |
-| TC-M18-04 | Uninstaller removes application files | ❌      |
-| TC-M18-05 | Uninstaller prompts for data deletion | ❌      |
-| TC-M18-06 | "Yes" deletes data directory          | ❌      |
-| TC-M18-07 | "No" preserves data directory         | ❌      |
-| TC-M18-08 | Upgrade install preserves user data   | ❌      |
+| TC-M20-01 | Installer completes without error     | ❌      |
+| TC-M20-02 | App appears in Start Menu             | ❌      |
+| TC-M20-03 | App appears in Add/Remove Programs    | ❌      |
+| TC-M20-04 | Uninstaller removes application files | ❌      |
+| TC-M20-05 | Uninstaller prompts for data deletion | ❌      |
+| TC-M20-06 | "Yes" deletes data directory          | ❌      |
+| TC-M20-07 | "No" preserves data directory         | ❌      |
+| TC-M20-08 | Upgrade install preserves user data   | ❌      |
 
 ---
 
-## M19: Layout Polish
+## M21: Layout Polish
 
 **Goal:** Resizable panes with persistent layout preferences.
 
@@ -816,11 +880,11 @@ sessions. Handle window resize gracefully by clamping pane width to valid range.
 
 | TC        | Description                                   | Status |
 |-----------|-----------------------------------------------|--------|
-| TC-M19-01 | Drag divider resizes left pane                | ❌      |
-| TC-M19-02 | Left pane respects minimum width (150px)      | ❌      |
-| TC-M19-03 | Left pane respects maximum width (50% window) | ❌      |
-| TC-M19-04 | Pane width persists after restart             | ❌      |
-| TC-M19-05 | Window resize clamps pane width if needed     | ❌      |
-| TC-M19-06 | Cursor shows col-resize on divider hover      | ❌      |
+| TC-M21-01 | Drag divider resizes left pane                | ❌      |
+| TC-M21-02 | Left pane respects minimum width (150px)      | ❌      |
+| TC-M21-03 | Left pane respects maximum width (50% window) | ❌      |
+| TC-M21-04 | Pane width persists after restart             | ❌      |
+| TC-M21-05 | Window resize clamps pane width if needed     | ❌      |
+| TC-M21-06 | Cursor shows col-resize on divider hover      | ❌      |
 
 ---
