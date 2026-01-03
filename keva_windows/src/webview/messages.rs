@@ -47,6 +47,17 @@ pub enum IncomingMessage {
         /// Each file: [source_path, target_filename]
         files: Vec<(String, String)>,
     },
+    /// Remove an attachment from a key.
+    RemoveAttachment {
+        key: String,
+        filename: String,
+    },
+    /// Rename an attachment.
+    RenameAttachment {
+        key: String,
+        old_filename: String,
+        new_filename: String,
+    },
 }
 
 /// Messages from native to WebView.

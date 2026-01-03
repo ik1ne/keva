@@ -53,6 +53,17 @@ pub enum Request {
         /// (source_path, target_filename)
         files: Vec<(String, String)>,
     },
+    /// Remove an attachment from a key.
+    RemoveAttachment {
+        key: String,
+        filename: String,
+    },
+    /// Rename an attachment.
+    RenameAttachment {
+        key: String,
+        old_filename: String,
+        new_filename: String,
+    },
     Shutdown,
 }
 
@@ -149,6 +160,16 @@ fn worker_loop(
             }
             Request::AddAttachments { key, files } => {
                 handle_add_attachments(&mut keva, &key, files, hwnd);
+            }
+            Request::RemoveAttachment { key, filename } => {
+                handle_remove_attachment(&mut keva, &key, &filename, hwnd);
+            }
+            Request::RenameAttachment {
+                key,
+                old_filename,
+                new_filename,
+            } => {
+                handle_rename_attachment(&mut keva, &key, &old_filename, &new_filename, hwnd);
             }
             Request::Shutdown => {
                 unsafe {
@@ -247,6 +268,38 @@ fn handle_add_attachments(
 
     if keva
         .add_attachments(&key, files, SystemTime::now())
+        .is_ok()
+    {
+        let _ = handle_get_value(keva, key_str, hwnd);
+    }
+}
+
+fn handle_remove_attachment(keva: &mut KevaCore, key_str: &str, filename: &str, hwnd: HWND) {
+    let Ok(key) = Key::try_from(key_str) else {
+        return;
+    };
+
+    if keva
+        .remove_attachment(&key, filename, SystemTime::now())
+        .is_ok()
+    {
+        let _ = handle_get_value(keva, key_str, hwnd);
+    }
+}
+
+fn handle_rename_attachment(
+    keva: &mut KevaCore,
+    key_str: &str,
+    old_filename: &str,
+    new_filename: &str,
+    hwnd: HWND,
+) {
+    let Ok(key) = Key::try_from(key_str) else {
+        return;
+    };
+
+    if keva
+        .rename_attachment(&key, old_filename, new_filename, SystemTime::now())
         .is_ok()
     {
         let _ = handle_get_value(keva, key_str, hwnd);

@@ -2,6 +2,7 @@
 
 const KeyList = {
     dom: null,
+    renameState: null,
 
     init: function (dom) {
         this.dom = dom;
@@ -58,8 +59,6 @@ const KeyList = {
         Editor.showEmpty('Loading...');
         Api.send({type: 'select', key: keyName});
     },
-
-    renameState: null,
 
     rename: function (keyName) {
         // Cancel any existing rename

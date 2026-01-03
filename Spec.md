@@ -372,12 +372,16 @@ else:
 - File list with name, size, type icon
 - Thumbnail preview for images (png, jpg, jpeg, gif, webp, svg)
 - Multi-select with Shift/Ctrl click
-- [X] button: Remove attachment (with warning if referenced)
+- [X] button: Remove attachment (shows confirmation dialog)
 - [+ Add files]: File picker or drop zone
 - Drag file to Monaco: Insert link at drop position
 - [✏️] button: Inline rename attachment
     - Opens inline text input with current filename
     - If new name exists: show duplicate dialog (Overwrite/Rename/Cancel)
+    - If referenced in markdown: show update dialog (Update/Don't Update/Cancel)
+        - Update: rename file and replace all `att:oldname` with `att:newname` in editor
+        - Don't Update: rename file only (references become broken)
+        - Cancel: abort rename
     - Invalid names (empty, too long) rejected with inline error
 
 **Thumbnail Generation:**
@@ -386,14 +390,11 @@ else:
 - Lazy generation for app upgrades (new format support)
 - Fallback to icon while generating
 
-**Delete Referenced Attachment:**
-
-When deleting attachment that has `[file](att:file)` in Markdown:
+**Delete Attachment Confirmation:**
 
 ```
 ┌─────────────────────────────────────────────┐
-│ "file.pdf" is referenced in your notes.     │
-│ Delete anyway?                              │
+│ Delete "file.pdf"?                          │
 │                                             │
 │ [Delete]  [Cancel]                          │
 └─────────────────────────────────────────────┘

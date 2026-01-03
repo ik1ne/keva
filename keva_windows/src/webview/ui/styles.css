@@ -541,6 +541,37 @@ html, body {
     color: rgba(255, 255, 255, 0.7);
 }
 
+.attachment-actions {
+    display: none;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.attachment-item:hover .attachment-actions {
+    display: flex;
+}
+
+.attachment-action-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px 4px;
+    font-size: 12px;
+    line-height: 1;
+}
+
+.attachment-action-btn:hover {
+    color: var(--text-primary);
+}
+
+/* Attachment inline rename - reuses .rename-input and .rename-error from key-item */
+.attachment-item.editing .attachment-name,
+.attachment-item.editing .attachment-size,
+.attachment-item.editing .attachment-actions {
+    display: none;
+}
+
 /* Inactive attachments pane - dimmed selection */
 .attachments-container.pane-inactive .attachment-item.selected {
     opacity: 0.6;

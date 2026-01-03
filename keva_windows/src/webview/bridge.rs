@@ -102,6 +102,20 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
         IncomingMessage::AddAttachments { key, files } => {
             let _ = request_tx.send(Request::AddAttachments { key, files });
         }
+        IncomingMessage::RemoveAttachment { key, filename } => {
+            let _ = request_tx.send(Request::RemoveAttachment { key, filename });
+        }
+        IncomingMessage::RenameAttachment {
+            key,
+            old_filename,
+            new_filename,
+        } => {
+            let _ = request_tx.send(Request::RenameAttachment {
+                key,
+                old_filename,
+                new_filename,
+            });
+        }
     }
 }
 

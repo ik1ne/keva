@@ -16,7 +16,7 @@ and includes test cases for verification.
 | M6  | Monaco Editor          | FileSystemHandle, markdown mode, auto-save   | ✅      |
 | M7  | Four-State Focus       | Focus model, keyboard navigation, dimming    | ✅      |
 | M8  | Attachments Display    | File list, sizes, icons, thumbnails, picker  | ✅      |
-| M9  | Attachment Operations  | Remove with warning, inline rename           | ❌      |
+| M9  | Attachment Operations  | Remove with confirmation, inline rename      | ✅      |
 | M10 | Attachment Drag & Drop | Drag to Monaco, file drop, multi-file batch  | ❌      |
 | M11 | Clipboard              | Native read, paste intercept, copy shortcuts | ❌      |
 | M12 | Edit/Preview Toggle    | Markdown renderer, att: link transform       | ❌      |
@@ -457,37 +457,50 @@ with conflict dialog. Empty state shows centered add button.
 
 **Goal:** Remove and rename attachments with appropriate dialogs.
 
-**Description:** Each attachment has [X] remove button and [✏️] rename button. Remove shows warning if attachment is
-referenced in markdown. Rename uses inline editor with conflict handling for duplicate names.
+**Description:** Each attachment has [X] remove button and [✏️] rename button. Remove shows confirmation dialog.
+Rename uses inline editor with conflict handling for duplicate names.
 
 **Implementation Notes:**
 
 - [X] button per attachment for removal
 - [✏️] button for inline rename (similar to key rename in M5)
-- Warning dialog if removing referenced attachment: "'{filename}' is referenced in your notes. Delete anyway?"
-- Rename conflict dialog: "'{filename}' already exists." with [Overwrite] [Rename] [Cancel]
+- Delete confirmation dialog: "Delete '{filename}'?" with [Delete] [Cancel]
+- Rename conflict dialog: "'{filename}' already exists." with [Overwrite] [Cancel]
 - Invalid rename (empty name) rejected with inline error
 - Buttons appear on hover (like key action buttons)
 
-**Reference Detection:**
+**Rename Reference Update:**
+
+When renaming an attachment that is referenced in markdown, show dialog:
 
 ```
-1. Get current markdown content
-2. Search for pattern: [any text](att:{filename})
-3. If found, show warning dialog before removal
+┌─────────────────────────────────────────────────┐
+│ "old.pdf" is referenced in your notes.          │
+│ Update references to "new.pdf"?                 │
+│                                                 │
+│ [Update]  [Don't Update]  [Cancel]              │
+└─────────────────────────────────────────────────┘
 ```
+
+- **Update:** Rename file and replace all `att:old.pdf` with `att:new.pdf` in editor
+- **Don't Update:** Rename file only (references become broken)
+- **Cancel:** Abort rename operation
+
+Reference update is handled by frontend (modifies editor content directly).
 
 **Test Cases:**
 
 | TC       | Description                                       | Status |
 |----------|---------------------------------------------------|--------|
-| TC-M9-01 | [X] button removes attachment                     | ❌      |
-| TC-M9-02 | Warning shown when removing referenced attachment | ❌      |
-| TC-M9-03 | Rename attachment via inline editor               | ❌      |
-| TC-M9-04 | Rename to existing filename shows conflict dialog | ❌      |
-| TC-M9-05 | Empty rename rejected with inline error           | ❌      |
-| TC-M9-06 | Action buttons appear on hover                    | ❌      |
-| TC-M9-07 | Escape cancels rename without hiding window       | ❌      |
+| TC-M9-01 | [X] button shows delete confirmation dialog       | ✅      |
+| TC-M9-02 | Confirming delete removes attachment              | ✅      |
+| TC-M9-03 | Rename attachment via inline editor               | ✅      |
+| TC-M9-04 | Rename to existing filename shows conflict dialog | ✅      |
+| TC-M9-05 | Empty rename rejected with inline error           | ✅      |
+| TC-M9-06 | Action buttons appear on hover                    | ✅      |
+| TC-M9-07 | Escape cancels rename without hiding window       | ✅      |
+| TC-M9-08 | Rename referenced file with Update updates editor | ✅      |
+| TC-M9-09 | Rename with Don't Update leaves editor unchanged  | ✅      |
 
 ---
 
