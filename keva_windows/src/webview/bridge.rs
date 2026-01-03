@@ -9,7 +9,10 @@ use crate::render::theme::Theme;
 use std::sync::mpsc::Sender;
 use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2;
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
-use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, SW_HIDE, ShowWindow};
+use windows::Win32::UI::WindowsAndMessaging::{
+    IDYES, MB_ICONWARNING, MB_YESNO, MessageBoxW, PostMessageW, PostQuitMessage, SW_HIDE, ShowWindow,
+};
+use windows_strings::w;
 use windows::core::PWSTR;
 
 pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<Request>) {
@@ -67,6 +70,19 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
         }
         IncomingMessage::ShutdownAck => {
             let _ = request_tx.send(Request::Shutdown);
+        }
+        IncomingMessage::ShutdownBlocked => {
+            let result = unsafe {
+                MessageBoxW(
+                    Some(parent_hwnd),
+                    w!("File copy in progress. Exit anyway?"),
+                    w!("Keva"),
+                    MB_YESNO | MB_ICONWARNING,
+                )
+            };
+            if result == IDYES {
+                unsafe { PostQuitMessage(0) };
+            }
         }
         IncomingMessage::OpenFilePicker { key } => {
             // Post to UI thread - file picker must run on UI thread

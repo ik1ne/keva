@@ -37,6 +37,7 @@ pub enum IncomingMessage {
     },
     Hide,
     ShutdownAck,
+    ShutdownBlocked,
     OpenFilePicker {
         key: String,
     },

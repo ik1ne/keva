@@ -296,6 +296,9 @@ const Main = {
             value: async function (msg, event) {
                 if (msg.key !== State.data.selectedKey) return;
 
+                // File copy completed
+                State.data.isCopying = false;
+
                 // Hide adding overlay if shown
                 self.hideAddingOverlay();
 
@@ -339,6 +342,11 @@ const Main = {
                 State.data.isShuttingDown = true;
                 self.showShutdownOverlay();
                 await Editor.forceSave();
+
+                if (State.data.isCopying) {
+                    Api.send({type: 'shutdownBlocked'});
+                    return;
+                }
                 Api.send({type: 'shutdownAck'});
             },
 
@@ -355,7 +363,7 @@ const Main = {
                     if (Editor.instance) Editor.instance.focus();
                 } else if (pane === 'attachments') {
                     const item = document.querySelector('.attachment-item.selected') ||
-                                 document.querySelector('.attachment-item');
+                        document.querySelector('.attachment-item');
                     if (item) item.focus();
                 }
             },
@@ -388,6 +396,7 @@ const Main = {
                     for (let i = 0; i < nonConflicts.length; i++) {
                         files.push([nonConflicts[i][0], nonConflicts[i][1]]);
                     }
+                    State.data.isCopying = true;
                     self.showAddingOverlay();
                     Api.send({type: 'addAttachments', key: msg.key, files: files});
                 }

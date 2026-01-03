@@ -8,6 +8,7 @@ const State = {
         selectedKey: null,
         isSelectedTrashed: false,
         isDirty: false,
+        isCopying: false,
         isShuttingDown: false,
         pendingSelectKey: null,
         focusEditorOnLoad: false,

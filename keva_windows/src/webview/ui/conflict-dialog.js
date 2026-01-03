@@ -176,6 +176,7 @@ const ConflictDialog = {
             return;
         }
 
+        State.data.isCopying = true;
         Main.showAddingOverlay();
 
         Api.send({
