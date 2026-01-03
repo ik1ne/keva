@@ -102,9 +102,9 @@ const Attachments = {
             ? '<img class="attachment-thumb" src="' + att.thumbnailUrl + '" alt="">'
             : '<span class="attachment-icon">' + this.getTypeIcon(att.filename) + '</span>';
 
-        return '<div class="attachment-item" tabindex="-1" data-index="' + index + '" data-filename="' + this.escapeHtml(att.filename) + '">' +
+        return '<div class="attachment-item" tabindex="-1" data-index="' + index + '" data-filename="' + Utils.escapeHtml(att.filename) + '">' +
             icon +
-            '<span class="attachment-name">' + this.escapeHtml(att.filename) + '</span>' +
+            '<span class="attachment-name">' + Utils.escapeHtml(att.filename) + '</span>' +
             '<span class="attachment-size">' + this.formatSize(att.size) + '</span>' +
             '<span class="attachment-actions">' +
             '<button class="attachment-action-btn" data-action="rename" title="Rename">\u270F\uFE0F</button>' +
@@ -145,13 +145,6 @@ const Attachments = {
             zip: icon.archive, rar: icon.archive, '7z': icon.archive, tar: icon.archive, gz: icon.archive,
         };
         return extToIcon[ext] || icon.file;
-    },
-
-    escapeHtml: function (str) {
-        return str.replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
     },
 
     getItems: function () {
