@@ -2,11 +2,13 @@
 
 const Attachments = {
     dom: null,
+    listEl: null,
     selectedIndices: new Set(),
     lastClickedIndex: -1,
 
     init: function (dom) {
         this.dom = dom;
+        this.listEl = document.getElementById('attachments-list');
         this.setupEventHandlers();
     },
 
@@ -42,6 +44,82 @@ const Attachments = {
                 self.navigateArrow(e.key === 'ArrowDown' ? 1 : -1, e.shiftKey);
             }
         });
+    },
+
+    render: function () {
+        if (!this.listEl) return;
+
+        const attachments = State.data.attachments;
+        this.clearSelection();
+
+        if (attachments.length === 0) {
+            this.listEl.innerHTML = '';
+            return;
+        }
+
+        // Sort by filename (case-insensitive)
+        const sorted = attachments.slice().sort(function (a, b) {
+            return a.filename.toLowerCase().localeCompare(b.filename.toLowerCase());
+        });
+
+        let html = '';
+        for (let i = 0; i < sorted.length; i++) {
+            html += this.renderItem(sorted[i], i);
+        }
+        this.listEl.innerHTML = html;
+    },
+
+    renderItem: function (att, index) {
+        const icon = att.thumbnailUrl
+            ? '<img class="attachment-thumb" src="' + att.thumbnailUrl + '" alt="">'
+            : '<span class="attachment-icon">' + this.getTypeIcon(att.filename) + '</span>';
+
+        return '<div class="attachment-item" tabindex="-1" data-index="' + index + '">' +
+            icon +
+            '<span class="attachment-name">' + this.escapeHtml(att.filename) + '</span>' +
+            '<span class="attachment-size">' + this.formatSize(att.size) + '</span>' +
+            '</div>';
+    },
+
+    formatSize: function (bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+    },
+
+    getTypeIcon: function (filename) {
+        const ext = (filename.split('.').pop() || '').toLowerCase();
+        const icon = {
+            document: '\uD83D\uDCC4',
+            chart: '\uD83D\uDCCA',
+            image: '\uD83D\uDDBC\uFE0F',
+            audio: '\uD83C\uDFB5',
+            video: '\uD83C\uDFAC',
+            archive: '\uD83D\uDCE6',
+            file: '\uD83D\uDCC1',
+        };
+        const extToIcon = {
+            pdf: icon.document,
+            doc: icon.document, docx: icon.document,
+            xls: icon.chart, xlsx: icon.chart,
+            ppt: icon.chart, pptx: icon.chart,
+            txt: icon.document, md: icon.document,
+            png: icon.image, jpg: icon.image, jpeg: icon.image,
+            gif: icon.image, bmp: icon.image, webp: icon.image,
+            svg: icon.image,
+            mp3: icon.audio, wav: icon.audio, ogg: icon.audio, flac: icon.audio,
+            mp4: icon.video, avi: icon.video, mkv: icon.video, mov: icon.video,
+            zip: icon.archive, rar: icon.archive, '7z': icon.archive, tar: icon.archive, gz: icon.archive,
+        };
+        return extToIcon[ext] || icon.file;
+    },
+
+    escapeHtml: function (str) {
+        return str.replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
     },
 
     getItems: function () {

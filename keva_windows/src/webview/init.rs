@@ -3,7 +3,7 @@
 use super::bridge::handle_webview_message;
 use super::messages::OutgoingMessage;
 use super::{WEBVIEW, WebView, wm};
-use crate::keva_worker::Request;
+use crate::keva_worker::{Request, get_data_path};
 use crate::render::theme::Theme;
 use std::ffi::c_void;
 use std::sync::mpsc::Receiver;
@@ -91,9 +91,23 @@ fn create_controller(
 
                     // Map virtual host to source directory for file-based loading
                     if let Ok(wv3) = wv.webview.cast::<ICoreWebView2_3>() {
+                        // UI files
                         let _ = wv3.SetVirtualHostNameToFolderMapping(
                             w!("keva.local"),
                             w!("../../keva_windows/src/webview/ui"),
+                            COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW,
+                        );
+
+                        // Data directory (thumbnails, blobs, content)
+                        let data_path = get_data_path();
+                        let data_path_wide: Vec<u16> = data_path
+                            .to_string_lossy()
+                            .encode_utf16()
+                            .chain(std::iter::once(0))
+                            .collect();
+                        let _ = wv3.SetVirtualHostNameToFolderMapping(
+                            w!("keva-data.local"),
+                            PWSTR(data_path_wide.as_ptr() as *mut u16),
                             COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW,
                         );
                     }

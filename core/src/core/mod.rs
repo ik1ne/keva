@@ -39,15 +39,9 @@ fn key_to_path(key: &Key) -> PathBuf {
 }
 
 pub struct KevaCore {
+    base_path: PathBuf,
     db: Database,
     file: FileStorage,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum AttachmentConflictResolution {
-    Overwrite,
-    Rename,
-    Skip,
 }
 
 #[derive(Debug, Default)]
@@ -59,6 +53,7 @@ pub struct MaintenanceOutcome {
 
 impl KevaCore {
     pub fn open(config: Config) -> Result<Self, KevaError> {
+        let base_path = config.base_path.clone();
         let file = FileStorage {
             content_path: config.content_path(),
             blobs_path: config.blobs_path(),
@@ -66,7 +61,16 @@ impl KevaCore {
         };
 
         let db = Database::new(config)?;
-        Ok(Self { db, file })
+        Ok(Self {
+            base_path,
+            db,
+            file,
+        })
+    }
+
+    /// Returns the base data directory path.
+    pub fn data_dir(&self) -> &Path {
+        &self.base_path
     }
 }
 
@@ -115,76 +119,36 @@ impl KevaCore {
         self.file.attachment_path(&key_hash, filename)
     }
 
-    /// If the caller mistakes and the resolution intent does not match the file system state, it will default to Rename.
+    /// Add attachments with explicit target filenames.
+    /// If a file with the same name exists, it will be overwritten.
     pub fn add_attachments(
         &mut self,
         key: &Key,
-        files: &[(PathBuf, Option<AttachmentConflictResolution>)],
+        files: Vec<(PathBuf, String)>,
         now: SystemTime,
-    ) -> Result<Value, KevaError> {
-        let value = self.db.get(key)?.ok_or(DatabaseError::NotFound)?;
-
+    ) -> Result<(), KevaError> {
         let key_hash = key_to_path(key);
-        let mut existing_names: HashSet<_> =
-            value.attachments.into_iter().map(|a| a.filename).collect();
 
-        for (source_path, resolution) in files {
-            let original_filename = source_path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .ok_or(FileStorageError::NonUtf8FileName)?
-                .to_string();
+        for (source_path, target_filename) in files {
+            // Remove existing attachment if present (overwrite behavior)
+            let _ = self.remove_attachment(key, &target_filename, now);
 
-            if !existing_names.contains(&original_filename) {
-                self.add_attachment_with_thumbnail(
-                    key,
-                    &key_hash,
-                    source_path,
-                    original_filename.clone(),
-                    now,
-                )?;
-                existing_names.insert(original_filename.clone());
-                continue;
-            }
-
-            match resolution.unwrap_or(AttachmentConflictResolution::Rename) {
-                AttachmentConflictResolution::Overwrite => {
-                    self.remove_attachment(key, &original_filename, now)?;
-                    self.add_attachment_with_thumbnail(
-                        key,
-                        &key_hash,
-                        source_path,
-                        original_filename.clone(),
-                        now,
-                    )?;
-                }
-                AttachmentConflictResolution::Rename => {
-                    let new_name = generate_unique_name(&original_filename, &existing_names);
-                    self.add_attachment_with_thumbnail(
-                        key,
-                        &key_hash,
-                        source_path,
-                        new_name.clone(),
-                        now,
-                    )?;
-                    existing_names.insert(new_name.clone());
-                }
-                AttachmentConflictResolution::Skip => {}
-            }
+            self.add_attachment_with_thumbnail(key, &key_hash, source_path, target_filename, now)?;
         }
-
-        Ok(self.get(key)?.expect("Key must exist after touch"))
+        Ok(())
     }
 
     fn add_attachment_with_thumbnail(
         &mut self,
         key: &Key,
         key_hash: &Path,
-        source_path: &Path,
+        source_path: PathBuf,
         filename: String,
         now: SystemTime,
     ) -> Result<u64, KevaError> {
-        let size = self.file.add_attachment(key_hash, source_path, &filename)?;
+        let size = self
+            .file
+            .add_attachment(key_hash, &source_path, &filename)?;
 
         if FileStorage::is_supported_image(&filename) {
             self.file
@@ -247,7 +211,8 @@ impl KevaCore {
 
 /// Thumbnail operations.
 impl KevaCore {
-    /// Returns filename -> thumbnail path map for all attachments.
+    /// Returns filename -> thumbnail relative path map for attachments with thumbnails.
+    /// Paths are relative to the thumbnails directory (`data_dir()/thumbnails`).
     pub fn thumbnail_paths(&mut self, key: &Key) -> Result<HashMap<String, PathBuf>, KevaError> {
         let key_hash = key_to_path(key);
         let value = self.db.get(key)?.ok_or(DatabaseError::NotFound)?;
@@ -264,7 +229,7 @@ impl KevaCore {
 
                 result.insert(
                     attachment.filename.clone(),
-                    self.file.thumbnail_path(&key_hash, &attachment.filename),
+                    FileStorage::thumbnail_rel_path(&key_hash, &attachment.filename),
                 );
             }
         }
@@ -372,27 +337,6 @@ impl KevaCore {
             keys_purged: gc_result.purged,
             orphaned_files_removed,
         })
-    }
-}
-
-/// Generates a unique filename by appending a number.
-fn generate_unique_name(original: &str, existing: &HashSet<String>) -> String {
-    let (stem, ext) = match original.rfind('.') {
-        Some(pos) => (&original[..pos], Some(&original[pos..])),
-        None => (original, None),
-    };
-
-    let mut counter = 1;
-    loop {
-        let new_name = match ext {
-            Some(ext) => format!("{} ({}){}", stem, counter, ext),
-            None => format!("{} ({})", stem, counter),
-        };
-
-        if !existing.contains(&new_name) {
-            return new_name;
-        }
-        counter += 1;
     }
 }
 

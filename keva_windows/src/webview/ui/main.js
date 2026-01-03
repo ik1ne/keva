@@ -54,6 +54,7 @@ const Main = {
             editorContainer: document.getElementById('editor-container'),
             emptyState: document.getElementById('empty-state'),
             attachments: document.getElementById('attachments-container'),
+            addFilesBtn: document.getElementById('add-files-btn'),
         };
 
         // Map pane names to DOM elements for focus management
@@ -92,6 +93,7 @@ const Main = {
 
         // Initial state
         this.initPaneClasses();
+        this.updateAddFilesBtn();
         this.dom.searchInput.focus();
         Editor.showEmpty();
     },
@@ -118,8 +120,11 @@ const Main = {
         this.dom.searchInput.addEventListener('input', function (e) {
             if (e.target.value && State.data.selectedKey) {
                 State.clearSelection();
+                State.data.attachments = [];
+                Attachments.render();
                 KeyList.updateSelection();
                 Editor.showEmpty();
+                self.updateAddFilesBtn();
             }
             self.updateSearchButton();
             Api.send({type: 'search', query: e.target.value});
@@ -227,6 +232,12 @@ const Main = {
             }
         });
 
+        // Add files button
+        this.dom.addFilesBtn.addEventListener('click', function () {
+            if (!State.data.selectedKey || State.data.isSelectedTrashed) return;
+            Api.send({type: 'openFilePicker', key: State.data.selectedKey});
+        });
+
         // Global keyboard shortcuts
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Tab') {
@@ -261,7 +272,10 @@ const Main = {
 
                 if (State.data.selectedKey && !State.isKeyVisible(State.data.selectedKey)) {
                     State.clearSelection();
+                    State.data.attachments = [];
+                    Attachments.render();
                     Editor.showEmpty();
+                    self.updateAddFilesBtn();
                 }
 
                 KeyList.render();
@@ -281,6 +295,19 @@ const Main = {
 
             value: async function (msg, event) {
                 if (msg.key !== State.data.selectedKey) return;
+
+                // Hide adding overlay if shown
+                self.hideAddingOverlay();
+
+                // Update attachments
+                State.data.attachments = msg.attachments || [];
+                Attachments.render();
+                self.updateAddFilesBtn();
+
+                // Skip editor reload if already showing this key (e.g., after adding attachments)
+                if (Editor.currentKey === msg.key) {
+                    return;
+                }
 
                 // Check for FileSystemHandle in additionalObjects
                 if (event.additionalObjects && event.additionalObjects.length > 0) {
@@ -331,6 +358,39 @@ const Main = {
                                  document.querySelector('.attachment-item');
                     if (item) item.focus();
                 }
+            },
+
+            filesSelected: function (msg) {
+                // Build set of existing attachment names
+                const existingNames = new Set();
+                for (let i = 0; i < State.data.attachments.length; i++) {
+                    existingNames.add(State.data.attachments[i].filename);
+                }
+
+                // Extract filename from path and detect conflicts
+                const conflicts = [];
+                const nonConflicts = [];
+                for (let i = 0; i < msg.files.length; i++) {
+                    const path = msg.files[i];
+                    const filename = path.split(/[/\\]/).pop();
+                    if (existingNames.has(filename)) {
+                        conflicts.push([path, filename]);
+                    } else {
+                        nonConflicts.push([path, filename]);
+                    }
+                }
+
+                if (conflicts.length > 0) {
+                    ConflictDialog.show(msg.key, conflicts, nonConflicts);
+                } else {
+                    // No conflicts - add all files with original filenames
+                    const files = [];
+                    for (let i = 0; i < nonConflicts.length; i++) {
+                        files.push([nonConflicts[i][0], nonConflicts[i][1]]);
+                    }
+                    self.showAddingOverlay();
+                    Api.send({type: 'addAttachments', key: msg.key, files: files});
+                }
             }
         };
     },
@@ -365,6 +425,11 @@ const Main = {
         this.dom.searchActionBtn.classList.add('visible');
     },
 
+    updateAddFilesBtn: function () {
+        const canAdd = State.data.selectedKey && !State.data.isSelectedTrashed;
+        this.dom.addFilesBtn.disabled = !canAdd;
+    },
+
     hideSplash: function () {
         if (this.dom.splash && !this.dom.splash.classList.contains('hidden')) {
             this.dom.splash.classList.add('hidden');
@@ -379,6 +444,23 @@ const Main = {
         const overlay = document.createElement('div');
         overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.3);z-index:9999;';
         document.body.appendChild(overlay);
+    },
+
+    addingOverlay: null,
+
+    showAddingOverlay: function () {
+        if (this.addingOverlay) return;
+        this.addingOverlay = document.createElement('div');
+        this.addingOverlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.3);z-index:9998;display:flex;align-items:center;justify-content:center;';
+        this.addingOverlay.innerHTML = '<div style="color:white;font-size:14px;">Adding files...</div>';
+        document.body.appendChild(this.addingOverlay);
+    },
+
+    hideAddingOverlay: function () {
+        if (this.addingOverlay) {
+            this.addingOverlay.remove();
+            this.addingOverlay = null;
+        }
     }
 };
 

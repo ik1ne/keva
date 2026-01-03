@@ -37,6 +37,15 @@ pub enum IncomingMessage {
     },
     Hide,
     ShutdownAck,
+    OpenFilePicker {
+        key: String,
+    },
+    /// Add attachments with target filenames.
+    AddAttachments {
+        key: String,
+        /// Each file: [source_path, target_filename]
+        files: Vec<(String, String)>,
+    },
 }
 
 /// Messages from native to WebView.
@@ -69,6 +78,12 @@ pub enum OutgoingMessage {
     Shutdown,
     /// Signals WebView to restore focus after window is shown.
     Focus,
+    /// Files selected from file picker. Frontend should check conflicts and send AddAttachments.
+    FilesSelected {
+        key: String,
+        /// Selected file paths
+        files: Vec<String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]

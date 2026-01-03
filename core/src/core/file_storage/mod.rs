@@ -146,10 +146,13 @@ impl FileStorage {
         Self::SUPPORTED_EXTENSIONS.contains(&ext.as_str())
     }
 
+    /// Returns relative path: `{key_hash}/{filename}.thumb`
+    pub fn thumbnail_rel_path(key_hash: &Path, filename: &str) -> PathBuf {
+        key_hash.join(format!("{}.thumb", filename))
+    }
+
     pub fn thumbnail_path(&self, key_hash: &Path, filename: &str) -> PathBuf {
-        self.thumbnails_path
-            .join(key_hash)
-            .join(format!("{}.thumb", filename))
+        self.thumbnails_path.join(Self::thumbnail_rel_path(key_hash, filename))
     }
 
     /// Returns `Err(UnsupportedFormat)` if the file is not a supported image.

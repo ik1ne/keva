@@ -26,19 +26,11 @@
             <div id="editor-container"></div>
             <div class="empty-state" id="empty-state">Select a key or type to search</div>
             <div id="attachments-container" class="attachments-container">
-                <div class="attachments-header">Attachments</div>
-                <div class="attachments-list">
-                    <div class="attachment-item" tabindex="-1">
-                        <span class="attachment-icon">📄</span>
-                        <span class="attachment-name">example.pdf</span>
-                        <span class="attachment-size">1.2 MB</span>
-                    </div>
-                    <div class="attachment-item" tabindex="-1">
-                        <span class="attachment-icon">🖼️</span>
-                        <span class="attachment-name">photo.png</span>
-                        <span class="attachment-size">340 KB</span>
-                    </div>
+                <div class="attachments-header">
+                    <span>Attachments</span>
+                    <button class="add-files-btn" id="add-files-btn" title="Add files">+</button>
                 </div>
+                <div class="attachments-list" id="attachments-list"></div>
             </div>
         </div>
     </div>
@@ -50,6 +42,7 @@
 <script src="keylist.js"></script>
 <script src="editor.js"></script>
 <script src="attachments.js"></script>
+<script src="conflict-dialog.js"></script>
 <script src="main.js"></script>
 </body>
 </html>

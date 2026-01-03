@@ -1,7 +1,7 @@
 //! Background worker thread for KevaCore and SearchEngine operations.
 
 use crate::webview::messages::{ExactMatch, OutgoingMessage, RenameResultType};
-use crate::webview::{FileHandleRequest, wm};
+use crate::webview::{AttachmentInfo, FileHandleRequest, wm};
 use keva_core::core::KevaCore;
 use keva_core::types::{Config, Key, LifecycleState, SavedConfig};
 use keva_search::{SearchConfig, SearchEngine, SearchQuery};
@@ -41,6 +41,17 @@ pub enum Request {
     /// Update timestamp after content save via FileSystemHandle.
     Touch {
         key: String,
+    },
+    /// Files selected from picker - send to frontend for conflict check.
+    FilesSelected {
+        key: String,
+        files: Vec<std::path::PathBuf>,
+    },
+    /// Add attachments with target filenames from frontend.
+    AddAttachments {
+        key: String,
+        /// (source_path, target_filename)
+        files: Vec<(String, String)>,
     },
     Shutdown,
 }
@@ -133,6 +144,12 @@ fn worker_loop(
                     let _ = keva.touch(&key, SystemTime::now());
                 }
             }
+            Request::FilesSelected { key, files } => {
+                handle_files_selected(&key, files, &responses);
+            }
+            Request::AddAttachments { key, files } => {
+                handle_add_attachments(&mut keva, &key, files, hwnd);
+            }
             Request::Shutdown => {
                 unsafe {
                     let _ = PostMessageW(Some(hwnd), wm::SHUTDOWN_COMPLETE, WPARAM(0), LPARAM(0));
@@ -152,6 +169,26 @@ fn handle_get_value(keva: &mut KevaCore, key_str: &str, hwnd: HWND) -> Option<()
         let _ = keva.touch(&key, now);
     }
 
+    // Build attachment info with thumbnail URLs (paths are relative to thumbnails dir)
+    let thumbnail_paths = keva.thumbnail_paths(&key).unwrap_or_default();
+    let attachments: Vec<AttachmentInfo> = value
+        .attachments
+        .into_iter()
+        .map(|att| {
+            let thumbnail_url = thumbnail_paths.get(&att.filename).map(|rel_path| {
+                format!(
+                    "https://keva-data.local/thumbnails/{}",
+                    rel_path.to_string_lossy().replace('\\', "/")
+                )
+            });
+            AttachmentInfo {
+                filename: att.filename,
+                size: att.size,
+                thumbnail_url,
+            }
+        })
+        .collect();
+
     // Post directly to UI thread, bypassing forwarder.
     // FileSystemHandle creation requires the UI thread, so routing through
     // the forwarder would just add an unnecessary thread hop.
@@ -159,6 +196,7 @@ fn handle_get_value(keva: &mut KevaCore, key_str: &str, hwnd: HWND) -> Option<()
         key: key_str.to_string(),
         content_path: keva.content_path(&key),
         read_only,
+        attachments,
     });
     unsafe {
         let _ = PostMessageW(
@@ -177,6 +215,41 @@ fn handle_save(keva: &mut KevaCore, key_str: &str, content: &str) {
         if std::fs::write(&content_path, content).is_ok() {
             let _ = keva.touch(&key, SystemTime::now());
         }
+    }
+}
+
+fn handle_files_selected(key_str: &str, files: Vec<PathBuf>, responses: &Sender<OutgoingMessage>) {
+    let files: Vec<String> = files
+        .into_iter()
+        .map(|path| path.to_string_lossy().to_string())
+        .collect();
+
+    let _ = responses.send(OutgoingMessage::FilesSelected {
+        key: key_str.to_string(),
+        files,
+    });
+}
+
+fn handle_add_attachments(
+    keva: &mut KevaCore,
+    key_str: &str,
+    files: Vec<(String, String)>,
+    hwnd: HWND,
+) {
+    let Ok(key) = Key::try_from(key_str) else {
+        return;
+    };
+
+    let files: Vec<(PathBuf, String)> = files
+        .into_iter()
+        .map(|(path, name)| (PathBuf::from(path), name))
+        .collect();
+
+    if keva
+        .add_attachments(&key, files, SystemTime::now())
+        .is_ok()
+    {
+        let _ = handle_get_value(keva, key_str, hwnd);
     }
 }
 
@@ -315,7 +388,7 @@ fn open_keva() -> KevaCore {
     KevaCore::open(config).expect("Failed to open database")
 }
 
-fn get_data_path() -> PathBuf {
+pub fn get_data_path() -> PathBuf {
     std::env::var("KEVA_DATA_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| {

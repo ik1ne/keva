@@ -458,6 +458,28 @@ html, body {
     color: var(--text-muted);
     background: var(--bg-header);
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.add-files-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+}
+
+.add-files-btn:hover {
+    color: var(--text-primary);
+}
+
+.add-files-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
 }
 
 .attachments-list {
@@ -489,6 +511,16 @@ html, body {
 
 .attachment-icon {
     flex-shrink: 0;
+    width: 24px;
+    text-align: center;
+}
+
+.attachment-thumb {
+    width: 24px;
+    height: 24px;
+    object-fit: cover;
+    border-radius: 2px;
+    flex-shrink: 0;
 }
 
 .attachment-name {
@@ -512,4 +544,75 @@ html, body {
 /* Inactive attachments pane - dimmed selection */
 .attachments-container.pane-inactive .attachment-item.selected {
     opacity: 0.6;
+}
+
+/* Conflict dialog */
+.conflict-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.conflict-dialog {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 20px;
+    min-width: 300px;
+    max-width: 400px;
+}
+
+.conflict-title {
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 12px;
+    color: var(--text-primary);
+}
+
+.conflict-filename {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+    word-break: break-all;
+}
+
+.conflict-buttons {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.conflict-btn {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.conflict-btn:hover {
+    background: var(--bg-hover);
+}
+
+.conflict-apply-all {
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.conflict-apply-all input {
+    margin: 0;
 }

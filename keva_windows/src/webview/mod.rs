@@ -6,6 +6,7 @@ pub mod messages;
 
 pub use init::init_webview;
 
+use serde::Serialize;
 use std::sync::OnceLock;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     ICoreWebView2, ICoreWebView2Controller, ICoreWebView2Environment,
@@ -15,11 +16,27 @@ use windows::Win32::Foundation::RECT;
 
 pub mod wm;
 
+/// Attachment metadata for WebView display.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AttachmentInfo {
+    pub filename: String,
+    pub size: u64,
+    pub thumbnail_url: Option<String>,
+}
+
 /// Request data for sending a FileSystemHandle to WebView.
 pub struct FileHandleRequest {
     pub key: String,
     pub content_path: std::path::PathBuf,
     pub read_only: bool,
+    pub attachments: Vec<AttachmentInfo>,
+}
+
+/// Request data for opening a file picker.
+pub struct FilePickerRequest {
+    pub key: String,
+    pub request_tx: std::sync::mpsc::Sender<crate::keva_worker::Request>,
 }
 
 pub static WEBVIEW: OnceLock<WebView> = OnceLock::new();

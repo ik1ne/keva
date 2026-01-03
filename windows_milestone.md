@@ -15,7 +15,7 @@ and includes test cases for verification.
 | M5  | Key List               | Left pane, create/rename/delete, selection   | ✅      |
 | M6  | Monaco Editor          | FileSystemHandle, markdown mode, auto-save   | ✅      |
 | M7  | Four-State Focus       | Focus model, keyboard navigation, dimming    | ✅      |
-| M8  | Attachments Display    | File list, sizes, icons, thumbnails, picker  | ❌      |
+| M8  | Attachments Display    | File list, sizes, icons, thumbnails, picker  | ✅      |
 | M9  | Attachment Operations  | Remove with warning, inline rename           | ❌      |
 | M10 | Attachment Drag & Drop | Drag to Monaco, file drop, multi-file batch  | ❌      |
 | M11 | Clipboard              | Native read, paste intercept, copy shortcuts | ❌      |
@@ -442,14 +442,14 @@ with conflict dialog. Empty state shows centered add button.
 
 | TC       | Description                                      | Status |
 |----------|--------------------------------------------------|--------|
-| TC-M8-01 | Attachments list displays files with names       | ❌      |
-| TC-M8-02 | File size shown in human-readable format (KB/MB) | ❌      |
-| TC-M8-03 | Image attachments show thumbnail                 | ❌      |
-| TC-M8-04 | Non-image attachments show type icon             | ❌      |
-| TC-M8-05 | Click [+ Add files] opens file picker            | ❌      |
-| TC-M8-06 | Duplicate filename shows conflict dialog         | ❌      |
-| TC-M8-07 | Multi-select with Ctrl+click                     | ❌      |
-| TC-M8-08 | Shift+click range selection works                | ❌      |
+| TC-M8-01 | Attachments list displays files with names       | ✅      |
+| TC-M8-02 | File size shown in human-readable format (KB/MB) | ✅      |
+| TC-M8-03 | Image attachments show thumbnail                 | ✅      |
+| TC-M8-04 | Non-image attachments show type icon             | ✅      |
+| TC-M8-05 | Click [+ Add files] opens file picker            | ✅      |
+| TC-M8-06 | Duplicate filename shows conflict dialog         | ✅      |
+| TC-M8-07 | Multi-select with Ctrl+click                     | ✅      |
+| TC-M8-08 | Shift+click range selection works                | ✅      |
 
 ---
 
@@ -879,17 +879,17 @@ pane sizes to valid ranges.
 
 **Test Cases:**
 
-| TC        | Description                                      | Status |
-|-----------|--------------------------------------------------|--------|
-| TC-M21-01 | Drag divider resizes left pane                   | ❌      |
-| TC-M21-02 | Left pane respects minimum width (150px)         | ❌      |
-| TC-M21-03 | Left pane respects maximum width (50% window)    | ❌      |
-| TC-M21-04 | Pane sizes persist after restart                 | ❌      |
-| TC-M21-05 | Window resize clamps pane sizes if needed        | ❌      |
-| TC-M21-06 | Cursor shows col-resize on left/right divider    | ❌      |
-| TC-M21-07 | Drag divider resizes attachments pane height     | ❌      |
-| TC-M21-08 | Attachments pane respects minimum height (60px)  | ❌      |
-| TC-M21-09 | Attachments pane respects maximum height (50%)   | ❌      |
-| TC-M21-10 | Cursor shows row-resize on editor/att divider    | ❌      |
+| TC        | Description                                     | Status |
+|-----------|-------------------------------------------------|--------|
+| TC-M21-01 | Drag divider resizes left pane                  | ❌      |
+| TC-M21-02 | Left pane respects minimum width (150px)        | ❌      |
+| TC-M21-03 | Left pane respects maximum width (50% window)   | ❌      |
+| TC-M21-04 | Pane sizes persist after restart                | ❌      |
+| TC-M21-05 | Window resize clamps pane sizes if needed       | ❌      |
+| TC-M21-06 | Cursor shows col-resize on left/right divider   | ❌      |
+| TC-M21-07 | Drag divider resizes attachments pane height    | ❌      |
+| TC-M21-08 | Attachments pane respects minimum height (60px) | ❌      |
+| TC-M21-09 | Attachments pane respects maximum height (50%)  | ❌      |
+| TC-M21-10 | Cursor shows row-resize on editor/att divider   | ❌      |
 
 ---

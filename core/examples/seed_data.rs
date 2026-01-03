@@ -2,7 +2,7 @@
 //!
 //! Run with: `cargo run -q --example seed_data -p keva_core`
 
-use keva_core::core::{AttachmentConflictResolution, KevaCore};
+use keva_core::core::KevaCore;
 use keva_core::types::{Config, Key, SavedConfig};
 use std::io::Write;
 use std::path::PathBuf;
@@ -109,19 +109,18 @@ fn seed_attachment_keys(keva: &mut KevaCore, now: SystemTime, base_path: &PathBu
     if keva.get(&key).unwrap().is_none() {
         match keva.create(&key, now) {
             Ok(_value) => {
-                let attachments: Vec<_> = file_paths
+                let files: Vec<_> = file_paths
                     .into_iter()
-                    .map(|p| (p, Some(AttachmentConflictResolution::Skip)))
+                    .map(|p| {
+                        let name = p.file_name().unwrap().to_string_lossy().into_owned();
+                        (p, name)
+                    })
                     .collect();
-
-                match keva.add_attachments(&key, &attachments, now) {
-                    Ok(value) => {
-                        println!(
-                            "  Created: my-files ({} attachments)",
-                            value.attachments.len()
-                        )
-                    }
-                    Err(e) => println!("  Failed to add attachments ({})", e),
+                let count = files.len();
+                if keva.add_attachments(&key, files, now).is_ok() {
+                    println!("  Created: my-files ({} attachments)", count);
+                } else {
+                    println!("  Created: my-files (failed to add attachments)");
                 }
             }
             Err(e) => println!("  Skipped my-files ({})", e),

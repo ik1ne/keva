@@ -207,17 +207,18 @@ mod add_attachments {
     use super::*;
 
     #[test]
-    fn test_add_attachment_to_key() {
+    fn test_add_single_attachment() {
         let (mut storage, temp) = create_test_storage();
         let key = make_key("test/key");
         let file_path = create_test_file(&temp, "test.txt", b"file content");
         let now = SystemTime::now();
 
         storage.create(&key, now).unwrap();
-        let value = storage
-            .add_attachments(&key, &[(file_path, None)], now)
+        storage
+            .add_attachments(&key, vec![(file_path, "test.txt".into())], now)
             .unwrap();
 
+        let value = storage.get(&key).unwrap().unwrap();
         assert_eq!(value.attachments.len(), 1);
         assert_eq!(value.attachments[0].filename, "test.txt");
         assert_eq!(value.attachments[0].size, 12); // "file content".len()
@@ -232,10 +233,18 @@ mod add_attachments {
         let now = SystemTime::now();
 
         storage.create(&key, now).unwrap();
-        let value = storage
-            .add_attachments(&key, &[(file1, None), (file2, None)], now)
+        storage
+            .add_attachments(
+                &key,
+                vec![
+                    (file1, "file1.txt".into()),
+                    (file2, "file2.txt".into()),
+                ],
+                now,
+            )
             .unwrap();
 
+        let value = storage.get(&key).unwrap().unwrap();
         assert_eq!(value.attachments.len(), 2);
     }
 
@@ -246,7 +255,7 @@ mod add_attachments {
         let file_path = create_test_file(&temp, "test.txt", b"content");
         let now = SystemTime::now();
 
-        let result = storage.add_attachments(&key, &[(file_path, None)], now);
+        let result = storage.add_attachments(&key, vec![(file_path, "test.txt".into())], now);
         assert!(matches!(
             result,
             Err(KevaError::Database(DatabaseError::NotFound))
@@ -254,83 +263,43 @@ mod add_attachments {
     }
 
     #[test]
-    fn test_add_attachment_skip_conflict() {
+    fn test_add_attachment_with_custom_target_name() {
         let (mut storage, temp) = create_test_storage();
         let key = make_key("test/key");
+        let file_path = create_test_file(&temp, "original.txt", b"content");
         let now = SystemTime::now();
 
         storage.create(&key, now).unwrap();
-
-        let file1 = create_test_file(&temp, "same.txt", b"first");
         storage
-            .add_attachments(&key, &[(file1, None)], now)
+            .add_attachments(&key, vec![(file_path, "renamed.txt".into())], now)
             .unwrap();
 
-        let file2 = create_test_file(&temp, "same.txt", b"second");
-        let value = storage
-            .add_attachments(
-                &key,
-                &[(file2, Some(AttachmentConflictResolution::Skip))],
-                now,
-            )
-            .unwrap();
-
-        // Still only 1 attachment (skipped)
+        let value = storage.get(&key).unwrap().unwrap();
         assert_eq!(value.attachments.len(), 1);
-        assert_eq!(value.attachments[0].size, 5); // "first".len() - original preserved
+        assert_eq!(value.attachments[0].filename, "renamed.txt");
     }
 
     #[test]
-    fn test_add_attachment_rename_conflict() {
+    fn test_add_attachment_overwrites_existing() {
         let (mut storage, temp) = create_test_storage();
         let key = make_key("test/key");
         let now = SystemTime::now();
 
         storage.create(&key, now).unwrap();
 
-        let file1 = create_test_file(&temp, "same.txt", b"first");
+        let file1 = create_test_file(&temp, "first.txt", b"first");
         storage
-            .add_attachments(&key, &[(file1, None)], now)
+            .add_attachments(&key, vec![(file1, "same.txt".into())], now)
             .unwrap();
 
-        let file2 = create_test_file(&temp, "same.txt", b"second");
-        let value = storage
-            .add_attachments(
-                &key,
-                &[(file2, Some(AttachmentConflictResolution::Rename))],
-                now,
-            )
-            .unwrap();
-
-        assert_eq!(value.attachments.len(), 2);
-        let filenames: Vec<_> = value.attachments.iter().map(|a| &a.filename).collect();
-        assert!(filenames.contains(&&"same.txt".to_string()));
-        assert!(filenames.contains(&&"same (1).txt".to_string()));
-    }
-
-    #[test]
-    fn test_add_attachment_overwrite_conflict() {
-        let (mut storage, temp) = create_test_storage();
-        let key = make_key("test/key");
-        let now = SystemTime::now();
-
-        storage.create(&key, now).unwrap();
-
-        let file1 = create_test_file(&temp, "same.txt", b"first");
+        let file2 = create_test_file(&temp, "second.txt", b"second content");
         storage
-            .add_attachments(&key, &[(file1, None)], now)
+            .add_attachments(&key, vec![(file2, "same.txt".into())], now)
             .unwrap();
 
-        let file2 = create_test_file(&temp, "same.txt", b"second content");
-        let value = storage
-            .add_attachments(
-                &key,
-                &[(file2, Some(AttachmentConflictResolution::Overwrite))],
-                now,
-            )
-            .unwrap();
-
+        let value = storage.get(&key).unwrap().unwrap();
         assert_eq!(value.attachments.len(), 1);
+        assert_eq!(value.attachments[0].filename, "same.txt");
         assert_eq!(value.attachments[0].size, 14); // "second content".len()
     }
 
@@ -343,7 +312,7 @@ mod add_attachments {
 
         storage.create(&key, now).unwrap();
         storage
-            .add_attachments(&key, &[(file_path, None)], now)
+            .add_attachments(&key, vec![(file_path, "test.txt".into())], now)
             .unwrap();
 
         let attachment_path = storage.attachment_path(&key, "test.txt");
@@ -367,7 +336,7 @@ mod remove_attachment {
 
         storage.create(&key, now).unwrap();
         storage
-            .add_attachments(&key, &[(file_path, None)], now)
+            .add_attachments(&key, vec![(file_path, "test.txt".into())], now)
             .unwrap();
 
         let later = now + Duration::from_secs(1);
@@ -386,7 +355,7 @@ mod remove_attachment {
 
         storage.create(&key, now).unwrap();
         storage
-            .add_attachments(&key, &[(file_path, None)], now)
+            .add_attachments(&key, vec![(file_path, "test.txt".into())], now)
             .unwrap();
 
         let attachment_path = storage.attachment_path(&key, "test.txt");
@@ -424,7 +393,7 @@ mod rename_attachment {
 
         storage.create(&key, now).unwrap();
         storage
-            .add_attachments(&key, &[(file_path, None)], now)
+            .add_attachments(&key, vec![(file_path, "old.txt".into())], now)
             .unwrap();
 
         storage
@@ -467,7 +436,11 @@ mod rename_attachment {
 
         storage.create(&key, now).unwrap();
         storage
-            .add_attachments(&key, &[(file_a, None), (file_b, None)], now)
+            .add_attachments(
+                &key,
+                vec![(file_a, "a.txt".into()), (file_b, "b.txt".into())],
+                now,
+            )
             .unwrap();
 
         // Rename a.txt -> b.txt should fail (destination exists)
@@ -488,7 +461,7 @@ mod rename_attachment {
 
         storage.create(&key, now).unwrap();
         storage
-            .add_attachments(&key, &[(file_path, None)], now)
+            .add_attachments(&key, vec![(file_path, "a.txt".into())], now)
             .unwrap();
 
         storage
@@ -603,7 +576,7 @@ mod rename {
 
         storage.create(&old_key, now).unwrap();
         storage
-            .add_attachments(&old_key, &[(file_path, None)], now)
+            .add_attachments(&old_key, vec![(file_path, "test.txt".into())], now)
             .unwrap();
 
         let old_attachment_path = storage.attachment_path(&old_key, "test.txt");
@@ -779,7 +752,7 @@ mod purge {
 
         storage.create(&key, now).unwrap();
         storage
-            .add_attachments(&key, &[(file_path, None)], now)
+            .add_attachments(&key, vec![(file_path, "test.txt".into())], now)
             .unwrap();
 
         let attachment_path = storage.attachment_path(&key, "test.txt");
@@ -861,7 +834,7 @@ mod maintenance {
 
         storage.create(&key, now).unwrap();
         storage
-            .add_attachments(&key, &[(file_path, None)], now)
+            .add_attachments(&key, vec![(file_path, "test.txt".into())], now)
             .unwrap();
 
         let content_path = storage.content_path(&key);
@@ -906,7 +879,7 @@ mod maintenance {
 
         storage.create(&key, now).unwrap();
         storage
-            .add_attachments(&key, &[(file_path, None)], now)
+            .add_attachments(&key, vec![(file_path, "test.txt".into())], now)
             .unwrap();
 
         let key_hash = key_to_path(&key);
@@ -965,7 +938,7 @@ mod thumbnail {
 
         storage.create(&key, now).unwrap();
         storage
-            .add_attachments(&key, &[(pdf_path, None)], now)
+            .add_attachments(&key, vec![(pdf_path, "document.pdf".into())], now)
             .unwrap();
 
         let paths = storage.thumbnail_paths(&key).unwrap();

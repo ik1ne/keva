@@ -4,8 +4,9 @@ use crate::keva_worker;
 use crate::platform::{
     handlers::{
         get_resize_border, on_activate, on_command, on_create, on_destroy, on_getminmaxinfo,
-        on_keydown, on_nccalcsize, on_paint, on_send_file_handle, on_settingchange, on_size,
-        on_trayicon, on_webview_message, scale_for_dpi, set_current_theme,
+        on_keydown, on_nccalcsize, on_open_file_picker, on_paint, on_send_file_handle,
+        on_settingchange, on_size, on_trayicon, on_webview_message, scale_for_dpi,
+        set_current_theme,
     },
     hit_test::hit_test,
     tray::{WM_TRAYICON, add_tray_icon},
@@ -17,6 +18,7 @@ use std::sync::mpsc;
 use windows::{
     Win32::{
         Foundation::{HWND, LPARAM, LRESULT, TRUE, WPARAM},
+        System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED},
         System::LibraryLoader::GetModuleHandleW,
         UI::{
             HiDpi::GetDpiForSystem,
@@ -37,6 +39,9 @@ use windows::{
 
 pub fn run() -> Result<()> {
     unsafe {
+        // Initialize COM for UI thread (required for WebView2, file picker, etc.)
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+
         let instance = GetModuleHandleW(None)?;
         let class_name = w!("KevaWindowClass");
 
@@ -158,6 +163,7 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
         }
         wm::WEBVIEW_MESSAGE => on_webview_message(lparam),
         wm::SEND_FILE_HANDLE => on_send_file_handle(lparam),
+        wm::OPEN_FILE_PICKER => on_open_file_picker(hwnd, lparam),
         WM_CLOSE => {
             if let Some(wv) = WEBVIEW.get() {
                 post_message(&wv.webview, &OutgoingMessage::Shutdown);

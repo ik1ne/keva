@@ -1,5 +1,6 @@
 //! Win32 platform abstractions.
 
+pub mod file_picker;
 pub mod handlers;
 pub mod hit_test;
 pub mod tray;

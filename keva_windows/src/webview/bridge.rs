@@ -2,12 +2,14 @@
 
 use super::WEBVIEW;
 use super::messages::{IncomingMessage, OutgoingMessage};
+use super::wm;
+use super::FilePickerRequest;
 use crate::keva_worker::Request;
 use crate::render::theme::Theme;
 use std::sync::mpsc::Sender;
 use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2;
-use windows::Win32::Foundation::HWND;
-use windows::Win32::UI::WindowsAndMessaging::{SW_HIDE, ShowWindow};
+use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, SW_HIDE, ShowWindow};
 use windows::core::PWSTR;
 
 pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<Request>) {
@@ -65,6 +67,24 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
         }
         IncomingMessage::ShutdownAck => {
             let _ = request_tx.send(Request::Shutdown);
+        }
+        IncomingMessage::OpenFilePicker { key } => {
+            // Post to UI thread - file picker must run on UI thread
+            let request = Box::new(FilePickerRequest {
+                key,
+                request_tx: request_tx.clone(),
+            });
+            unsafe {
+                let _ = PostMessageW(
+                    Some(parent_hwnd),
+                    wm::OPEN_FILE_PICKER,
+                    WPARAM(0),
+                    LPARAM(Box::into_raw(request) as isize),
+                );
+            }
+        }
+        IncomingMessage::AddAttachments { key, files } => {
+            let _ = request_tx.send(Request::AddAttachments { key, files });
         }
     }
 }

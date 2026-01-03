@@ -13,6 +13,7 @@ const State = {
         focusEditorOnLoad: false,
         currentTheme: 'dark',
         activePane: 'search',
+        attachments: [],
     },
 
     setSelectedKey: function (key, isTrashed) {

@@ -1,10 +1,12 @@
 //! Window message handlers.
 
+use crate::keva_worker::Request;
+use crate::platform::file_picker::open_file_picker;
 use crate::platform::tray::{
     IDM_LAUNCH_AT_LOGIN, IDM_QUIT, IDM_SETTINGS, IDM_SHOW, remove_tray_icon, show_tray_menu,
 };
 use crate::render::theme::{MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, Theme};
-use crate::webview::FileHandleRequest;
+use crate::webview::{FileHandleRequest, FilePickerRequest};
 use crate::webview::WEBVIEW;
 use crate::webview::bridge::post_message;
 use crate::webview::messages::OutgoingMessage;
@@ -392,11 +394,13 @@ pub fn on_send_file_handle(lparam: LPARAM) -> LRESULT {
             return LRESULT(0);
         };
 
-        // Create JSON message with key and readOnly flag
+        // Create JSON message with key, readOnly flag, and attachments
+        let attachments_json = serde_json::to_string(&request.attachments).unwrap_or_default();
         let json = format!(
-            r#"{{"type":"value","key":"{}","readOnly":{}}}"#,
+            r#"{{"type":"value","key":"{}","readOnly":{},"attachments":{}}}"#,
             request.key.replace('\\', "\\\\").replace('"', "\\\""),
-            request.read_only
+            request.read_only,
+            attachments_json
         );
         let json_pwstr = pwstr_from_str(&json);
 
@@ -407,6 +411,26 @@ pub fn on_send_file_handle(lparam: LPARAM) -> LRESULT {
                 e
             );
         }
+    }
+
+    LRESULT(0)
+}
+
+/// WM_OPEN_FILE_PICKER: Open file picker and send selected files to worker.
+pub fn on_open_file_picker(hwnd: HWND, lparam: LPARAM) -> LRESULT {
+    let ptr = lparam.0 as *mut FilePickerRequest;
+    if ptr.is_null() {
+        return LRESULT(0);
+    }
+
+    let request = unsafe { Box::from_raw(ptr) };
+    let files = open_file_picker(hwnd);
+
+    if !files.is_empty() {
+        let _ = request.request_tx.send(Request::FilesSelected {
+            key: request.key,
+            files,
+        });
     }
 
     LRESULT(0)
