@@ -14,7 +14,7 @@ and includes test cases for verification.
 | M4  | Search Engine          | Nucleo on main thread, progressive results   | ✅      |
 | M5  | Key List               | Left pane, create/rename/delete, selection   | ✅      |
 | M6  | Monaco Editor          | FileSystemHandle, markdown mode, auto-save   | ✅      |
-| M7  | Four-State Focus       | Focus model, keyboard navigation, dimming    | ❌      |
+| M7  | Four-State Focus       | Focus model, keyboard navigation, dimming    | ✅      |
 | M8  | Attachments Panel      | File list, thumbnails, drag to Monaco        | ❌      |
 | M9  | Clipboard              | Native read, paste intercept, copy shortcuts | ❌      |
 | M10 | Edit/Preview Toggle    | Markdown renderer, att: link transform       | ❌      |
@@ -399,14 +399,20 @@ at a time. Visual indicators for active/inactive state. Keyboard navigation betw
 
 | TC       | Description                                                  | Status |
 |----------|--------------------------------------------------------------|--------|
-| TC-M7-01 | Only one pane shows active state                             | ❌      |
-| TC-M7-02 | Click pane activates it                                      | ❌      |
-| TC-M7-03 | Down arrow from search focuses left pane                     | ❌      |
-| TC-M7-04 | Enter from left pane focuses right top                       | ❌      |
-| TC-M7-05 | Inactive panes show dimmed styling                           | ❌      |
-| TC-M7-06 | Left pane selection persists when inactive                   | ❌      |
-| TC-M7-07 | Ctrl+S focuses search bar from any pane                      | ❌      |
-| TC-M7-08 | Clicking key in list while right pane is focused selects key | ❌      |
+| TC-M7-01 | Only one pane shows active state                             | ✅      |
+| TC-M7-02 | Click pane activates it                                      | ✅      |
+| TC-M7-03 | Down arrow from search focuses left pane                     | ✅      |
+| TC-M7-04 | Enter from left pane focuses right top                       | ✅      |
+| TC-M7-05 | Inactive panes show dimmed styling                           | ✅      |
+| TC-M7-06 | Left pane selection persists when inactive                   | ✅      |
+| TC-M7-07 | Ctrl+S focuses search bar from any pane                      | ✅      |
+| TC-M7-08 | Clicking key in list while right pane is focused selects key | ✅      |
+| TC-M7-09 | Ctrl+S from editor focuses search bar with text selected     | ✅      |
+| TC-M7-10 | Clicking Monaco sets editor as active pane                   | ✅      |
+| TC-M7-11 | Shift+click on first attachment (no prior selection) selects | ✅      |
+| TC-M7-12 | Window hide → show restores focus to previously active pane  | ✅      |
+| TC-M7-13 | Arrow navigation in empty key list does nothing (no crash)   | ✅      |
+| TC-M7-14 | Tab key does nothing (blocked globally)                      | ✅      |
 
 ---
 
