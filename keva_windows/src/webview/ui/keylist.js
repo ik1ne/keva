@@ -219,78 +219,20 @@ const KeyList = {
         }
     },
 
-    handleDialogTab: function (e, buttons) {
-        if (e.key !== 'Tab') return;
-        e.preventDefault();
-
-        const currentIndex = buttons.indexOf(document.activeElement);
-        let nextIndex;
-        if (e.shiftKey) {
-            nextIndex = currentIndex <= 0 ? buttons.length - 1 : currentIndex - 1;
-        } else {
-            nextIndex = currentIndex >= buttons.length - 1 ? 0 : currentIndex + 1;
-        }
-        buttons[nextIndex].focus();
-    },
-
     showOverwriteDialog: function (oldKey, newKey) {
         const self = this;
 
-        const overlay = document.createElement('div');
-        overlay.className = 'dialog-overlay';
-
-        const dialog = document.createElement('div');
-        dialog.className = 'dialog';
-        dialog.tabIndex = -1;
-
-        const message = document.createElement('div');
-        message.className = 'dialog-message';
-        message.textContent = 'Key "' + newKey + '" already exists. Overwrite?';
-
-        const buttons = document.createElement('div');
-        buttons.className = 'dialog-buttons';
-
-        const cancelBtn = document.createElement('button');
-        cancelBtn.className = 'dialog-btn dialog-btn-secondary';
-        cancelBtn.textContent = 'Cancel';
-        cancelBtn.onclick = function () {
-            overlay.remove();
-            self.cancelRename();
-        };
-
-        const overwriteBtn = document.createElement('button');
-        overwriteBtn.className = 'dialog-btn dialog-btn-primary';
-        overwriteBtn.textContent = 'Overwrite';
-        overwriteBtn.onclick = function () {
-            overlay.remove();
-            self.cancelRename();
-            Api.send({type: 'rename', oldKey: oldKey, newKey: newKey, force: true});
-        };
-
-        buttons.appendChild(cancelBtn);
-        buttons.appendChild(overwriteBtn);
-        dialog.appendChild(message);
-        dialog.appendChild(buttons);
-        overlay.appendChild(dialog);
-        document.body.appendChild(overlay);
-
-        const focusableButtons = [cancelBtn, overwriteBtn];
-        overwriteBtn.focus();
-
-        overlay.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') {
-                e.stopPropagation();
-                overlay.remove();
+        Dialog.show({
+            message: 'Key "' + newKey + '" already exists. Overwrite?',
+            buttons: [
+                { label: 'Cancel', action: 'cancel' },
+                { label: 'Overwrite', action: 'overwrite', primary: true }
+            ],
+            onClose: function (action) {
                 self.cancelRename();
-            } else if (e.key === 'Tab') {
-                self.handleDialogTab(e, focusableButtons);
-            }
-        });
-
-        // Restore keyboard focus without selecting a button
-        overlay.addEventListener('click', function (e) {
-            if (!e.target.closest('button')) {
-                dialog.focus();
+                if (action === 'overwrite') {
+                    Api.send({type: 'rename', oldKey: oldKey, newKey: newKey, force: true});
+                }
             }
         });
     },

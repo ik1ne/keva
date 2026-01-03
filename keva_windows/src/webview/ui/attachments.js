@@ -408,151 +408,47 @@ const Attachments = {
         this.renameState = null;
     },
 
-    // Helper for Tab cycling in dialogs
-    handleDialogTab: function (e, buttons) {
-        if (e.key !== 'Tab') return;
-        e.preventDefault();
-
-        const currentIndex = buttons.indexOf(document.activeElement);
-        let nextIndex;
-        if (e.shiftKey) {
-            nextIndex = currentIndex <= 0 ? buttons.length - 1 : currentIndex - 1;
-        } else {
-            nextIndex = currentIndex >= buttons.length - 1 ? 0 : currentIndex + 1;
-        }
-        buttons[nextIndex].focus();
-    },
-
     showRenameConflictDialog: function (oldFilename, newFilename) {
         const self = this;
-        const overlay = document.createElement('div');
-        overlay.className = 'dialog-overlay';
 
-        const dialog = document.createElement('div');
-        dialog.className = 'dialog';
-        dialog.tabIndex = -1;
-
-        const message = document.createElement('div');
-        message.className = 'dialog-message';
-        message.textContent = '"' + newFilename + '" already exists. Overwrite?';
-
-        const buttons = document.createElement('div');
-        buttons.className = 'dialog-buttons';
-
-        const cancelBtn = document.createElement('button');
-        cancelBtn.className = 'dialog-btn dialog-btn-secondary';
-        cancelBtn.textContent = 'Cancel';
-        cancelBtn.onclick = function () {
-            overlay.remove();
-            self.cancelRename();
-        };
-
-        const overwriteBtn = document.createElement('button');
-        overwriteBtn.className = 'dialog-btn dialog-btn-primary';
-        overwriteBtn.textContent = 'Overwrite';
-        overwriteBtn.onclick = function () {
-            overlay.remove();
-            // Check for references before overwrite
-            if (self.isReferenced(oldFilename)) {
-                self.showRenameReferenceDialog(oldFilename, newFilename, true);
-            } else {
-                self.doRename(oldFilename, newFilename, false, true);
-            }
-        };
-
-        buttons.appendChild(cancelBtn);
-        buttons.appendChild(overwriteBtn);
-        dialog.appendChild(message);
-        dialog.appendChild(buttons);
-        overlay.appendChild(dialog);
-        document.body.appendChild(overlay);
-
-        const focusableButtons = [cancelBtn, overwriteBtn];
-        overwriteBtn.focus();
-
-        overlay.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') {
-                e.stopPropagation();
-                overlay.remove();
-                self.cancelRename();
-            } else if (e.key === 'Tab') {
-                self.handleDialogTab(e, focusableButtons);
-            }
-        });
-
-        // Restore keyboard focus without selecting a button
-        overlay.addEventListener('click', function (e) {
-            if (!e.target.closest('button')) {
-                dialog.focus();
+        Dialog.show({
+            message: '"' + newFilename + '" already exists. Overwrite?',
+            buttons: [
+                { label: 'Cancel', action: 'cancel' },
+                { label: 'Overwrite', action: 'overwrite', primary: true }
+            ],
+            onClose: function (action) {
+                if (action === 'overwrite') {
+                    if (self.isReferenced(oldFilename)) {
+                        self.showRenameReferenceDialog(oldFilename, newFilename, true);
+                    } else {
+                        self.doRename(oldFilename, newFilename, false, true);
+                    }
+                } else {
+                    self.cancelRename();
+                }
             }
         });
     },
 
     showRenameReferenceDialog: function (oldFilename, newFilename, force) {
         const self = this;
-        const overlay = document.createElement('div');
-        overlay.className = 'dialog-overlay';
 
-        const dialog = document.createElement('div');
-        dialog.className = 'dialog';
-        dialog.tabIndex = -1;
-
-        const message = document.createElement('div');
-        message.className = 'dialog-message';
-        message.textContent = '"' + oldFilename + '" is referenced in your notes. Update references to "' + newFilename + '"?';
-
-        const buttons = document.createElement('div');
-        buttons.className = 'dialog-buttons';
-
-        const cancelBtn = document.createElement('button');
-        cancelBtn.className = 'dialog-btn dialog-btn-secondary';
-        cancelBtn.textContent = 'Cancel';
-        cancelBtn.onclick = function () {
-            overlay.remove();
-            self.cancelRename();
-        };
-
-        const dontUpdateBtn = document.createElement('button');
-        dontUpdateBtn.className = 'dialog-btn dialog-btn-secondary';
-        dontUpdateBtn.textContent = "Don't Update";
-        dontUpdateBtn.onclick = function () {
-            overlay.remove();
-            self.doRename(oldFilename, newFilename, false, force);
-        };
-
-        const updateBtn = document.createElement('button');
-        updateBtn.className = 'dialog-btn dialog-btn-primary';
-        updateBtn.textContent = 'Update';
-        updateBtn.onclick = function () {
-            overlay.remove();
-            self.doRename(oldFilename, newFilename, true, force);
-        };
-
-        buttons.appendChild(cancelBtn);
-        buttons.appendChild(dontUpdateBtn);
-        buttons.appendChild(updateBtn);
-        dialog.appendChild(message);
-        dialog.appendChild(buttons);
-        overlay.appendChild(dialog);
-        document.body.appendChild(overlay);
-
-        const focusableButtons = [cancelBtn, dontUpdateBtn, updateBtn];
-        updateBtn.focus();
-
-        overlay.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') {
-                e.stopPropagation();
-                overlay.remove();
-                self.cancelRename();
-            } else if (e.key === 'Tab') {
-                self.handleDialogTab(e, focusableButtons);
-            }
-        });
-
-        // Restore keyboard focus without selecting a button
-        overlay.addEventListener('click', function (e) {
-            if (!e.target.closest('button')) {
-                dialog.focus();
+        Dialog.show({
+            message: '"' + oldFilename + '" is referenced in your notes. Update references to "' + newFilename + '"?',
+            buttons: [
+                { label: 'Cancel', action: 'cancel' },
+                { label: "Don't Update", action: 'skip' },
+                { label: 'Update', action: 'update', primary: true }
+            ],
+            onClose: function (action) {
+                if (action === 'update') {
+                    self.doRename(oldFilename, newFilename, true, force);
+                } else if (action === 'skip') {
+                    self.doRename(oldFilename, newFilename, false, force);
+                } else {
+                    self.cancelRename();
+                }
             }
         });
     },
@@ -572,59 +468,17 @@ const Attachments = {
 
     showDeleteConfirmDialog: function (filename) {
         const self = this;
-        const overlay = document.createElement('div');
-        overlay.className = 'dialog-overlay';
 
-        const dialog = document.createElement('div');
-        dialog.className = 'dialog';
-        dialog.tabIndex = -1;
-
-        const message = document.createElement('div');
-        message.className = 'dialog-message';
-        message.textContent = 'Delete "' + filename + '"?';
-
-        const buttons = document.createElement('div');
-        buttons.className = 'dialog-buttons';
-
-        const cancelBtn = document.createElement('button');
-        cancelBtn.className = 'dialog-btn dialog-btn-secondary';
-        cancelBtn.textContent = 'Cancel';
-        cancelBtn.onclick = function () {
-            overlay.remove();
-        };
-
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'dialog-btn dialog-btn-primary';
-        deleteBtn.textContent = 'Delete';
-        deleteBtn.style.background = '#f44336';
-        deleteBtn.onclick = function () {
-            overlay.remove();
-            self.doDelete(filename);
-        };
-
-        buttons.appendChild(cancelBtn);
-        buttons.appendChild(deleteBtn);
-        dialog.appendChild(message);
-        dialog.appendChild(buttons);
-        overlay.appendChild(dialog);
-        document.body.appendChild(overlay);
-
-        const focusableButtons = [cancelBtn, deleteBtn];
-        cancelBtn.focus();
-
-        overlay.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') {
-                e.stopPropagation();
-                overlay.remove();
-            } else if (e.key === 'Tab') {
-                self.handleDialogTab(e, focusableButtons);
-            }
-        });
-
-        // Restore keyboard focus without selecting a button
-        overlay.addEventListener('click', function (e) {
-            if (!e.target.closest('button')) {
-                dialog.focus();
+        Dialog.show({
+            message: 'Delete "' + filename + '"?',
+            buttons: [
+                { label: 'Cancel', action: 'cancel', focus: true },
+                { label: 'Delete', action: 'delete', primary: true, danger: true }
+            ],
+            onClose: function (action) {
+                if (action === 'delete') {
+                    self.doDelete(filename);
+                }
             }
         });
     }
