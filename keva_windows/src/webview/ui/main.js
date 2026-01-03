@@ -451,7 +451,7 @@ const Main = {
 
     showShutdownOverlay: function () {
         const overlay = document.createElement('div');
-        overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.3);z-index:9999;';
+        overlay.className = 'blocking-overlay';
         document.body.appendChild(overlay);
     },
 
@@ -460,8 +460,8 @@ const Main = {
     showAddingOverlay: function () {
         if (this.addingOverlay) return;
         this.addingOverlay = document.createElement('div');
-        this.addingOverlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.3);z-index:9998;display:flex;align-items:center;justify-content:center;';
-        this.addingOverlay.innerHTML = '<div style="color:white;font-size:14px;">Adding files...</div>';
+        this.addingOverlay.className = 'blocking-overlay';
+        this.addingOverlay.innerHTML = '<div class="blocking-overlay-message">Adding files...</div>';
         document.body.appendChild(this.addingOverlay);
     },
 
