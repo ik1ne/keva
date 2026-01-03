@@ -12,6 +12,7 @@ const State = {
         pendingSelectKey: null,
         focusEditorOnLoad: false,
         currentTheme: 'dark',
+        activePane: 'search',
     },
 
     setSelectedKey: function (key, isTrashed) {

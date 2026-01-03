@@ -11,8 +11,9 @@ use crate::webview::messages::OutgoingMessage;
 use std::sync::atomic::{AtomicIsize, AtomicU8, Ordering};
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_FILE_SYSTEM_HANDLE_PERMISSION_READ_ONLY,
-    COREWEBVIEW2_FILE_SYSTEM_HANDLE_PERMISSION_READ_WRITE, ICoreWebView2_23,
-    ICoreWebView2Environment14, ICoreWebView2ObjectCollection,
+    COREWEBVIEW2_FILE_SYSTEM_HANDLE_PERMISSION_READ_WRITE,
+    COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC, ICoreWebView2_23, ICoreWebView2Environment14,
+    ICoreWebView2ObjectCollection,
 };
 use webview2_com::pwstr_from_str;
 use windows::Win32::{
@@ -166,21 +167,35 @@ pub fn on_keydown(hwnd: HWND, wparam: WPARAM) -> Option<LRESULT> {
     None
 }
 
+/// Shows window, brings to foreground, and signals WebView to restore focus.
+fn show_and_focus_window(hwnd: HWND) {
+    unsafe {
+        let _ = ShowWindow(hwnd, SW_SHOW);
+        let _ = SetForegroundWindow(hwnd);
+    }
+    if let Some(wv) = WEBVIEW.get() {
+        let _ = unsafe {
+            wv.controller
+                .MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC)
+        };
+        post_message(&wv.webview, &OutgoingMessage::Focus);
+    }
+}
+
 /// WM_TRAYICON: Handle system tray icon clicks.
 pub fn on_trayicon(hwnd: HWND, lparam: LPARAM) -> LRESULT {
-    // Low word of lparam contains the mouse message
     let mouse_msg = (lparam.0 & 0xFFFF) as u32;
-    unsafe {
-        if mouse_msg == WM_LBUTTONUP {
-            if IsWindowVisible(hwnd).as_bool() {
+    if mouse_msg == WM_LBUTTONUP {
+        let is_visible = unsafe { IsWindowVisible(hwnd).as_bool() };
+        if is_visible {
+            unsafe {
                 let _ = ShowWindow(hwnd, SW_HIDE);
-            } else {
-                let _ = ShowWindow(hwnd, SW_SHOW);
-                let _ = SetForegroundWindow(hwnd);
             }
-        } else if mouse_msg == WM_RBUTTONUP {
-            show_tray_menu(hwnd);
+        } else {
+            show_and_focus_window(hwnd);
         }
+    } else if mouse_msg == WM_RBUTTONUP {
+        show_tray_menu(hwnd);
     }
     LRESULT(0)
 }
@@ -188,19 +203,14 @@ pub fn on_trayicon(hwnd: HWND, lparam: LPARAM) -> LRESULT {
 /// WM_COMMAND: Handle menu commands from tray context menu.
 pub fn on_command(hwnd: HWND, wparam: WPARAM) -> LRESULT {
     let cmd_id = (wparam.0 & 0xFFFF) as u32;
-    unsafe {
-        match cmd_id {
-            IDM_SHOW => {
-                let _ = ShowWindow(hwnd, SW_SHOW);
-                let _ = SetForegroundWindow(hwnd);
-            }
-            IDM_SETTINGS => {}
-            IDM_LAUNCH_AT_LOGIN => {}
-            IDM_QUIT => {
-                let _ = PostMessageW(Some(hwnd), WM_CLOSE, WPARAM(0), LPARAM(0));
-            }
-            _ => {}
-        }
+    match cmd_id {
+        IDM_SHOW => show_and_focus_window(hwnd),
+        IDM_SETTINGS => {}
+        IDM_LAUNCH_AT_LOGIN => {}
+        IDM_QUIT => unsafe {
+            let _ = PostMessageW(Some(hwnd), WM_CLOSE, WPARAM(0), LPARAM(0));
+        },
+        _ => {}
     }
     LRESULT(0)
 }

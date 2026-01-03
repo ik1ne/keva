@@ -44,6 +44,10 @@ const Editor = {
                 self.updatePlaceholder();
             });
 
+            self.instance.onDidFocusEditorWidget(function () {
+                Main.setActivePane('editor');
+            });
+
             if (callback) callback();
         });
     },
@@ -53,6 +57,12 @@ const Editor = {
         const isEmpty = this.instance.getValue() === '';
         const shouldShow = isEmpty && !this.isReadOnly;
         this.placeholderElement.style.display = shouldShow ? 'block' : 'none';
+
+        if (shouldShow) {
+            const layout = this.instance.getLayoutInfo();
+            this.placeholderElement.style.left = layout.contentLeft + 'px';
+            this.placeholderElement.style.top = this.instance.getTopForLineNumber(1) + 'px';
+        }
     },
 
     showWithHandle: async function (handle, key, readOnly) {

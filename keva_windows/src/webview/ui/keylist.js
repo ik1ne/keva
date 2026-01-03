@@ -9,7 +9,7 @@ const KeyList = {
 
     render: function () {
         this.dom.keyList.innerHTML = State.data.keys.map(function (key) {
-            return '<div class="key-item" tabindex="0" data-key="' + Utils.escapeHtml(key) + '" onclick="KeyList.requestSelect(\'' + Utils.escapeJs(key) + '\')">' +
+            return '<div class="key-item" tabindex="-1" data-key="' + Utils.escapeHtml(key) + '" onclick="KeyList.requestSelect(\'' + Utils.escapeJs(key) + '\')">' +
                 '<span class="key-name">' + Utils.escapeHtml(key) + '</span>' +
                 '<div class="key-actions">' +
                 '<button class="key-action-btn" onclick="event.stopPropagation(); KeyList.rename(\'' + Utils.escapeJs(key) + '\')" title="Rename">&#9998;</button>' +
@@ -28,16 +28,21 @@ const KeyList = {
         this.dom.trashSection.style.display = 'block';
         this.dom.trashCount.textContent = State.data.trashedKeys.length.toString();
         this.dom.trashList.innerHTML = State.data.trashedKeys.map(function (key) {
-            return '<div class="trash-item" onclick="KeyList.requestSelect(\'' + Utils.escapeJs(key) + '\')">' +
+            return '<div class="trash-item" tabindex="-1" data-key="' + Utils.escapeHtml(key) + '" onclick="KeyList.requestSelect(\'' + Utils.escapeJs(key) + '\')">' +
                 '<span class="trash-icon">T</span>' +
                 '<span class="key-name">' + Utils.escapeHtml(key) + '</span>' +
                 '</div>';
         }).join('');
+        this.updateSelection();
     },
 
     updateSelection: function () {
+        const selectedKey = State.data.selectedKey;
         document.querySelectorAll('.key-item').forEach(function (el) {
-            el.classList.toggle('selected', el.dataset.key === State.data.selectedKey);
+            el.classList.toggle('selected', el.dataset.key === selectedKey);
+        });
+        document.querySelectorAll('.trash-item').forEach(function (el) {
+            el.classList.toggle('selected', el.dataset.key === selectedKey);
         });
     },
 

@@ -67,6 +67,8 @@ pub enum OutgoingMessage {
         result: RenameResultType,
     },
     Shutdown,
+    /// Signals WebView to restore focus after window is shown.
+    Focus,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
