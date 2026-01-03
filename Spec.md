@@ -539,7 +539,6 @@ Duplicate filenames are not allowed within a key.
 **Large File Handling:**
 
 - Threshold applies **per file**, not total
-- **Hard maximum:** 1 GB per file (reject larger files with error message)
 - Multiple files: each checked individually against threshold
 
 ### First-Run Experience

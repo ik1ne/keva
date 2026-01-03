@@ -433,9 +433,9 @@ with conflict dialog. Empty state shows centered add button.
 - Thumbnail stored as {filename}.thumb
 - File size formatting: bytes → KB/MB/GB
 - Type icons for non-image files (📄 document, 🎵 audio, 🎬 video, etc.)
-- Empty state: show only [+ Add files] button centered
-- Duplicate dialog: "'{filename}' already exists." with [Overwrite] [Rename] [Cancel]
-- File >1GB rejected with error message
+- [+] button in header opens file picker (disabled when no key selected or key is trashed)
+- Duplicate dialog: "'{filename}' already exists." with [Overwrite] [Rename] [Skip]
+- Multi-file: "Apply to all" checkbox to use same action for remaining conflicts
 - Native file picker via Win32 `GetOpenFileNameW` or IFileOpenDialog
 
 **Test Cases:**
@@ -448,10 +448,8 @@ with conflict dialog. Empty state shows centered add button.
 | TC-M8-04 | Non-image attachments show type icon             | ❌      |
 | TC-M8-05 | Click [+ Add files] opens file picker            | ❌      |
 | TC-M8-06 | Duplicate filename shows conflict dialog         | ❌      |
-| TC-M8-07 | File >1GB rejected with error message            | ❌      |
-| TC-M8-08 | Empty panel shows [+ Add files] centered         | ❌      |
-| TC-M8-09 | Multi-select with Ctrl+click                     | ❌      |
-| TC-M8-10 | Shift+click range selection works                | ❌      |
+| TC-M8-07 | Multi-select with Ctrl+click                     | ❌      |
+| TC-M8-08 | Shift+click range selection works                | ❌      |
 
 ---
 
@@ -865,26 +863,33 @@ Uninstaller removes files and optionally data.
 
 **Goal:** Resizable panes with persistent layout preferences.
 
-**Description:** Add draggable divider between left and right panes. User can resize by dragging. Width persists across
-sessions. Handle window resize gracefully by clamping pane width to valid range.
+**Description:** Add draggable dividers between panes. Left/right divider resizes key list width. Editor/attachments
+divider resizes attachments panel height. Sizes persist across sessions. Handle window resize gracefully by clamping
+pane sizes to valid ranges.
 
 **Implementation Notes:**
 
 - Drag handle between left and right panes (4-6px wide)
-- Cursor changes to `col-resize` on hover
+- Drag handle between editor and attachments pane (4-6px tall)
+- Cursor changes to `col-resize` / `row-resize` on hover
 - Left pane: min 150px, max 50% of window width
-- On window resize: clamp left pane width if exceeds max
-- Persist width to config (not ratio)
+- Attachments pane: min 60px, max 50% of right pane height
+- On window resize: clamp pane sizes if exceeds max
+- Persist sizes to config (not ratios)
 
 **Test Cases:**
 
-| TC        | Description                                   | Status |
-|-----------|-----------------------------------------------|--------|
-| TC-M21-01 | Drag divider resizes left pane                | ❌      |
-| TC-M21-02 | Left pane respects minimum width (150px)      | ❌      |
-| TC-M21-03 | Left pane respects maximum width (50% window) | ❌      |
-| TC-M21-04 | Pane width persists after restart             | ❌      |
-| TC-M21-05 | Window resize clamps pane width if needed     | ❌      |
-| TC-M21-06 | Cursor shows col-resize on divider hover      | ❌      |
+| TC        | Description                                      | Status |
+|-----------|--------------------------------------------------|--------|
+| TC-M21-01 | Drag divider resizes left pane                   | ❌      |
+| TC-M21-02 | Left pane respects minimum width (150px)         | ❌      |
+| TC-M21-03 | Left pane respects maximum width (50% window)    | ❌      |
+| TC-M21-04 | Pane sizes persist after restart                 | ❌      |
+| TC-M21-05 | Window resize clamps pane sizes if needed        | ❌      |
+| TC-M21-06 | Cursor shows col-resize on left/right divider    | ❌      |
+| TC-M21-07 | Drag divider resizes attachments pane height     | ❌      |
+| TC-M21-08 | Attachments pane respects minimum height (60px)  | ❌      |
+| TC-M21-09 | Attachments pane respects maximum height (50%)   | ❌      |
+| TC-M21-10 | Cursor shows row-resize on editor/att divider    | ❌      |
 
 ---
