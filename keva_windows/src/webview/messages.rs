@@ -57,6 +57,8 @@ pub enum IncomingMessage {
         key: String,
         old_filename: String,
         new_filename: String,
+        /// If true, overwrite existing file with same name.
+        force: bool,
     },
 }
 

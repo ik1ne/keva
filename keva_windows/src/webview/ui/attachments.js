@@ -340,15 +340,15 @@ const Attachments = {
 
         // Check for references
         if (this.isReferenced(oldFilename)) {
-            this.showRenameReferenceDialog(oldFilename, newFilename);
+            this.showRenameReferenceDialog(oldFilename, newFilename, false);
             return;
         }
 
         // No conflicts, no references - proceed with rename
-        this.doRename(oldFilename, newFilename, false);
+        this.doRename(oldFilename, newFilename, false, false);
     },
 
-    doRename: function (oldFilename, newFilename, updateReferences) {
+    doRename: function (oldFilename, newFilename, updateReferences, force) {
         this.cancelRename();
 
         // Update references in editor if requested (frontend handles this)
@@ -366,7 +366,8 @@ const Attachments = {
             type: 'renameAttachment',
             key: State.data.selectedKey,
             oldFilename: oldFilename,
-            newFilename: newFilename
+            newFilename: newFilename,
+            force: force
         });
     },
 
@@ -414,6 +415,21 @@ const Attachments = {
         this.renameState = null;
     },
 
+    // Helper for Tab cycling in dialogs
+    handleDialogTab: function (e, buttons) {
+        if (e.key !== 'Tab') return;
+        e.preventDefault();
+
+        const currentIndex = buttons.indexOf(document.activeElement);
+        let nextIndex;
+        if (e.shiftKey) {
+            nextIndex = currentIndex <= 0 ? buttons.length - 1 : currentIndex - 1;
+        } else {
+            nextIndex = currentIndex >= buttons.length - 1 ? 0 : currentIndex + 1;
+        }
+        buttons[nextIndex].focus();
+    },
+
     showRenameConflictDialog: function (oldFilename, newFilename) {
         const self = this;
         const overlay = document.createElement('div');
@@ -421,6 +437,7 @@ const Attachments = {
 
         const dialog = document.createElement('div');
         dialog.className = 'dialog';
+        dialog.tabIndex = -1;
 
         const message = document.createElement('div');
         message.className = 'dialog-message';
@@ -444,9 +461,9 @@ const Attachments = {
             overlay.remove();
             // Check for references before overwrite
             if (self.isReferenced(oldFilename)) {
-                self.showRenameReferenceDialog(oldFilename, newFilename);
+                self.showRenameReferenceDialog(oldFilename, newFilename, true);
             } else {
-                self.doRename(oldFilename, newFilename, false);
+                self.doRename(oldFilename, newFilename, false, true);
             }
         };
 
@@ -457,23 +474,35 @@ const Attachments = {
         overlay.appendChild(dialog);
         document.body.appendChild(overlay);
 
+        const focusableButtons = [cancelBtn, overwriteBtn];
         overwriteBtn.focus();
 
         overlay.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {
+                e.stopPropagation();
                 overlay.remove();
                 self.cancelRename();
+            } else if (e.key === 'Tab') {
+                self.handleDialogTab(e, focusableButtons);
+            }
+        });
+
+        // Restore keyboard focus without selecting a button
+        overlay.addEventListener('click', function (e) {
+            if (!e.target.closest('button')) {
+                dialog.focus();
             }
         });
     },
 
-    showRenameReferenceDialog: function (oldFilename, newFilename) {
+    showRenameReferenceDialog: function (oldFilename, newFilename, force) {
         const self = this;
         const overlay = document.createElement('div');
         overlay.className = 'dialog-overlay';
 
         const dialog = document.createElement('div');
         dialog.className = 'dialog';
+        dialog.tabIndex = -1;
 
         const message = document.createElement('div');
         message.className = 'dialog-message';
@@ -495,7 +524,7 @@ const Attachments = {
         dontUpdateBtn.textContent = "Don't Update";
         dontUpdateBtn.onclick = function () {
             overlay.remove();
-            self.doRename(oldFilename, newFilename, false);
+            self.doRename(oldFilename, newFilename, false, force);
         };
 
         const updateBtn = document.createElement('button');
@@ -503,7 +532,7 @@ const Attachments = {
         updateBtn.textContent = 'Update';
         updateBtn.onclick = function () {
             overlay.remove();
-            self.doRename(oldFilename, newFilename, true);
+            self.doRename(oldFilename, newFilename, true, force);
         };
 
         buttons.appendChild(cancelBtn);
@@ -514,12 +543,23 @@ const Attachments = {
         overlay.appendChild(dialog);
         document.body.appendChild(overlay);
 
+        const focusableButtons = [cancelBtn, dontUpdateBtn, updateBtn];
         updateBtn.focus();
 
         overlay.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {
+                e.stopPropagation();
                 overlay.remove();
                 self.cancelRename();
+            } else if (e.key === 'Tab') {
+                self.handleDialogTab(e, focusableButtons);
+            }
+        });
+
+        // Restore keyboard focus without selecting a button
+        overlay.addEventListener('click', function (e) {
+            if (!e.target.closest('button')) {
+                dialog.focus();
             }
         });
     },
@@ -544,6 +584,7 @@ const Attachments = {
 
         const dialog = document.createElement('div');
         dialog.className = 'dialog';
+        dialog.tabIndex = -1;
 
         const message = document.createElement('div');
         message.className = 'dialog-message';
@@ -575,11 +616,22 @@ const Attachments = {
         overlay.appendChild(dialog);
         document.body.appendChild(overlay);
 
+        const focusableButtons = [cancelBtn, deleteBtn];
         cancelBtn.focus();
 
         overlay.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {
+                e.stopPropagation();
                 overlay.remove();
+            } else if (e.key === 'Tab') {
+                self.handleDialogTab(e, focusableButtons);
+            }
+        });
+
+        // Restore keyboard focus without selecting a button
+        overlay.addEventListener('click', function (e) {
+            if (!e.target.closest('button')) {
+                dialog.focus();
             }
         });
     }

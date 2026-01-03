@@ -109,11 +109,13 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
             key,
             old_filename,
             new_filename,
+            force,
         } => {
             let _ = request_tx.send(Request::RenameAttachment {
                 key,
                 old_filename,
                 new_filename,
+                force,
             });
         }
     }

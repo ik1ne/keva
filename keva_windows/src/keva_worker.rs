@@ -63,6 +63,8 @@ pub enum Request {
         key: String,
         old_filename: String,
         new_filename: String,
+        /// If true, overwrite existing file with same name.
+        force: bool,
     },
     Shutdown,
 }
@@ -168,8 +170,9 @@ fn worker_loop(
                 key,
                 old_filename,
                 new_filename,
+                force,
             } => {
-                handle_rename_attachment(&mut keva, &key, &old_filename, &new_filename, hwnd);
+                handle_rename_attachment(&mut keva, &key, &old_filename, &new_filename, force, hwnd);
             }
             Request::Shutdown => {
                 unsafe {
@@ -292,11 +295,17 @@ fn handle_rename_attachment(
     key_str: &str,
     old_filename: &str,
     new_filename: &str,
+    force: bool,
     hwnd: HWND,
 ) {
     let Ok(key) = Key::try_from(key_str) else {
         return;
     };
+
+    // If force, remove destination first
+    if force {
+        let _ = keva.remove_attachment(&key, new_filename, SystemTime::now());
+    }
 
     if keva
         .rename_attachment(&key, old_filename, new_filename, SystemTime::now())

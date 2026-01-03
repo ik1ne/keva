@@ -327,6 +327,11 @@ html, body {
     opacity: 0.9;
 }
 
+.dialog-btn:focus {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
+}
+
 .right-pane {
     flex: 1;
     display: flex;
@@ -633,6 +638,11 @@ html, body {
 
 .conflict-btn:hover {
     background: var(--bg-hover);
+}
+
+.conflict-btn:focus {
+    outline: 2px solid var(--accent-color);
+    outline-offset: 2px;
 }
 
 .conflict-apply-all {

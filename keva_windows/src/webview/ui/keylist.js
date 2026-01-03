@@ -219,6 +219,20 @@ const KeyList = {
         }
     },
 
+    handleDialogTab: function (e, buttons) {
+        if (e.key !== 'Tab') return;
+        e.preventDefault();
+
+        const currentIndex = buttons.indexOf(document.activeElement);
+        let nextIndex;
+        if (e.shiftKey) {
+            nextIndex = currentIndex <= 0 ? buttons.length - 1 : currentIndex - 1;
+        } else {
+            nextIndex = currentIndex >= buttons.length - 1 ? 0 : currentIndex + 1;
+        }
+        buttons[nextIndex].focus();
+    },
+
     showOverwriteDialog: function (oldKey, newKey) {
         const self = this;
 
@@ -227,6 +241,7 @@ const KeyList = {
 
         const dialog = document.createElement('div');
         dialog.className = 'dialog';
+        dialog.tabIndex = -1;
 
         const message = document.createElement('div');
         message.className = 'dialog-message';
@@ -259,11 +274,23 @@ const KeyList = {
         overlay.appendChild(dialog);
         document.body.appendChild(overlay);
 
+        const focusableButtons = [cancelBtn, overwriteBtn];
         overwriteBtn.focus();
 
         overlay.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {
+                e.stopPropagation();
                 overlay.remove();
+                self.cancelRename();
+            } else if (e.key === 'Tab') {
+                self.handleDialogTab(e, focusableButtons);
+            }
+        });
+
+        // Restore keyboard focus without selecting a button
+        overlay.addEventListener('click', function (e) {
+            if (!e.target.closest('button')) {
+                dialog.focus();
             }
         });
     },

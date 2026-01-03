@@ -35,7 +35,7 @@ const ConflictDialog = {
         this.overlay = document.createElement('div');
         this.overlay.className = 'conflict-overlay';
         this.overlay.innerHTML =
-            '<div class="conflict-dialog">' +
+            '<div class="conflict-dialog" tabindex="-1">' +
             '  <div class="conflict-title">File already exists</div>' +
             '  <div class="conflict-filename"></div>' +
             '  <div class="conflict-buttons">' +
@@ -61,6 +61,41 @@ const ConflictDialog = {
         this.overlay.querySelector('#apply-to-all').addEventListener('change', function () {
             self.applyToAll = this.checked;
         });
+
+        var checkbox = this.overlay.querySelector('#apply-to-all');
+
+        this.overlay.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                e.stopPropagation();
+                self.cancel();
+            } else if (e.key === 'Tab') {
+                e.preventDefault();
+                // Build focusables list dynamically (checkbox may be hidden)
+                var focusables = Array.prototype.slice.call(buttons);
+                if (checkbox.offsetParent !== null) {
+                    focusables.push(checkbox);
+                }
+                var currentIndex = focusables.indexOf(document.activeElement);
+                var nextIndex;
+                if (e.shiftKey) {
+                    nextIndex = currentIndex <= 0 ? focusables.length - 1 : currentIndex - 1;
+                } else {
+                    nextIndex = currentIndex >= focusables.length - 1 ? 0 : currentIndex + 1;
+                }
+                focusables[nextIndex].focus();
+            }
+        });
+
+        // Restore keyboard focus without selecting a button
+        var dialog = this.overlay.querySelector('.conflict-dialog');
+        this.overlay.addEventListener('click', function (e) {
+            if (!e.target.closest('button') && !e.target.closest('input')) {
+                dialog.focus();
+            }
+        });
+
+        // Focus first button
+        buttons[0].focus();
     },
 
     showCurrentConflict: function () {
@@ -156,6 +191,13 @@ const ConflictDialog = {
             }
         }
         this.pending = stillPending;
+    },
+
+    cancel: function () {
+        if (this.overlay) {
+            this.overlay.remove();
+            this.overlay = null;
+        }
     },
 
     finish: function () {
