@@ -119,6 +119,7 @@ const Main = {
             if (e.target.value && State.data.selectedKey) {
                 State.clearSelection();
                 KeyList.updateSelection();
+                Editor.showEmpty();
             }
             self.updateSearchButton();
             Api.send({type: 'search', query: e.target.value});
