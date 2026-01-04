@@ -5,30 +5,31 @@ and includes test cases for verification.
 
 ## Milestone Overview
 
-| #   | Milestone              | Description                                  | Status |
-|-----|------------------------|----------------------------------------------|--------|
-| M0  | keva_core Verification | Verify keva_core matches keva_core.md spec   | ✅      |
-| M1  | Window Skeleton        | Borderless window, resize, tray icon         | ✅      |
-| M2  | WebView + Bridge       | WebView2 hosting, postMessage, dark theme    | ✅      |
-| M3  | Worker Thread          | Main↔Worker mpsc, keva_core integration      | ✅      |
-| M4  | Search Engine          | Nucleo on main thread, progressive results   | ✅      |
-| M5  | Key List               | Left pane, create/rename/delete, selection   | ✅      |
-| M6  | Monaco Editor          | FileSystemHandle, markdown mode, auto-save   | ✅      |
-| M7  | Four-State Focus       | Focus model, keyboard navigation, dimming    | ✅      |
-| M8  | Attachments Display    | File list, sizes, icons, thumbnails, picker  | ✅      |
-| M9  | Attachment Operations  | Remove with confirmation, inline rename      | ✅      |
-| M10 | Attachment Drag & Drop | Drag to Monaco, file drop, multi-file batch  | ❌      |
-| M11 | Clipboard              | Native read, paste intercept, copy shortcuts | ❌      |
-| M12 | Edit/Preview Toggle    | Markdown renderer, att: link transform       | ❌      |
-| M13 | Trash                  | Trash section, restore, GC triggers          | ❌      |
-| M14 | Settings               | Dialog, config persistence, theme            | ❌      |
-| M15 | Global Hotkey          | Ctrl+Alt+K registration, conflict detection  | ❌      |
-| M16 | Single Instance        | Named mutex, activate existing window        | ❌      |
-| M17 | Window Position Memory | Per-monitor position, off-screen check       | ❌      |
-| M18 | First-Run Dialog       | Welcome message, launch at login checkbox    | ❌      |
-| M19 | Monaco Bundling        | Embed resources, single exe                  | ❌      |
-| M20 | Installer              | WiX/MSIX, uninstaller, data deletion prompt  | ❌      |
-| M21 | Layout Polish          | Resizable panes, layout persistence          | ❌      |
+| #    | Milestone              | Description                                  | Status |
+|------|------------------------|----------------------------------------------|--------|
+| M0   | keva_core Verification | Verify keva_core matches keva_core.md spec   | ✅      |
+| M1   | Window Skeleton        | Borderless window, resize, tray icon         | ✅      |
+| M2   | WebView + Bridge       | WebView2 hosting, postMessage, dark theme    | ✅      |
+| M3   | Worker Thread          | Main↔Worker mpsc, keva_core integration      | ✅      |
+| M4   | Search Engine          | Nucleo on main thread, progressive results   | ✅      |
+| M5   | Key List               | Left pane, create/rename/delete, selection   | ✅      |
+| M6   | Monaco Editor          | FileSystemHandle, markdown mode, auto-save   | ✅      |
+| M7   | Four-State Focus       | Focus model, keyboard navigation, dimming    | ✅      |
+| M8   | Attachments Display    | File list, sizes, icons, thumbnails, picker  | ✅      |
+| M9   | Attachment Operations  | Remove with confirmation, inline rename      | ✅      |
+| M10a | CompositionController  | WebView2 migration for native drag-drop      | ❌      |
+| M10  | Attachment Drag & Drop | Drag to Monaco, file drop, multi-file batch  | ❌      |
+| M11  | Clipboard              | Native read, paste intercept, copy shortcuts | ❌      |
+| M12  | Edit/Preview Toggle    | Markdown renderer, att: link transform       | ❌      |
+| M13  | Trash                  | Trash section, restore, GC triggers          | ❌      |
+| M14  | Settings               | Dialog, config persistence, theme            | ❌      |
+| M15  | Global Hotkey          | Ctrl+Alt+K registration, conflict detection  | ❌      |
+| M16  | Single Instance        | Named mutex, activate existing window        | ❌      |
+| M17  | Window Position Memory | Per-monitor position, off-screen check       | ❌      |
+| M18  | First-Run Dialog       | Welcome message, launch at login checkbox    | ❌      |
+| M19  | Monaco Bundling        | Embed resources, single exe                  | ❌      |
+| M20  | Installer              | WiX/MSIX, uninstaller, data deletion prompt  | ❌      |
+| M21  | Layout Polish          | Resizable panes, layout persistence          | ❌      |
 
 ---
 
@@ -501,6 +502,46 @@ Reference update is handled by frontend (modifies editor content directly).
 | TC-M9-07 | Escape cancels rename without hiding window       | ✅      |
 | TC-M9-08 | Rename referenced file with Update updates editor | ✅      |
 | TC-M9-09 | Rename with Don't Update leaves editor unchanged  | ✅      |
+
+---
+
+## M10a: WebView2 CompositionController Migration
+
+**Goal:** Convert WebView2 from standard Controller to CompositionController mode, enabling native drag-drop
+interception.
+
+**Description:** Standard Controller mode prevents access to file paths during drag-drop (web security restriction).
+CompositionController mode gives native code full control over input, allowing us to intercept drops via `IDropTarget`,
+extract paths, and forward events to WebView2.
+
+**Reference:** See `research/composition_controller_migration.md` for detailed architecture and implementation notes.
+
+**Implementation Notes:**
+
+- Replace `CreateCoreWebView2Controller` with `CreateCoreWebView2CompositionController`
+- Set up DirectComposition device and visual tree
+- Forward client-area input via `SendMouseInput()`, `SendKeyboardInput()`
+- Handle cursor changes via `CursorChanged` event
+- Implement `IDropTarget` to cache file paths and forward to controller
+- Add `addDroppedFiles` message for index-based file resolution
+
+**Test Cases:**
+
+| TC         | Description                                              | Status |
+|------------|----------------------------------------------------------|--------|
+| TC-M10a-01 | Window displays correctly (no visual regression)         | ❌      |
+| TC-M10a-02 | Mouse clicks work throughout UI                          | ❌      |
+| TC-M10a-03 | Keyboard input works (typing, shortcuts)                 | ❌      |
+| TC-M10a-04 | Window resize from edges works                           | ❌      |
+| TC-M10a-05 | CSS `app-region: drag` enables window dragging           | ❌      |
+| TC-M10a-06 | Text is crisp at 150% DPI scaling                        | ❌      |
+| TC-M10a-07 | Existing file picker (`openFilePicker`) still works      | ❌      |
+| TC-M10a-08 | Scroll wheel works in scrollable content                 | ❌      |
+| TC-M10a-09 | Right-click shows context menu                           | ❌      |
+| TC-M10a-10 | Cursor changes appropriately (pointer, text cursor)      | ❌      |
+| TC-M10a-11 | Drop single file → paths cached, DOM event fires         | ❌      |
+| TC-M10a-12 | Drop files with same name (mod.rs, mod.rs) → index works | ❌      |
+| TC-M10a-13 | Drag enter/leave without drop → cache cleared            | ❌      |
 
 ---
 
