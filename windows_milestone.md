@@ -18,7 +18,7 @@ and includes test cases for verification.
 | M8   | Attachments Display    | File list, sizes, icons, thumbnails, picker  | ✅      |
 | M9   | Attachment Operations  | Remove with confirmation, inline rename      | ✅      |
 | M10a | CompositionController  | WebView2 migration for native drag-drop      | ✅      |
-| M10  | Attachment Drag & Drop | Drag to Monaco, file drop, multi-file batch  | ❌      |
+| M10  | Attachment Drag & Drop | Drag to Monaco, file drop, multi-file batch  | ✅      |
 | M11  | Clipboard              | Native read, paste intercept, copy shortcuts | ❌      |
 | M12  | Edit/Preview Toggle    | Markdown renderer, att: link transform       | ❌      |
 | M13  | Trash                  | Trash section, restore, GC triggers          | ❌      |
@@ -572,14 +572,14 @@ onto attachments pane adds them. Multi-file operations show "Apply to all" check
 
 | TC        | Description                                        | Status |
 |-----------|----------------------------------------------------|--------|
-| TC-M10-01 | Drag attachment to Monaco inserts link             | ❌      |
-| TC-M10-02 | Drop files onto attachments pane adds them         | ❌      |
-| TC-M10-03 | Multi-file drop with duplicates shows batch dialog | ❌      |
-| TC-M10-04 | "Apply to all" checkbox applies to remaining files | ❌      |
-| TC-M10-05 | Drop onto trashed key rejected                     | ❌      |
-| TC-M10-06 | Drag multiple selected attachments to Monaco       | ❌      |
-| TC-M10-07 | Drop text from external app onto Monaco            | ❌      |
-| TC-M10-08 | Escape during drag cancels drag, doesn't hide      | ❌      |
+| TC-M10-01 | Drag attachment to Monaco inserts link             | ✅      |
+| TC-M10-02 | Drop files onto attachments pane adds them         | ✅      |
+| TC-M10-03 | Multi-file drop with duplicates shows batch dialog | ✅      |
+| TC-M10-04 | "Apply to all" checkbox applies to remaining files | ✅      |
+| TC-M10-05 | Drop onto trashed key rejected                     | ✅      |
+| TC-M10-06 | Drag multiple selected attachments to Monaco       | ✅      |
+| TC-M10-07 | Drop text from external app onto Monaco            | ✅      |
+| TC-M10-08 | Escape during drag cancels drag, doesn't hide      | ✅      |
 
 ---
 
