@@ -5,6 +5,7 @@ use super::messages::{IncomingMessage, OutgoingMessage};
 use super::wm;
 use super::FilePickerRequest;
 use crate::keva_worker::Request;
+use crate::platform::drop_target::take_dropped_paths;
 use crate::render::theme::Theme;
 use std::sync::mpsc::Sender;
 use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2;
@@ -117,6 +118,23 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
                 new_filename,
                 force,
             });
+        }
+        IncomingMessage::AddDroppedFiles { key, files } => {
+            // Get cached paths from IDropTarget and match by index
+            let cached_paths = take_dropped_paths();
+            let resolved_files: Vec<(std::path::PathBuf, String)> = files
+                .into_iter()
+                .filter_map(|(index, filename)| {
+                    cached_paths.get(index).map(|path| (path.clone(), filename))
+                })
+                .collect();
+
+            if !resolved_files.is_empty() {
+                let _ = request_tx.send(Request::AddDroppedFiles {
+                    key,
+                    files: resolved_files,
+                });
+            }
         }
     }
 }

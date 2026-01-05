@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 windows-strings = "0.5"
+windows-core = "0.62"
 webview2-com = { git = "https://github.com/ik1ne/webview2-rs.git", branch = "crate_update" }
 keva_core = { path = "../core" }
 keva_search = { path = "../search" }
@@ -17,13 +18,21 @@ features = [
     "Win32_Foundation",
     "Win32_System_LibraryLoader",
     "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Ole",
+    "Win32_System_SystemServices",
     "Win32_UI_WindowsAndMessaging",
     "Win32_UI_Shell",
     "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Input_Pointer",
     "Win32_UI_Controls",
     "Win32_UI_HiDpi",
     "Win32_Graphics_Gdi",
     "Win32_Graphics_Dwm",
+    "Win32_Graphics_DirectComposition",
+    "Win32_Graphics_Dxgi",
+    "Win32_Graphics_Direct3D",
+    "Win32_Graphics_Direct3D11",
     "UI_ViewManagement",
 ]
 

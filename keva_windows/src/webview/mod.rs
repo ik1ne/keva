@@ -6,10 +6,12 @@ pub mod messages;
 
 pub use init::init_webview;
 
+use crate::platform::composition::CompositionHost;
 use serde::Serialize;
 use std::sync::OnceLock;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
-    ICoreWebView2, ICoreWebView2Controller, ICoreWebView2Environment,
+    ICoreWebView2, ICoreWebView2CompositionController, ICoreWebView2Controller,
+    ICoreWebView2Environment,
 };
 use webview2_com::pwstr_from_str;
 use windows::Win32::Foundation::RECT;
@@ -42,9 +44,11 @@ pub struct FilePickerRequest {
 pub static WEBVIEW: OnceLock<WebView> = OnceLock::new();
 
 pub struct WebView {
+    pub composition_controller: ICoreWebView2CompositionController,
     pub controller: ICoreWebView2Controller,
     pub webview: ICoreWebView2,
     pub env: ICoreWebView2Environment,
+    composition_host: CompositionHost,
 }
 
 unsafe impl Send for WebView {}
@@ -53,15 +57,22 @@ unsafe impl Sync for WebView {}
 impl WebView {
     /// Sets the bounds of the WebView within its parent window.
     pub fn set_bounds(&self, x: i32, y: i32, width: i32, height: i32) {
-        unsafe {
-            let rect = RECT {
-                left: x,
-                top: y,
-                right: x + width,
-                bottom: y + height,
-            };
-            let _ = self.controller.SetBounds(rect);
-        }
+        // Position via DirectComposition visual offset
+        let _ = self.composition_host.set_offset(x, y);
+
+        // Size via controller bounds (position is 0,0 since offset handles it)
+        let rect = RECT {
+            left: 0,
+            top: 0,
+            right: width,
+            bottom: height,
+        };
+        let _ = unsafe { self.controller.SetBounds(rect) };
+    }
+
+    /// Commits pending DirectComposition changes.
+    pub fn commit_composition(&self) {
+        let _ = self.composition_host.commit();
     }
 
     #[expect(dead_code)]

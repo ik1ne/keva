@@ -1,6 +1,7 @@
 //! Window message handlers.
 
 use crate::keva_worker::Request;
+use crate::platform::drop_target::revoke_drop_target;
 use crate::platform::file_picker::open_file_picker;
 use crate::platform::tray::{
     IDM_LAUNCH_AT_LOGIN, IDM_QUIT, IDM_SETTINGS, IDM_SHOW, remove_tray_icon, show_tray_menu,
@@ -153,6 +154,13 @@ pub fn on_activate(wparam: WPARAM, lparam: LPARAM) {
     }
 }
 
+/// WM_SETFOCUS: Transfer focus to WebView2 CompositionController.
+pub fn on_setfocus() {
+    if let Some(wv) = WEBVIEW.get() {
+        let _ = unsafe { wv.controller.MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC) };
+    }
+}
+
 /// WM_KEYDOWN: Hide window on Esc, restoring focus to previous window.
 pub fn on_keydown(hwnd: HWND, wparam: WPARAM) -> Option<LRESULT> {
     let virtual_key = wparam.0 as u16;
@@ -176,10 +184,7 @@ fn show_and_focus_window(hwnd: HWND) {
         let _ = SetForegroundWindow(hwnd);
     }
     if let Some(wv) = WEBVIEW.get() {
-        let _ = unsafe {
-            wv.controller
-                .MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC)
-        };
+        let _ = unsafe { wv.controller.MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC) };
         post_message(&wv.webview, &OutgoingMessage::Focus);
     }
 }
@@ -239,6 +244,7 @@ pub fn on_size(wparam: WPARAM, lparam: LPARAM) -> LRESULT {
             )
         };
         wv.set_bounds(x, y, w, h);
+        wv.commit_composition();
     }
 
     LRESULT(0)
@@ -276,6 +282,7 @@ pub fn on_paint(hwnd: HWND) -> LRESULT {
 
 /// WM_DESTROY: Clean up and exit application.
 pub fn on_destroy(hwnd: HWND) -> LRESULT {
+    revoke_drop_target(hwnd);
     unsafe {
         remove_tray_icon(hwnd);
         PostQuitMessage(0);

@@ -1,19 +1,24 @@
-//! Window hit testing for resize borders.
+//! Window hit testing for resize borders and app-region: drag areas.
 
+use crate::webview::WEBVIEW;
+use webview2_com::Microsoft::Web::WebView2::Win32::{
+    COREWEBVIEW2_NON_CLIENT_REGION_KIND_CAPTION, ICoreWebView2CompositionController4,
+};
 use windows::Win32::{
-    Foundation::{HWND, LRESULT, RECT},
+    Foundation::{HWND, LRESULT, POINT, RECT},
     UI::WindowsAndMessaging::{
-        GetSystemMetrics, GetWindowRect, HTBOTTOM, HTBOTTOMLEFT, HTBOTTOMRIGHT, HTCLIENT, HTLEFT,
-        HTRIGHT, HTTOP, HTTOPLEFT, HTTOPRIGHT, SM_CXPADDEDBORDER, SM_CXSIZEFRAME, SM_CYSIZEFRAME,
+        GetSystemMetrics, GetWindowRect, HTBOTTOM, HTBOTTOMLEFT, HTBOTTOMRIGHT, HTCAPTION,
+        HTCLIENT, HTLEFT, HTRIGHT, HTTOP, HTTOPLEFT, HTTOPRIGHT, SM_CXPADDEDBORDER, SM_CXSIZEFRAME,
+        SM_CYSIZEFRAME,
     },
 };
+use windows::core::Interface;
 
-/// Determines which part of the window the cursor is over for resize.
+/// Determines which part of the window the cursor is over for resize/drag.
 ///
 /// Uses system metrics for proper DPI-aware resize border sizes.
 /// Returns an HT* constant wrapped in LRESULT.
 /// The x, y coordinates are in screen space.
-/// Window dragging is handled by CSS `app-region: drag` in the WebView.
 pub fn hit_test(hwnd: HWND, screen_x: i32, screen_y: i32) -> LRESULT {
     let mut rect = RECT::default();
     let _ = unsafe { GetWindowRect(hwnd, &mut rect) };
@@ -33,25 +38,46 @@ pub fn hit_test(hwnd: HWND, screen_x: i32, screen_y: i32) -> LRESULT {
     let on_top = screen_y >= top && screen_y < top + border_y;
     let on_bottom = screen_y >= bottom - border_y && screen_y < bottom;
 
-    let result = if on_top && on_left {
-        HTTOPLEFT
+    // Check resize borders first (higher priority than caption)
+    if on_top && on_left {
+        return LRESULT(HTTOPLEFT as isize);
     } else if on_top && on_right {
-        HTTOPRIGHT
+        return LRESULT(HTTOPRIGHT as isize);
     } else if on_bottom && on_left {
-        HTBOTTOMLEFT
+        return LRESULT(HTBOTTOMLEFT as isize);
     } else if on_bottom && on_right {
-        HTBOTTOMRIGHT
+        return LRESULT(HTBOTTOMRIGHT as isize);
     } else if on_left {
-        HTLEFT
+        return LRESULT(HTLEFT as isize);
     } else if on_right {
-        HTRIGHT
+        return LRESULT(HTRIGHT as isize);
     } else if on_top {
-        HTTOP
+        return LRESULT(HTTOP as isize);
     } else if on_bottom {
-        HTBOTTOM
-    } else {
-        HTCLIENT
-    };
+        return LRESULT(HTBOTTOM as isize);
+    }
 
-    LRESULT(result as isize)
+    // Check WebView's non-client regions (app-region: drag areas)
+    if let Some(wv) = WEBVIEW.get()
+        && let Ok(cc4) = wv
+            .composition_controller
+            .cast::<ICoreWebView2CompositionController4>()
+    {
+        // Convert screen coordinates to WebView client coordinates
+        let client_x = screen_x - left - border_x;
+        let client_y = screen_y - top - border_y;
+        let point = POINT {
+            x: client_x,
+            y: client_y,
+        };
+
+        let mut region_kind = Default::default();
+        if unsafe { cc4.GetNonClientRegionAtPoint(point, &mut region_kind) }.is_ok()
+            && region_kind == COREWEBVIEW2_NON_CLIENT_REGION_KIND_CAPTION
+        {
+            return LRESULT(HTCAPTION as isize);
+        }
+    }
+
+    LRESULT(HTCLIENT as isize)
 }

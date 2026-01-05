@@ -60,6 +60,13 @@ pub enum IncomingMessage {
         /// If true, overwrite existing file with same name.
         force: bool,
     },
+    /// Add dropped files using cached paths from IDropTarget.
+    /// Files are referenced by index (matching order in JS drop event).
+    AddDroppedFiles {
+        key: String,
+        /// Each file: [index, resolved_filename]
+        files: Vec<(usize, String)>,
+    },
 }
 
 /// Messages from native to WebView.

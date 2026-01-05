@@ -4,6 +4,7 @@ use super::bridge::handle_webview_message;
 use super::messages::OutgoingMessage;
 use super::{WEBVIEW, WebView, wm};
 use crate::keva_worker::{Request, get_data_path};
+use crate::platform::composition::CompositionHost;
 use crate::render::theme::Theme;
 use std::ffi::c_void;
 use std::sync::mpsc::Receiver;
@@ -11,16 +12,17 @@ use std::sync::mpsc::Sender;
 use std::thread;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW, CreateCoreWebView2Environment, ICoreWebView2,
-    ICoreWebView2_3, ICoreWebView2Controller, ICoreWebView2Environment, ICoreWebView2Settings9,
-    ICoreWebView2WebMessageReceivedEventArgs,
+    ICoreWebView2Controller, ICoreWebView2Environment, ICoreWebView2Environment3,
+    ICoreWebView2Settings9, ICoreWebView2WebMessageReceivedEventArgs, ICoreWebView2_3,
 };
 use webview2_com::{
-    CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
+    CreateCoreWebView2CompositionControllerCompletedHandler,
+    CreateCoreWebView2EnvironmentCompletedHandler, CursorChangedEventHandler,
     WebMessageReceivedEventHandler,
 };
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::System::Com::CoTaskMemFree;
-use windows::Win32::UI::WindowsAndMessaging::PostMessageW;
+use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, SetCursor, HCURSOR};
 use windows::core::{Interface, PWSTR, w};
 
 #[expect(clippy::too_many_arguments)]
@@ -34,11 +36,20 @@ pub fn init_webview(
     request_tx: Sender<Request>,
     response_rx: Receiver<OutgoingMessage>,
 ) {
+    // Create DirectComposition host first
+    let composition_host = match CompositionHost::new(hwnd) {
+        Ok(host) => host,
+        Err(e) => {
+            eprintln!("[WebView] Failed to create CompositionHost: {:?}", e);
+            return;
+        }
+    };
+
     unsafe {
         let _ = CreateCoreWebView2Environment(
             &CreateCoreWebView2EnvironmentCompletedHandler::create(Box::new(move |_error, env| {
                 let Some(env) = env else { return Ok(()) };
-                create_controller(
+                create_composition_controller(
                     hwnd,
                     x,
                     y,
@@ -48,6 +59,7 @@ pub fn init_webview(
                     env,
                     request_tx,
                     response_rx,
+                    composition_host,
                 );
                 Ok(())
             })),
@@ -56,7 +68,7 @@ pub fn init_webview(
 }
 
 #[expect(clippy::too_many_arguments)]
-fn create_controller(
+fn create_composition_controller(
     hwnd: HWND,
     x: i32,
     y: i32,
@@ -66,16 +78,55 @@ fn create_controller(
     env: ICoreWebView2Environment,
     request_tx: Sender<Request>,
     response_rx: Receiver<OutgoingMessage>,
+    composition_host: CompositionHost,
 ) {
     unsafe {
+        // Cast to Environment3 for CompositionController support
+        let Ok(env3) = env.cast::<ICoreWebView2Environment3>() else {
+            eprintln!("[WebView] ICoreWebView2Environment3 not available");
+            return;
+        };
+
         let env_for_webview = env.clone();
-        let _ = env.CreateCoreWebView2Controller(
+        let _ = env3.CreateCoreWebView2CompositionController(
             hwnd,
-            &CreateCoreWebView2ControllerCompletedHandler::create(Box::new(
-                move |_error, controller| {
-                    let Some(controller) = controller else {
+            &CreateCoreWebView2CompositionControllerCompletedHandler::create(Box::new(
+                move |_error, composition_controller| {
+                    let Some(composition_controller) = composition_controller else {
+                        eprintln!("[WebView] CompositionController creation failed");
                         return Ok(());
                     };
+
+                    // Set the root visual target for DirectComposition
+                    let root_visual = composition_host.root_visual();
+                    if let Err(e) = composition_controller.SetRootVisualTarget(root_visual) {
+                        eprintln!("[WebView] SetRootVisualTarget failed: {:?}", e);
+                        return Ok(());
+                    }
+
+                    // Subscribe to cursor change events for immediate feedback
+                    let comp_controller_for_cursor = composition_controller.clone();
+                    let mut cursor_token = 0i64;
+                    let _ = composition_controller.add_CursorChanged(
+                        &CursorChangedEventHandler::create(Box::new(
+                            move |_sender, _args| {
+                                let mut cursor = HCURSOR::default();
+                                if comp_controller_for_cursor.Cursor(&mut cursor).is_ok() {
+                                    SetCursor(Some(cursor));
+                                }
+                                Ok(())
+                            },
+                        )),
+                        &mut cursor_token,
+                    );
+
+                    // Get the base controller interface
+                    let Ok(controller) = composition_controller.cast::<ICoreWebView2Controller>()
+                    else {
+                        eprintln!("[WebView] Failed to cast to ICoreWebView2Controller");
+                        return Ok(());
+                    };
+
                     let Some(webview) = setup_webview(controller.clone(), hwnd, request_tx) else {
                         return Ok(());
                     };
@@ -83,11 +134,16 @@ fn create_controller(
                     let _ = controller.SetIsVisible(true);
 
                     let wv = WebView {
+                        composition_controller,
                         controller,
                         webview,
                         env: env_for_webview.clone(),
+                        composition_host,
                     };
                     wv.set_bounds(x, y, width, height);
+
+                    // Commit composition after WebView visual is attached
+                    wv.commit_composition();
 
                     // Map virtual host to source directory for file-based loading
                     if let Ok(wv3) = wv.webview.cast::<ICoreWebView2_3>() {

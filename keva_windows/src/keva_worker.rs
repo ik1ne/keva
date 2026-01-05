@@ -66,6 +66,12 @@ pub enum Request {
         /// If true, overwrite existing file with same name.
         force: bool,
     },
+    /// Add dropped files using cached paths from IDropTarget.
+    AddDroppedFiles {
+        key: String,
+        /// (source_path, target_filename)
+        files: Vec<(PathBuf, String)>,
+    },
     Shutdown,
 }
 
@@ -173,6 +179,9 @@ fn worker_loop(
                 force,
             } => {
                 handle_rename_attachment(&mut keva, &key, &old_filename, &new_filename, force, hwnd);
+            }
+            Request::AddDroppedFiles { key, files } => {
+                handle_add_dropped_files(&mut keva, &key, files, hwnd);
             }
             Request::Shutdown => {
                 unsafe {
@@ -309,6 +318,24 @@ fn handle_rename_attachment(
 
     if keva
         .rename_attachment(&key, old_filename, new_filename, SystemTime::now())
+        .is_ok()
+    {
+        let _ = handle_get_value(keva, key_str, hwnd);
+    }
+}
+
+fn handle_add_dropped_files(
+    keva: &mut KevaCore,
+    key_str: &str,
+    files: Vec<(PathBuf, String)>,
+    hwnd: HWND,
+) {
+    let Ok(key) = Key::try_from(key_str) else {
+        return;
+    };
+
+    if keva
+        .add_attachments(&key, files, SystemTime::now())
         .is_ok()
     {
         let _ = handle_get_value(keva, key_str, hwnd);
