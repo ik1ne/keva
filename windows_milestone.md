@@ -17,7 +17,7 @@ and includes test cases for verification.
 | M7   | Four-State Focus       | Focus model, keyboard navigation, dimming    | ✅      |
 | M8   | Attachments Display    | File list, sizes, icons, thumbnails, picker  | ✅      |
 | M9   | Attachment Operations  | Remove with confirmation, inline rename      | ✅      |
-| M10a | CompositionController  | WebView2 migration for native drag-drop      | ❌      |
+| M10a | CompositionController  | WebView2 migration for native drag-drop      | ✅      |
 | M10  | Attachment Drag & Drop | Drag to Monaco, file drop, multi-file batch  | ❌      |
 | M11  | Clipboard              | Native read, paste intercept, copy shortcuts | ❌      |
 | M12  | Edit/Preview Toggle    | Markdown renderer, att: link transform       | ❌      |
@@ -529,18 +529,18 @@ extract paths, and forward events to WebView2.
 
 | TC         | Description                                              | Status |
 |------------|----------------------------------------------------------|--------|
-| TC-M10a-01 | Window displays correctly (no visual regression)         | ❌      |
-| TC-M10a-02 | Mouse clicks work throughout UI                          | ❌      |
-| TC-M10a-03 | Keyboard input works (typing, shortcuts)                 | ❌      |
-| TC-M10a-04 | Window resize from edges works                           | ❌      |
-| TC-M10a-05 | CSS `app-region: drag` enables window dragging           | ❌      |
-| TC-M10a-06 | Text is crisp at 150% DPI scaling                        | ❌      |
-| TC-M10a-07 | Existing file picker (`openFilePicker`) still works      | ❌      |
-| TC-M10a-08 | Scroll wheel works in scrollable content                 | ❌      |
-| TC-M10a-09 | Cursor changes appropriately (pointer, text cursor)      | ❌      |
-| TC-M10a-10 | Drop single file → paths cached, DOM event fires         | ❌      |
-| TC-M10a-11 | Drop files with same name (mod.rs, mod.rs) → index works | ❌      |
-| TC-M10a-12 | Drag enter/leave without drop → cache cleared            | ❌      |
+| TC-M10a-01 | Window displays correctly (no visual regression)         | ✅      |
+| TC-M10a-02 | Mouse clicks work throughout UI                          | ✅      |
+| TC-M10a-03 | Keyboard input works (typing, shortcuts)                 | ✅      |
+| TC-M10a-04 | Window resize from edges works                           | ✅      |
+| TC-M10a-05 | CSS `app-region: drag` enables window dragging           | ✅      |
+| TC-M10a-06 | Text is crisp at 150% DPI scaling                        | ✅      |
+| TC-M10a-07 | Existing file picker (`openFilePicker`) still works      | ✅      |
+| TC-M10a-08 | Scroll wheel works in scrollable content                 | ✅      |
+| TC-M10a-09 | Cursor changes appropriately (pointer, text cursor)      | ✅      |
+| TC-M10a-10 | Drop single file → paths cached, DOM event fires         | ✅      |
+| TC-M10a-11 | Drop files with same name (mod.rs, mod.rs) → index works | ✅      |
+| TC-M10a-12 | Drag enter/leave without drop → cache cleared            | ✅      |
 
 ---
 
