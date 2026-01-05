@@ -537,11 +537,10 @@ extract paths, and forward events to WebView2.
 | TC-M10a-06 | Text is crisp at 150% DPI scaling                        | ❌      |
 | TC-M10a-07 | Existing file picker (`openFilePicker`) still works      | ❌      |
 | TC-M10a-08 | Scroll wheel works in scrollable content                 | ❌      |
-| TC-M10a-09 | Right-click shows context menu                           | ❌      |
-| TC-M10a-10 | Cursor changes appropriately (pointer, text cursor)      | ❌      |
-| TC-M10a-11 | Drop single file → paths cached, DOM event fires         | ❌      |
-| TC-M10a-12 | Drop files with same name (mod.rs, mod.rs) → index works | ❌      |
-| TC-M10a-13 | Drag enter/leave without drop → cache cleared            | ❌      |
+| TC-M10a-09 | Cursor changes appropriately (pointer, text cursor)      | ❌      |
+| TC-M10a-10 | Drop single file → paths cached, DOM event fires         | ❌      |
+| TC-M10a-11 | Drop files with same name (mod.rs, mod.rs) → index works | ❌      |
+| TC-M10a-12 | Drag enter/leave without drop → cache cleared            | ❌      |
 
 ---
 

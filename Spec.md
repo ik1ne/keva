@@ -110,8 +110,7 @@ Attachments are referenced in Markdown using filename-based links:
 **Resize and Move:**
 
 - **Outer border:** Resize handle (triggers OS-level resize), should behave like native window border
-- **Search icon (🔍):** Drag handle for moving window (click does nothing, drag moves window), should behave like native
-  title bar drag
+- **Search icon (🔍):** Drag handle for moving window (click does nothing, drag moves window)
 
 **Window Positioning:**
 
