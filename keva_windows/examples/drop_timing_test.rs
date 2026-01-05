@@ -7,12 +7,13 @@
 //!
 //! ## Test Procedure
 //! 1. Drop files onto the window
-//! 2. Observe timing comparison:
-//!    - PATH B (green): Native injection via ExecuteScriptAsync
-//!    - PATH A (red): Standard DOM drop event via cc3.Drop()
+//! 2. Open DevTools console to observe timing logs:
+//!    - `[native_drop]`: Native injection via ExecuteScriptAsync
+//!    - `[drop]`: Standard DOM drop event via cc3.Drop()
+//!    - `[delta]`: Time difference between the two
 //!
-//! If PATH B consistently arrives before PATH A, native injection is viable
-//! for timing-critical applications.
+//! If `[native_drop]` consistently arrives before `[drop]`, native injection
+//! is viable for timing-critical applications.
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -20,6 +21,7 @@ use std::cell::Cell;
 use std::ffi::OsString;
 use std::os::windows::ffi::OsStringExt;
 use std::sync::OnceLock;
+use std::time::Instant;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     CreateCoreWebView2Environment, ICoreWebView2, ICoreWebView2CompositionController,
     ICoreWebView2CompositionController3, ICoreWebView2Controller, ICoreWebView2Controller4,
@@ -39,14 +41,13 @@ use windows::Win32::Graphics::DirectComposition::{
 };
 use windows::Win32::Graphics::Dxgi::IDXGIDevice;
 use windows::Win32::Graphics::Gdi::ScreenToClient;
-use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance};
 use windows::Win32::System::Com::{DVASPECT_CONTENT, FORMATETC, IDataObject, TYMED_HGLOBAL};
 use windows::Win32::System::Ole::{
     CF_HDROP, DROPEFFECT, DROPEFFECT_COPY, IDropTarget, IDropTarget_Impl, OleInitialize,
     OleUninitialize, RegisterDragDrop, ReleaseStgMedium,
 };
 use windows::Win32::System::SystemServices::MODIFIERKEYS_FLAGS;
-use windows::Win32::UI::Shell::{CLSID_DragDropHelper, DragQueryFileW, HDROP, IDropTargetHelper};
+use windows::Win32::UI::Shell::{DragQueryFileW, HDROP};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, GetClientRect, GetMessageW,
     GetSystemMetrics, IDC_ARROW, LoadCursorW, MSG, PostQuitMessage, RegisterClassW, SM_CXSCREEN,
@@ -61,71 +62,45 @@ const CLASS_NAME: &str = "DropTimingTest\0";
 
 const HTML_CONTENT: &str = r#"<!DOCTYPE html>
 <html>
-<head><style>
-  body { font-family: monospace; padding: 20px; background: #1e1e1e; color: #d4d4d4; }
-  #dropzone {
-    width: 100%; height: 200px;
-    border: 3px dashed #666;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 18px;
-    transition: all 0.2s ease;
-  }
-  #dropzone.dragover { border-color: #0078d4; background: #2d4a6e; }
-  h2 { margin-bottom: 15px; color: #569cd6; }
-  #log { margin-top: 20px; white-space: pre-wrap; line-height: 1.6; font-size: 14px; }
-  .path-a { color: #f14c4c; }
-  .path-b { color: #89d185; }
-  .delta { color: #dcdcaa; }
-  .info { color: #808080; }
-</style></head>
+<head></head>
 <body>
-  <h2>Drop Timing Test</h2>
-  <div id="dropzone">Drop Files Here</div>
-  <div id="log"><span class="info">Waiting for file drop...</span></div>
+  <div id="left">Left</div>
+  <div id="right">Right</div>
   <script>
-    const log = document.getElementById('log');
-    const dropzone = document.getElementById('dropzone');
     let nativeDropTime = null;
-    let dropCount = 0;
 
-    // Path B: Native injection listener (via ExecuteScriptAsync)
     window.addEventListener('native_drop', (e) => {
       const now = performance.now();
       nativeDropTime = now;
-      dropCount++;
-      log.innerHTML += `<span class="path-b">[PATH B - Native] ${now.toFixed(2)}ms - Files: ${e.detail.count}</span>\n`;
+      console.log('[native_drop]', now.toFixed(2) + 'ms', 'Files:', e.detail.count);
     });
 
-    // Path A: Standard DOM drop event (via cc3.Drop())
-    dropzone.addEventListener('dragenter', (e) => {
+    document.addEventListener('dragenter', (e) => {
       e.preventDefault();
-      dropzone.classList.add('dragover');
+      console.log('[dragenter]', performance.now().toFixed(2) + 'ms');
     });
-    dropzone.addEventListener('dragover', (e) => {
+
+    document.addEventListener('dragover', (e) => {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'copy';
+      console.log('[dragover]', performance.now().toFixed(2) + 'ms');
     });
-    dropzone.addEventListener('dragleave', () => {
-      dropzone.classList.remove('dragover');
-    });
-    dropzone.addEventListener('drop', (e) => {
-      e.preventDefault();
-      dropzone.classList.remove('dragover');
-      const now = performance.now();
-      const files = e.dataTransfer.files;
-      log.innerHTML += `<span class="path-a">[PATH A - DOM]    ${now.toFixed(2)}ms - Files: ${files.length}</span>\n`;
 
+    document.addEventListener('dragleave', (e) => {
+      console.log('[dragleave]', performance.now().toFixed(2) + 'ms');
+    });
+
+    document.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const now = performance.now();
+      console.log('[drop]', now.toFixed(2) + 'ms', 'Files:', e.dataTransfer.files.length);
       if (nativeDropTime !== null) {
-        const diff = now - nativeDropTime;
-        log.innerHTML += `<span class="delta">[DELTA] Path A arrived ${diff.toFixed(2)}ms after Path B</span>\n\n`;
+        console.log('[delta]', (now - nativeDropTime).toFixed(2) + 'ms');
         nativeDropTime = null;
-      } else {
-        log.innerHTML += `<span class="info">[INFO] No native timestamp (Path B may have failed)</span>\n\n`;
       }
     });
 
-    // Log page ready
-    log.innerHTML = '<span class="info">Page ready. Drop files to test timing.</span>\n\n';
+    console.log('[ready]');
   </script>
 </body>
 </html>"#;
@@ -204,11 +179,15 @@ impl CompositionHost {
     }
 }
 
+/// ~33ms between DragOver forwards to WebView2 (30fps)
+const DRAGOVER_THROTTLE_MS: u128 = 33;
+
 /// IDropTarget implementation for timing test
 #[windows_core::implement(IDropTarget)]
 struct DropTarget {
     hwnd: HWND,
-    drop_helper: IDropTargetHelper,
+    last_dragover: Cell<Option<Instant>>,
+    cached_effect: Cell<DROPEFFECT>,
 }
 
 impl DropTarget {
@@ -282,15 +261,9 @@ impl IDropTarget_Impl for DropTarget_Impl {
         pt: &POINTL,
         pdweffect: *mut DROPEFFECT,
     ) -> windows::core::Result<()> {
-        // Call IDropTargetHelper first for proper drag image feedback
-        let screen_pt = POINT { x: pt.x, y: pt.y };
-        unsafe {
-            let _ =
-                self.drop_helper
-                    .DragEnter(self.hwnd, pdataobj.ok().ok(), &screen_pt, *pdweffect);
-        }
+        println!("[Native] DragEnter at ({}, {})", pt.x, pt.y);
 
-        // Forward to WebView2 CompositionController3
+        // Forward to WebView2 CompositionController3 (handles drag visual)
         if let Some(state) = WEBVIEW_STATE.get()
             && let Ok(cc3) = state
                 .composition_controller
@@ -316,35 +289,56 @@ impl IDropTarget_Impl for DropTarget_Impl {
         pt: &POINTL,
         pdweffect: *mut DROPEFFECT,
     ) -> windows::core::Result<()> {
-        // Call IDropTargetHelper first for proper drag image feedback
-        let screen_pt = POINT { x: pt.x, y: pt.y };
-        unsafe {
-            let _ = self.drop_helper.DragOver(&screen_pt, *pdweffect);
+        // Debug: check if OS sends DragOver without pointer movement
+        static LAST_PT: std::sync::Mutex<Option<POINTL>> = std::sync::Mutex::new(None);
+        let mut last = LAST_PT.lock().unwrap();
+        let moved = last.map(|l| l.x != pt.x || l.y != pt.y).unwrap_or(true);
+        if moved {
+            println!("[DragOver] MOVED to ({}, {})", pt.x, pt.y);
+        } else {
+            println!("[DragOver] STATIONARY");
         }
+        *last = Some(*pt);
 
-        // Forward to WebView2 CompositionController3
-        if let Some(state) = WEBVIEW_STATE.get()
-            && let Ok(cc3) = state
-                .composition_controller
-                .cast::<ICoreWebView2CompositionController3>()
-        {
-            let point = self.to_webview_point(pt);
-            let _ = unsafe { cc3.DragOver(grfkeystate.0, point, pdweffect as *mut u32) };
-        }
+        // Throttle forwarding to WebView2 at 30fps
+        let now = Instant::now();
+        let should_forward = match self.last_dragover.get() {
+            None => true,
+            Some(last) => now.duration_since(last).as_millis() >= DRAGOVER_THROTTLE_MS,
+        };
 
-        unsafe {
-            if (*pdweffect).0 == 0 {
-                *pdweffect = DROPEFFECT_COPY;
+        if should_forward {
+            self.last_dragover.set(Some(now));
+
+            // Forward to WebView2 CompositionController3
+            if let Some(state) = WEBVIEW_STATE.get()
+                && let Ok(cc3) = state
+                    .composition_controller
+                    .cast::<ICoreWebView2CompositionController3>()
+            {
+                let point = self.to_webview_point(pt);
+                let _ = unsafe { cc3.DragOver(grfkeystate.0, point, pdweffect as *mut u32) };
+            }
+
+            // Cache the effect returned by WebView2
+            unsafe {
+                if (*pdweffect).0 == 0 {
+                    *pdweffect = DROPEFFECT_COPY;
+                }
+                self.cached_effect.set(*pdweffect);
+            }
+        } else {
+            // Use cached effect when throttled for consistent cursor feedback
+            unsafe {
+                *pdweffect = self.cached_effect.get();
             }
         }
+
         Ok(())
     }
 
     fn DragLeave(&self) -> windows::core::Result<()> {
-        // Call IDropTargetHelper first
-        unsafe {
-            let _ = self.drop_helper.DragLeave();
-        }
+        println!("[Native] DragLeave");
 
         // Forward to WebView2 CompositionController3
         if let Some(state) = WEBVIEW_STATE.get()
@@ -364,13 +358,7 @@ impl IDropTarget_Impl for DropTarget_Impl {
         pt: &POINTL,
         pdweffect: *mut DROPEFFECT,
     ) -> windows::core::Result<()> {
-        // Call IDropTargetHelper first
-        let screen_pt = POINT { x: pt.x, y: pt.y };
-        unsafe {
-            let _ = self
-                .drop_helper
-                .Drop(pdataobj.ok().ok(), &screen_pt, *pdweffect);
-        }
+        println!("[Native] Drop at ({}, {})", pt.x, pt.y);
 
         let Some(state) = WEBVIEW_STATE.get() else {
             return Ok(());
@@ -423,11 +411,11 @@ fn register_drop_target(hwnd: HWND) -> windows::core::Result<()> {
             return Ok(());
         }
 
-        // Create IDropTargetHelper for drag image feedback
-        let drop_helper: IDropTargetHelper =
-            unsafe { CoCreateInstance(&CLSID_DragDropHelper, None, CLSCTX_INPROC_SERVER)? };
-
-        let target = DropTarget { hwnd, drop_helper };
+        let target = DropTarget {
+            hwnd,
+            last_dragover: Cell::new(None),
+            cached_effect: Cell::new(DROPEFFECT_COPY),
+        };
         let target_interface: IDropTarget = target.into();
         let result = unsafe { RegisterDragDrop(hwnd, &target_interface) };
         if result.is_ok() {
@@ -510,6 +498,13 @@ fn create_composition_controller(hwnd: HWND, env: ICoreWebView2Environment) {
 
                     // Commit composition after WebView visual is attached
                     let _ = composition_host.commit();
+
+                    // Open DevTools in debug builds
+                    #[cfg(debug_assertions)]
+                    {
+                        let _ = webview.OpenDevToolsWindow();
+                        println!("[WebView] DevTools window opened");
+                    }
 
                     // Store state for drop target access
                     let _ = WEBVIEW_STATE.set(WebViewState {
