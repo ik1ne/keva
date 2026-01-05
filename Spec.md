@@ -355,6 +355,12 @@ else:
 
 ### Right Bottom Pane (Attachments)
 
+**Visibility:**
+
+- **No key selected:** Hidden (pane not visible)
+- **Key selected:** Visible with slide-up animation
+- **Trashed key selected:** Visible but read-only (no add/delete/rename, user can view attached files)
+
 **Layout:**
 
 ```
@@ -363,6 +369,34 @@ else:
 │ [img] image.png    340 KB         [✏️] [X]  │  ← thumbnail for images
 │                                             │
 │              [+ Add files]                  │
+└─────────────────────────────────────────────┘
+```
+
+**Empty State:**
+
+When no attachments exist, show centered placeholder text:
+```
+┌─────────────────────────────────────────────┐
+│                                             │
+│      Drop files here or onto the editor     │
+│                                             │
+└─────────────────────────────────────────────┘
+```
+
+**Drop Zone Overlay:**
+
+When dragging files over the attachments pane:
+- Overlay appears on top of existing file list
+- Shows drop hint text with highlighted border
+- Indicates valid drop target
+
+```
+┌─────────────────────────────────────────────┐
+│ ┌─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┐ │
+│ │                                       │ │
+│ │   Drop files here or onto the editor  │ │  ← highlighted overlay
+│ │                                       │ │
+│ └─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘ │
 └─────────────────────────────────────────────┘
 ```
 
