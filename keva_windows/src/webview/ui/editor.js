@@ -33,7 +33,8 @@ const Editor = {
                 fontSize: 14,
                 wordWrap: 'on',
                 scrollBeyondLastLine: false,
-                readOnlyMessage: {value: 'Restore from trash to edit', isTrusted: true}
+                readOnlyMessage: {value: 'Restore from trash to edit', isTrusted: true},
+                dropIntoEditor: {enabled: false}
             });
 
             self.instance.onDidChangeModelContent(function () {

@@ -72,6 +72,40 @@ const Attachments = {
                 self.navigateArrow(e.key === 'ArrowDown' ? 1 : -1, e.shiftKey);
             }
         });
+
+        // Drag start for dragging attachments to Monaco
+        this.dom.container.addEventListener('dragstart', function (e) {
+            const item = e.target.closest('.attachment-item');
+            if (!item) return;
+
+            // Get selected filenames (or just the dragged one if not selected)
+            const filenames = self.getDragFilenames(item);
+            if (filenames.length === 0) return;
+
+            // Set custom data type for internal attachment drag
+            e.dataTransfer.setData('application/x-keva-attachments', JSON.stringify(filenames));
+            e.dataTransfer.effectAllowed = 'copy';
+        });
+    },
+
+    getDragFilenames: function (draggedItem) {
+        const draggedFilename = draggedItem.dataset.filename;
+        const draggedIndex = parseInt(draggedItem.dataset.index, 10);
+
+        // If dragged item is selected, drag all selected items
+        if (this.selectedIndices.has(draggedIndex)) {
+            const filenames = [];
+            const items = this.getItems();
+            this.selectedIndices.forEach(function (index) {
+                if (items[index]) {
+                    filenames.push(items[index].dataset.filename);
+                }
+            });
+            return filenames;
+        }
+
+        // Otherwise just drag the clicked item
+        return [draggedFilename];
     },
 
     render: function () {
@@ -102,7 +136,7 @@ const Attachments = {
             ? '<img class="attachment-thumb" src="' + att.thumbnailUrl + '" alt="">'
             : '<span class="attachment-icon">' + this.getTypeIcon(att.filename) + '</span>';
 
-        return '<div class="attachment-item" tabindex="-1" data-index="' + index + '" data-filename="' + Utils.escapeHtml(att.filename) + '">' +
+        return '<div class="attachment-item" tabindex="-1" draggable="true" data-index="' + index + '" data-filename="' + Utils.escapeHtml(att.filename) + '">' +
             icon +
             '<span class="attachment-name">' + Utils.escapeHtml(att.filename) + '</span>' +
             '<span class="attachment-size">' + this.formatSize(att.size) + '</span>' +

@@ -6,10 +6,12 @@
 
 use crate::platform::handlers::get_resize_border;
 use crate::webview::WEBVIEW;
+use std::cell::Cell;
 use std::ffi::OsString;
 use std::os::windows::ffi::OsStringExt;
 use std::path::PathBuf;
 use std::sync::RwLock;
+use std::time::Instant;
 use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2CompositionController3;
 use windows::Win32::Foundation::{HWND, POINT, POINTL};
 use windows::Win32::Graphics::Gdi::ScreenToClient;
@@ -31,10 +33,17 @@ pub fn take_dropped_paths() -> Vec<PathBuf> {
     std::mem::take(&mut *DROPPED_PATHS.write().unwrap())
 }
 
+/// Throttle DragOver forwarding to ~30fps to avoid overwhelming WebView2.
+const DRAGOVER_THROTTLE_MS: u128 = 33;
+
 /// Our IDropTarget implementation that intercepts drag-drop and forwards to WebView2.
 #[windows_core::implement(IDropTarget)]
 pub struct DropTarget {
     hwnd: HWND,
+    /// Last time we forwarded a DragOver to WebView2.
+    last_dragover: Cell<Option<Instant>>,
+    /// Cached drop effect from last DragOver forward.
+    cached_effect: Cell<DROPEFFECT>,
 }
 
 impl DropTarget {
@@ -87,19 +96,36 @@ impl IDropTarget_Impl for DropTarget_Impl {
         pt: &POINTL,
         pdweffect: *mut DROPEFFECT,
     ) -> windows::core::Result<()> {
-        // Forward to WebView2 CompositionController3
-        if let Some(wv) = WEBVIEW.get()
-            && let Ok(cc3) =
-                wv.composition_controller.cast::<ICoreWebView2CompositionController3>()
-        {
-            let point = self.to_webview_point(pt);
-            let _ = unsafe { cc3.DragOver(grfkeystate.0, point, pdweffect as *mut u32) };
-        }
+        // Throttle forwarding to WebView2 at ~30fps
+        let now = Instant::now();
+        let should_forward = match self.last_dragover.get() {
+            None => true,
+            Some(last) => now.duration_since(last).as_millis() >= DRAGOVER_THROTTLE_MS,
+        };
 
-        // If pdweffect is still unset, default to copy
-        unsafe {
-            if (*pdweffect).0 == 0 {
-                *pdweffect = DROPEFFECT_COPY;
+        if should_forward {
+            self.last_dragover.set(Some(now));
+
+            // Forward to WebView2 CompositionController3
+            if let Some(wv) = WEBVIEW.get()
+                && let Ok(cc3) =
+                    wv.composition_controller.cast::<ICoreWebView2CompositionController3>()
+            {
+                let point = self.to_webview_point(pt);
+                let _ = unsafe { cc3.DragOver(grfkeystate.0, point, pdweffect as *mut u32) };
+            }
+
+            // Cache the effect and default to copy if unset
+            unsafe {
+                if (*pdweffect).0 == 0 {
+                    *pdweffect = DROPEFFECT_COPY;
+                }
+                self.cached_effect.set(*pdweffect);
+            }
+        } else {
+            // Return cached effect when throttled
+            unsafe {
+                *pdweffect = self.cached_effect.get();
             }
         }
 
@@ -196,7 +222,11 @@ fn extract_paths_from_hdrop(data_obj: &IDataObject) -> Vec<PathBuf> {
 
 /// Registers the window as a drop target.
 pub fn register_drop_target(hwnd: HWND) -> windows::core::Result<()> {
-    let target = DropTarget { hwnd };
+    let target = DropTarget {
+        hwnd,
+        last_dragover: Cell::new(None),
+        cached_effect: Cell::new(DROPEFFECT_COPY),
+    };
     let target_interface: IDropTarget = target.into();
     unsafe { RegisterDragDrop(hwnd, &target_interface) }
 }

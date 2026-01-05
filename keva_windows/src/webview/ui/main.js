@@ -84,6 +84,8 @@ const Main = {
             container: this.dom.attachments,
         });
 
+        Drop.init();
+
         // Set up event handlers
         this.setupEventHandlers();
 
@@ -243,6 +245,12 @@ const Main = {
             if (e.key === 'Tab') {
                 e.preventDefault();
             } else if (e.key === 'Escape') {
+                // During drag, just cancel the drag instead of hiding
+                if (Drop.isDragging) {
+                    Drop.isDragging = false;
+                    Drop.clearDropCursor();
+                    return;
+                }
                 Api.send({type: 'hide'});
             } else if (e.key === 's' && e.ctrlKey && !e.altKey && !e.shiftKey) {
                 e.preventDefault();
@@ -306,6 +314,15 @@ const Main = {
                 State.data.attachments = msg.attachments || [];
                 Attachments.render();
                 self.updateAddFilesBtn();
+
+                // Insert links if pending from drop
+                if (State.data.pendingLinkInsert) {
+                    Drop.insertAttachmentLinks(
+                        State.data.pendingLinkInsert.files,
+                        State.data.pendingLinkInsert.position
+                    );
+                    State.data.pendingLinkInsert = null;
+                }
 
                 // Skip editor reload if already showing this key (e.g., after adding attachments)
                 if (Editor.currentKey === msg.key) {

@@ -578,6 +578,8 @@ onto attachments pane adds them. Multi-file operations show "Apply to all" check
 | TC-M10-04 | "Apply to all" checkbox applies to remaining files | ❌      |
 | TC-M10-05 | Drop onto trashed key rejected                     | ❌      |
 | TC-M10-06 | Drag multiple selected attachments to Monaco       | ❌      |
+| TC-M10-07 | Drop text from external app onto Monaco            | ❌      |
+| TC-M10-08 | Escape during drag cancels drag, doesn't hide      | ❌      |
 
 ---
 
