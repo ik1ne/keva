@@ -5,31 +5,32 @@ and includes test cases for verification.
 
 ## Milestone Overview
 
-| #    | Milestone              | Description                                  | Status |
-|------|------------------------|----------------------------------------------|--------|
-| M0   | keva_core Verification | Verify keva_core matches keva_core.md spec   | ✅      |
-| M1   | Window Skeleton        | Borderless window, resize, tray icon         | ✅      |
-| M2   | WebView + Bridge       | WebView2 hosting, postMessage, dark theme    | ✅      |
-| M3   | Worker Thread          | Main↔Worker mpsc, keva_core integration      | ✅      |
-| M4   | Search Engine          | Nucleo on main thread, progressive results   | ✅      |
-| M5   | Key List               | Left pane, create/rename/delete, selection   | ✅      |
-| M6   | Monaco Editor          | FileSystemHandle, markdown mode, auto-save   | ✅      |
-| M7   | Four-State Focus       | Focus model, keyboard navigation, dimming    | ✅      |
-| M8   | Attachments Display    | File list, sizes, icons, thumbnails, picker  | ✅      |
-| M9   | Attachment Operations  | Remove with confirmation, inline rename      | ✅      |
-| M10a | CompositionController  | WebView2 migration for native drag-drop      | ✅      |
-| M10  | Attachment Drag & Drop | Drag to Monaco, file drop, multi-file batch  | ✅      |
-| M11  | Clipboard              | Native read, paste intercept, copy shortcuts | ❌      |
-| M12  | Edit/Preview Toggle    | Markdown renderer, att: link transform       | ❌      |
-| M13  | Trash                  | Trash section, restore, GC triggers          | ❌      |
-| M14  | Settings               | Dialog, config persistence, theme            | ❌      |
-| M15  | Global Hotkey          | Ctrl+Alt+K registration, conflict detection  | ❌      |
-| M16  | Single Instance        | Named mutex, activate existing window        | ❌      |
-| M17  | Window Position Memory | Per-monitor position, off-screen check       | ❌      |
-| M18  | First-Run Dialog       | Welcome message, launch at login checkbox    | ❌      |
-| M19  | Monaco Bundling        | Embed resources, single exe                  | ❌      |
-| M20  | Installer              | WiX/MSIX, uninstaller, data deletion prompt  | ❌      |
-| M21  | Layout Polish          | Resizable panes, layout persistence          | ❌      |
+| #    | Milestone              | Description                                   | Status |
+|------|------------------------|-----------------------------------------------|--------|
+| M0   | keva_core Verification | Verify keva_core matches keva_core.md spec    | ✅      |
+| M1   | Window Skeleton        | Borderless window, resize, tray icon          | ✅      |
+| M2   | WebView + Bridge       | WebView2 hosting, postMessage, dark theme     | ✅      |
+| M3   | Worker Thread          | Main↔Worker mpsc, keva_core integration       | ✅      |
+| M4   | Search Engine          | Nucleo on main thread, progressive results    | ✅      |
+| M5   | Key List               | Left pane, create/rename/delete, selection    | ✅      |
+| M6   | Monaco Editor          | FileSystemHandle, markdown mode, auto-save    | ✅      |
+| M7   | Four-State Focus       | Focus model, keyboard navigation, dimming     | ✅      |
+| M8   | Attachments Display    | File list, sizes, icons, thumbnails, picker   | ✅      |
+| M9   | Attachment Operations  | Remove with confirmation, inline rename       | ✅      |
+| M10a | CompositionController  | WebView2 migration for native drag-drop       | ✅      |
+| M10  | Attachment Drag & Drop | Drag to Monaco, file drop, multi-file batch   | ✅      |
+| M11  | Attachment Drag Out    | Drag attachments to external apps (copy)      | ❌      |
+| M12  | Clipboard              | Native read, paste intercept, copy shortcuts  | ❌      |
+| M13  | Edit/Preview Toggle    | Markdown renderer, att: link transform        | ❌      |
+| M14  | Trash                  | Trash section, restore, GC triggers           | ❌      |
+| M15  | Settings               | Dialog, config persistence, theme             | ❌      |
+| M16  | Global Hotkey          | Ctrl+Alt+K registration, conflict detection   | ❌      |
+| M17  | Single Instance        | Named mutex, activate existing window         | ❌      |
+| M18  | Window Position Memory | Per-monitor position, off-screen check        | ❌      |
+| M19  | First-Run Dialog       | Welcome message, launch at login checkbox     | ❌      |
+| M20  | Monaco Bundling        | Embed resources, single exe                   | ❌      |
+| M21  | Installer              | WiX/MSIX, uninstaller, WebView2 version check | ❌      |
+| M22  | Layout Polish          | Resizable panes, layout persistence           | ❌      |
 
 ---
 
@@ -583,7 +584,54 @@ onto attachments pane adds them. Multi-file operations show "Apply to all" check
 
 ---
 
-## M11: Clipboard
+## M11: Attachment Drag Out
+
+**Goal:** Drag attachments from Keva to external applications.
+
+**Description:** Drag attachments from the attachments panel to external drop targets (File Explorer, email clients,
+etc.). Uses `DragStarting` event on `ICoreWebView2CompositionController5` to intercept WebView drag and create
+`CF_HDROP` with blob paths. Supports single and multi-file selection. Copy only (attachment remains in Keva).
+
+**Prerequisites:**
+
+- WebView2 Runtime with `ICoreWebView2CompositionController5` support (DragStarting API)
+- Minimum WebView2 version enforced at app launch
+
+**Implementation Notes:**
+
+- Subscribe to `DragStarting` event on CompositionController5
+- Detect internal attachment drag via `application/x-keva-attachments` in IDataObject
+- Create new IDataObject with `CF_HDROP` containing absolute blob paths
+- Set `args.Handled = true` to suppress WebView default drag
+- Call `DoDragDrop()` with `DROPEFFECT_COPY`
+- Internal drop detection: check if paths are inside Keva blob storage directory
+
+**Drop Resolution:**
+
+When drop occurs back onto Keva window (detected via path prefix in `IDropTarget::Drop`):
+
+| Drop Location    | Action                           |
+|------------------|----------------------------------|
+| Monaco           | Insert `[file](att:file)` links  |
+| Attachments pane | No-op (already attached)         |
+| External app     | DoDragDrop handles (file copied) |
+
+**Test Cases:**
+
+| TC        | Description                                     | Status |
+|-----------|-------------------------------------------------|--------|
+| TC-M11-01 | Drag single attachment to Explorer creates copy | ❌      |
+| TC-M11-02 | Drag multiple selected attachments to Explorer  | ❌      |
+| TC-M11-03 | Drag to email client attaches file              | ❌      |
+| TC-M11-04 | Drag from trashed key rejected (no drag start)  | ❌      |
+| TC-M11-05 | Escape cancels drag operation                   | ❌      |
+| TC-M11-06 | Internal drag to Monaco still inserts links     | ❌      |
+| TC-M11-07 | Internal drag to attachments pane is no-op      | ❌      |
+| TC-M11-08 | Monaco internal text drag-drop still works      | ❌      |
+
+---
+
+## M12: Clipboard
 
 **Goal:** Native clipboard integration with paste interception.
 
@@ -611,21 +659,21 @@ paste and requests clipboard from native. Context-aware paste behavior. Copy sho
 
 | TC        | Description                                          | Status |
 |-----------|------------------------------------------------------|--------|
-| TC-M11-01 | Paste text into search bar                           | ❌      |
-| TC-M11-02 | Paste text into Monaco                               | ❌      |
-| TC-M11-03 | Paste files adds attachments + inserts links         | ❌      |
-| TC-M11-04 | Ctrl+C in Monaco copies selected text                | ❌      |
-| TC-M11-05 | Ctrl+C in attachments copies selected files          | ❌      |
-| TC-M11-06 | Ctrl+Alt+T copies markdown, hides window             | ❌      |
-| TC-M11-07 | Ctrl+Alt+R copies rendered HTML, hides window        | ❌      |
-| TC-M11-08 | Ctrl+Alt+F copies attachments, hides window          | ❌      |
-| TC-M11-09 | "Nothing to copy" shown when no target key           | ❌      |
-| TC-M11-10 | Paste files into search bar does nothing             | ❌      |
-| TC-M11-11 | Paste text into attachments panel shows confirmation | ❌      |
+| TC-M12-01 | Paste text into search bar                           | ❌      |
+| TC-M12-02 | Paste text into Monaco                               | ❌      |
+| TC-M12-03 | Paste files adds attachments + inserts links         | ❌      |
+| TC-M12-04 | Ctrl+C in Monaco copies selected text                | ❌      |
+| TC-M12-05 | Ctrl+C in attachments copies selected files          | ❌      |
+| TC-M12-06 | Ctrl+Alt+T copies markdown, hides window             | ❌      |
+| TC-M12-07 | Ctrl+Alt+R copies rendered HTML, hides window        | ❌      |
+| TC-M12-08 | Ctrl+Alt+F copies attachments, hides window          | ❌      |
+| TC-M12-09 | "Nothing to copy" shown when no target key           | ❌      |
+| TC-M12-10 | Paste files into search bar does nothing             | ❌      |
+| TC-M12-11 | Paste text into attachments panel shows confirmation | ❌      |
 
 ---
 
-## M12: Edit/Preview Toggle
+## M13: Edit/Preview Toggle
 
 **Goal:** Toggle between markdown editing and rendered preview.
 
@@ -656,18 +704,18 @@ shows rendered markdown with inline images. Attachment links (att:filename) tran
 
 | TC        | Description                                  | Status |
 |-----------|----------------------------------------------|--------|
-| TC-M12-01 | Edit tab shows Monaco editor                 | ❌      |
-| TC-M12-02 | Preview tab shows rendered markdown          | ❌      |
-| TC-M12-03 | att: image links display inline              | ❌      |
-| TC-M12-04 | att: non-image links are clickable           | ❌      |
-| TC-M12-05 | Preview updates when switching from Edit     | ❌      |
-| TC-M12-06 | Preview is read-only (no cursor, no editing) | ❌      |
-| TC-M12-07 | Broken att: link shows placeholder           | ❌      |
-| TC-M12-08 | External links open in default browser       | ❌      |
+| TC-M13-01 | Edit tab shows Monaco editor                 | ❌      |
+| TC-M13-02 | Preview tab shows rendered markdown          | ❌      |
+| TC-M13-03 | att: image links display inline              | ❌      |
+| TC-M13-04 | att: non-image links are clickable           | ❌      |
+| TC-M13-05 | Preview updates when switching from Edit     | ❌      |
+| TC-M13-06 | Preview is read-only (no cursor, no editing) | ❌      |
+| TC-M13-07 | Broken att: link shows placeholder           | ❌      |
+| TC-M13-08 | External links open in default browser       | ❌      |
 
 ---
 
-## M13: Trash
+## M14: Trash
 
 **Goal:** Trash section with restore and permanent delete.
 
@@ -693,17 +741,17 @@ delete button removes key and files. GC runs on window hide and periodically.
 
 | TC        | Description                                       | Status |
 |-----------|---------------------------------------------------|--------|
-| TC-M13-01 | Trash section shows trashed keys                  | ❌      |
-| TC-M13-02 | Restore button moves key to active                | ❌      |
-| TC-M13-03 | Permanent delete removes key and files            | ❌      |
-| TC-M13-04 | Trashed key content is read-only                  | ❌      |
-| TC-M13-05 | Drop onto trashed key rejected                    | ❌      |
-| TC-M13-06 | Arrow keys navigate within trash section          | ❌      |
-| TC-M13-07 | Click required to enter trash section from active | ❌      |
+| TC-M14-01 | Trash section shows trashed keys                  | ❌      |
+| TC-M14-02 | Restore button moves key to active                | ❌      |
+| TC-M14-03 | Permanent delete removes key and files            | ❌      |
+| TC-M14-04 | Trashed key content is read-only                  | ❌      |
+| TC-M14-05 | Drop onto trashed key rejected                    | ❌      |
+| TC-M14-06 | Arrow keys navigate within trash section          | ❌      |
+| TC-M14-07 | Click required to enter trash section from active | ❌      |
 
 ---
 
-## M14: Settings
+## M15: Settings
 
 **Goal:** Settings dialog with persistent configuration.
 
@@ -725,17 +773,17 @@ Applied immediately to running app.
 
 | TC        | Description                                  | Status |
 |-----------|----------------------------------------------|--------|
-| TC-M14-01 | Ctrl+, opens settings dialog                 | ❌      |
-| TC-M14-02 | Tray menu opens settings                     | ❌      |
-| TC-M14-03 | Theme change applies immediately             | ❌      |
-| TC-M14-04 | Settings saved to config.toml                | ❌      |
-| TC-M14-05 | Esc closes settings dialog                   | ❌      |
-| TC-M14-06 | Launch at login toggle creates/removes entry | ❌      |
-| TC-M14-07 | TTL settings are editable                    | ❌      |
+| TC-M15-01 | Ctrl+, opens settings dialog                 | ❌      |
+| TC-M15-02 | Tray menu opens settings                     | ❌      |
+| TC-M15-03 | Theme change applies immediately             | ❌      |
+| TC-M15-04 | Settings saved to config.toml                | ❌      |
+| TC-M15-05 | Esc closes settings dialog                   | ❌      |
+| TC-M15-06 | Launch at login toggle creates/removes entry | ❌      |
+| TC-M15-07 | TTL settings are editable                    | ❌      |
 
 ---
 
-## M15: Global Hotkey
+## M16: Global Hotkey
 
 **Goal:** System-wide Ctrl+Alt+K to show window.
 
@@ -760,14 +808,14 @@ with other applications. Fallback: double-click exe to show window.
 
 | TC        | Description                                 | Status |
 |-----------|---------------------------------------------|--------|
-| TC-M15-01 | Ctrl+Alt+K shows window from any app        | ❌      |
-| TC-M15-02 | Hotkey works when window already visible    | ❌      |
-| TC-M15-03 | Custom hotkey can be configured in settings | ❌      |
-| TC-M15-04 | Double-click exe shows window as fallback   | ❌      |
+| TC-M16-01 | Ctrl+Alt+K shows window from any app        | ❌      |
+| TC-M16-02 | Hotkey works when window already visible    | ❌      |
+| TC-M16-03 | Custom hotkey can be configured in settings | ❌      |
+| TC-M16-04 | Double-click exe shows window as fallback   | ❌      |
 
 ---
 
-## M16: Single Instance
+## M17: Single Instance
 
 **Goal:** Ensure only one instance runs at a time.
 
@@ -786,13 +834,13 @@ launching new.
 
 | TC        | Description                             | Status |
 |-----------|-----------------------------------------|--------|
-| TC-M16-01 | Second launch activates existing window | ❌      |
-| TC-M16-02 | Second launch exits after activation    | ❌      |
-| TC-M16-03 | Works when existing window is hidden    | ❌      |
+| TC-M17-01 | Second launch activates existing window | ❌      |
+| TC-M17-02 | Second launch exits after activation    | ❌      |
+| TC-M17-03 | Works when existing window is hidden    | ❌      |
 
 ---
 
-## M17: Window Position Memory
+## M18: Window Position Memory
 
 **Goal:** Remember window position per monitor.
 
@@ -810,13 +858,13 @@ subsequent launches. Handle monitor configuration changes gracefully.
 
 | TC        | Description                             | Status |
 |-----------|-----------------------------------------|--------|
-| TC-M17-01 | Position restored on next launch        | ❌      |
-| TC-M17-02 | Size restored on next launch            | ❌      |
-| TC-M17-03 | First launch centers on primary monitor | ❌      |
+| TC-M18-01 | Position restored on next launch        | ❌      |
+| TC-M18-02 | Size restored on next launch            | ❌      |
+| TC-M18-03 | First launch centers on primary monitor | ❌      |
 
 ---
 
-## M18: First-Run Dialog
+## M19: First-Run Dialog
 
 **Goal:** Welcome experience on first launch.
 
@@ -844,14 +892,14 @@ Setup: Delete config.toml before testing.
 
 | TC        | Description                                 | Status |
 |-----------|---------------------------------------------|--------|
-| TC-M18-01 | First launch (no config) shows welcome      | ❌      |
-| TC-M18-02 | Get Started button closes dialog            | ❌      |
-| TC-M18-03 | Subsequent launches skip welcome dialog     | ❌      |
-| TC-M18-04 | Launch at login checkbox persists to config | ❌      |
+| TC-M19-01 | First launch (no config) shows welcome      | ❌      |
+| TC-M19-02 | Get Started button closes dialog            | ❌      |
+| TC-M19-03 | Subsequent launches skip welcome dialog     | ❌      |
+| TC-M19-04 | Launch at login checkbox persists to config | ❌      |
 
 ---
 
-## M19: Monaco Bundling
+## M20: Monaco Bundling
 
 **Goal:** Embed Monaco and resources in single executable.
 
@@ -871,24 +919,34 @@ Setup: Disconnect network or use airplane mode.
 
 | TC        | Description                             | Status |
 |-----------|-----------------------------------------|--------|
-| TC-M19-01 | App launches without network connection | ❌      |
-| TC-M19-02 | Monaco editor functions without network | ❌      |
-| TC-M19-03 | All UI assets load (no broken images)   | ❌      |
+| TC-M20-01 | App launches without network connection | ❌      |
+| TC-M20-02 | Monaco editor functions without network | ❌      |
+| TC-M20-03 | All UI assets load (no broken images)   | ❌      |
 
 ---
 
-## M20: Installer
+## M21: Installer
 
-**Goal:** Professional installer with clean uninstall.
+**Goal:** Professional installer with clean uninstall and WebView2 version check.
 
 **Description:** Create Windows installer (WiX or MSIX). Install to Program Files. Register in Add/Remove Programs.
-Uninstaller removes files and optionally data.
+Uninstaller removes files and optionally data. Verify WebView2 Runtime meets minimum version requirement.
 
 **Installation:**
 
 - Install to `%ProgramFiles%\Keva`
 - Add to Start Menu
 - Register uninstaller in registry
+
+**WebView2 Version Check:**
+
+Keva requires WebView2 Runtime with `ICoreWebView2CompositionController5` support (DragStarting API).
+
+| Scenario                    | Installer Behavior                          |
+|-----------------------------|---------------------------------------------|
+| WebView2 not installed      | Prompt to download/install WebView2 Runtime |
+| WebView2 version too old    | Prompt to update via Windows Update         |
+| WebView2 version sufficient | Continue installation                       |
 
 **Uninstallation:**
 
@@ -901,20 +959,23 @@ Uninstaller removes files and optionally data.
 
 **Test Cases:**
 
-| TC        | Description                           | Status |
-|-----------|---------------------------------------|--------|
-| TC-M20-01 | Installer completes without error     | ❌      |
-| TC-M20-02 | App appears in Start Menu             | ❌      |
-| TC-M20-03 | App appears in Add/Remove Programs    | ❌      |
-| TC-M20-04 | Uninstaller removes application files | ❌      |
-| TC-M20-05 | Uninstaller prompts for data deletion | ❌      |
-| TC-M20-06 | "Yes" deletes data directory          | ❌      |
-| TC-M20-07 | "No" preserves data directory         | ❌      |
-| TC-M20-08 | Upgrade install preserves user data   | ❌      |
+| TC        | Description                            | Status |
+|-----------|----------------------------------------|--------|
+| TC-M21-01 | Installer completes without error      | ❌      |
+| TC-M21-02 | App appears in Start Menu              | ❌      |
+| TC-M21-03 | App appears in Add/Remove Programs     | ❌      |
+| TC-M21-04 | Uninstaller removes application files  | ❌      |
+| TC-M21-05 | Uninstaller prompts for data deletion  | ❌      |
+| TC-M21-06 | "Yes" deletes data directory           | ❌      |
+| TC-M21-07 | "No" preserves data directory          | ❌      |
+| TC-M21-08 | Upgrade install preserves user data    | ❌      |
+| TC-M21-09 | Installer detects missing WebView2     | ❌      |
+| TC-M21-10 | Installer detects outdated WebView2    | ❌      |
+| TC-M21-11 | Installer proceeds with valid WebView2 | ❌      |
 
 ---
 
-## M21: Layout Polish
+## M22: Layout Polish
 
 **Goal:** Resizable panes with persistent layout preferences.
 
@@ -936,15 +997,15 @@ pane sizes to valid ranges.
 
 | TC        | Description                                     | Status |
 |-----------|-------------------------------------------------|--------|
-| TC-M21-01 | Drag divider resizes left pane                  | ❌      |
-| TC-M21-02 | Left pane respects minimum width (150px)        | ❌      |
-| TC-M21-03 | Left pane respects maximum width (50% window)   | ❌      |
-| TC-M21-04 | Pane sizes persist after restart                | ❌      |
-| TC-M21-05 | Window resize clamps pane sizes if needed       | ❌      |
-| TC-M21-06 | Cursor shows col-resize on left/right divider   | ❌      |
-| TC-M21-07 | Drag divider resizes attachments pane height    | ❌      |
-| TC-M21-08 | Attachments pane respects minimum height (60px) | ❌      |
-| TC-M21-09 | Attachments pane respects maximum height (50%)  | ❌      |
-| TC-M21-10 | Cursor shows row-resize on editor/att divider   | ❌      |
+| TC-M22-01 | Drag divider resizes left pane                  | ❌      |
+| TC-M22-02 | Left pane respects minimum width (150px)        | ❌      |
+| TC-M22-03 | Left pane respects maximum width (50% window)   | ❌      |
+| TC-M22-04 | Pane sizes persist after restart                | ❌      |
+| TC-M22-05 | Window resize clamps pane sizes if needed       | ❌      |
+| TC-M22-06 | Cursor shows col-resize on left/right divider   | ❌      |
+| TC-M22-07 | Drag divider resizes attachments pane height    | ❌      |
+| TC-M22-08 | Attachments pane respects minimum height (60px) | ❌      |
+| TC-M22-09 | Attachments pane respects maximum height (50%)  | ❌      |
+| TC-M22-10 | Cursor shows row-resize on editor/att divider   | ❌      |
 
 ---

@@ -375,6 +375,7 @@ else:
 **Empty State:**
 
 When no attachments exist, show centered placeholder text:
+
 ```
 ┌─────────────────────────────────────────────┐
 │                                             │
@@ -386,6 +387,7 @@ When no attachments exist, show centered placeholder text:
 **Drop Zone Overlay:**
 
 When dragging files over the attachments pane:
+
 - Overlay appears on top of existing file list
 - Shows drop hint text with highlighted border
 - Indicates valid drop target
@@ -551,7 +553,7 @@ Duplicate filenames are not allowed within a key.
 
 ### Drag & Drop
 
-**Drop Targets:**
+**Drop Targets (Import):**
 
 | Target             | Text                    | Files                             |
 |--------------------|-------------------------|-----------------------------------|
@@ -561,9 +563,16 @@ Duplicate filenames are not allowed within a key.
 | Trashed key        | Rejected                | Rejected                          |
 | Search bar         | Not a drop target       | Not a drop target                 |
 
-**Drag from Attachments Panel:**
+**Drag from Attachments Panel (Internal):**
 
 - Drag file to Monaco → Insert `[filename](att:filename)` at drop position
+
+**Drag from Attachments Panel (Export):**
+
+- Drag file to external application (Explorer, email client, etc.) → Copy file
+- Multi-select supported: all selected files included in drag
+- Trashed key attachments: drag rejected (cursor shows "not allowed")
+- Effect: Copy only (attachment remains in Keva)
 
 **Monaco Text Drop:**
 
@@ -701,3 +710,47 @@ If copy shortcut fails (no target key, no content):
 
 - Show popup: "Nothing to copy"
 - Window stays open
+
+## 8. Future Plans
+
+Features considered but not scheduled for initial release.
+
+### Drag Modifier Keys (Import)
+
+Modifier keys for dropping files into Keva from external sources:
+
+| Modifier | Effect | Description                     |
+|----------|--------|---------------------------------|
+| None     | Copy   | Default behavior (current)      |
+| Ctrl     | Copy   | Force copy (explicit)           |
+| Shift    | Move   | Delete source file after import |
+
+### Drag Modifier Keys (Export)
+
+Modifier keys for dragging files from attachments panel to external applications:
+
+| Modifier | Effect | Description                                       |
+|----------|--------|---------------------------------------------------|
+| None     | Copy   | Default behavior (current)                        |
+| Ctrl     | Copy   | Force copy (explicit)                             |
+| Shift    | Move   | Remove attachment from Keva after successful drop |
+| Alt      | Link   | Create Windows shortcut (.lnk) to blob file       |
+
+**Move (Shift+drag) considerations:**
+
+- Attachment removed only if external drop succeeds
+- If attachment referenced in markdown: offer to remove broken links after move
+
+**Link (Alt+drag) considerations:**
+
+- Shortcut points to internal blob path (`%LOCALAPPDATA%\keva\blobs\...`)
+- Shortcut breaks if Keva storage reorganized or data deleted
+- Shortcut is user-specific (won't work if shared)
+
+### Drag to Different Key
+
+Drag attachments from one key to another key in the left pane:
+
+- Drop on key in list → Copy attachment to target key's attachments
+- Conflict handling for duplicate filenames
+- Modifier keys for move vs copy semantics
