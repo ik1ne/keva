@@ -6,7 +6,6 @@ const Attachments = {
     selectedIndices: new Set(),
     lastClickedIndex: -1,
     renameState: null,
-    isDraggingOut: false,
 
     init: function (dom) {
         this.dom = dom;
@@ -96,13 +95,6 @@ const Attachments = {
             };
             e.dataTransfer.setData('application/x-keva-attachments', JSON.stringify(dragData));
             e.dataTransfer.effectAllowed = 'copy';
-
-            // Track that we're in an attachment drag (for Escape handling)
-            self.isDraggingOut = true;
-        });
-
-        this.dom.container.addEventListener('dragend', function () {
-            self.isDraggingOut = false;
         });
     },
 

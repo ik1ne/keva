@@ -245,14 +245,10 @@ const Main = {
             if (e.key === 'Tab') {
                 e.preventDefault();
             } else if (e.key === 'Escape') {
-                // During external file drag-in, just cancel the drag instead of hiding
+                // During drag, just cancel the drag instead of hiding
                 if (Drop.isDragging) {
                     Drop.isDragging = false;
                     Drop.clearDropCursor();
-                    return;
-                }
-                // During attachment drag-out, let native handle cancel (don't hide)
-                if (Attachments.isDraggingOut) {
                     return;
                 }
                 Api.send({type: 'hide'});
