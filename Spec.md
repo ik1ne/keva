@@ -578,6 +578,7 @@ Duplicate filenames are not allowed within a key.
 
 - Internal drag: Monaco built-in (`dragAndDrop: true`)
 - External text drop: DOM drop event → Monaco executeEdits
+- External text drag-out: Not supported (Monaco limitation - use copy-paste instead)
 
 **Large File Handling:**
 
