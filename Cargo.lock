@@ -801,7 +801,7 @@ dependencies = [
 [[package]]
 name = "webview2-com"
 version = "0.38.0"
-source = "git+https://github.com/ik1ne/webview2-rs.git?branch=crate_update#f4dc4345f5c61742018b47e25f8e7aa8e1fe9d04"
+source = "git+https://github.com/ik1ne/webview2-rs.git?branch=1.0.3712-prerelease#4d55bd2e69a6222239b01f1fd5cc1f496295739a"
 dependencies = [
  "webview2-com-macros",
  "webview2-com-sys",
@@ -814,7 +814,7 @@ dependencies = [
 [[package]]
 name = "webview2-com-macros"
 version = "0.8.0"
-source = "git+https://github.com/ik1ne/webview2-rs.git?branch=crate_update#f4dc4345f5c61742018b47e25f8e7aa8e1fe9d04"
+source = "git+https://github.com/ik1ne/webview2-rs.git?branch=1.0.3712-prerelease#4d55bd2e69a6222239b01f1fd5cc1f496295739a"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -824,7 +824,7 @@ dependencies = [
 [[package]]
 name = "webview2-com-sys"
 version = "0.38.0"
-source = "git+https://github.com/ik1ne/webview2-rs.git?branch=crate_update#f4dc4345f5c61742018b47e25f8e7aa8e1fe9d04"
+source = "git+https://github.com/ik1ne/webview2-rs.git?branch=1.0.3712-prerelease#4d55bd2e69a6222239b01f1fd5cc1f496295739a"
 dependencies = [
  "thiserror",
  "windows",

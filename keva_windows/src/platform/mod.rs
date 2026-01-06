@@ -1,6 +1,7 @@
 //! Win32 platform abstractions.
 
 pub mod composition;
+pub mod drag_out;
 pub mod drop_target;
 pub mod file_picker;
 pub mod handlers;

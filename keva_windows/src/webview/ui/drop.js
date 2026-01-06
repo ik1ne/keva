@@ -176,9 +176,9 @@ const Drop = {
         if (!position) return;
 
         try {
-            const filenames = JSON.parse(attachmentData);
-            if (filenames.length > 0) {
-                this.insertAttachmentLinks(filenames, position);
+            const data = JSON.parse(attachmentData);
+            if (data.filenames && data.filenames.length > 0) {
+                this.insertAttachmentLinks(data.filenames, position);
             }
         } catch (err) {
             console.error('[Drop] Failed to parse attachment data:', err);

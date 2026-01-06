@@ -72,6 +72,16 @@ impl KevaCore {
     pub fn data_dir(&self) -> &Path {
         &self.base_path
     }
+
+    /// Computes the absolute path to an attachment blob file.
+    ///
+    /// This is a static method that doesn't require a KevaCore instance,
+    /// useful for code that needs to resolve attachment paths independently
+    /// (e.g., drag-drop handlers on the main thread).
+    pub fn attachment_blob_path(base_path: &Path, key: &Key, filename: &str) -> PathBuf {
+        let key_hash = key_to_path(key);
+        base_path.join("blobs").join(key_hash).join(filename)
+    }
 }
 
 /// Read operations.

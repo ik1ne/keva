@@ -73,17 +73,27 @@ const Attachments = {
             }
         });
 
-        // Drag start for dragging attachments to Monaco
+        // Drag start for dragging attachments to Monaco or external apps
         this.dom.container.addEventListener('dragstart', function (e) {
             const item = e.target.closest('.attachment-item');
             if (!item) return;
+
+            // Block drag from trashed keys
+            if (State.data.isSelectedTrashed) {
+                e.preventDefault();
+                return;
+            }
 
             // Get selected filenames (or just the dragged one if not selected)
             const filenames = self.getDragFilenames(item);
             if (filenames.length === 0) return;
 
-            // Set custom data type for internal attachment drag
-            e.dataTransfer.setData('application/x-keva-attachments', JSON.stringify(filenames));
+            // Set custom data type with key and filenames for native drag-out
+            const dragData = {
+                key: State.data.selectedKey,
+                filenames: filenames
+            };
+            e.dataTransfer.setData('application/x-keva-attachments', JSON.stringify(dragData));
             e.dataTransfer.effectAllowed = 'copy';
         });
     },

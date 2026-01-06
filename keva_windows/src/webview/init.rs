@@ -5,20 +5,24 @@ use super::messages::OutgoingMessage;
 use super::{WEBVIEW, WebView, wm};
 use crate::keva_worker::{Request, get_data_path};
 use crate::platform::composition::CompositionHost;
+use crate::platform::drag_out::handle_drag_starting;
 use crate::render::theme::Theme;
 use std::ffi::c_void;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
 use std::thread;
+#[cfg(debug_assertions)]
+use webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_CHANNEL_SEARCH_KIND_LEAST_STABLE;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
-    COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW, CreateCoreWebView2Environment, ICoreWebView2,
-    ICoreWebView2Controller, ICoreWebView2Environment, ICoreWebView2Environment3,
+    COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW, CreateCoreWebView2EnvironmentWithOptions,
+    ICoreWebView2, ICoreWebView2CompositionController5, ICoreWebView2Controller,
+    ICoreWebView2Environment, ICoreWebView2Environment3, ICoreWebView2EnvironmentOptions,
     ICoreWebView2Settings9, ICoreWebView2WebMessageReceivedEventArgs, ICoreWebView2_3,
 };
 use webview2_com::{
-    CreateCoreWebView2CompositionControllerCompletedHandler,
+    CoreWebView2EnvironmentOptions, CreateCoreWebView2CompositionControllerCompletedHandler,
     CreateCoreWebView2EnvironmentCompletedHandler, CursorChangedEventHandler,
-    WebMessageReceivedEventHandler,
+    DragStartingEventHandler, WebMessageReceivedEventHandler,
 };
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::System::Com::CoTaskMemFree;
@@ -45,8 +49,20 @@ pub fn init_webview(
         }
     };
 
+    let options = CoreWebView2EnvironmentOptions::default();
+    // In debug builds, prefer Beta/Dev/Canary channels which have
+    // ICoreWebView2CompositionController5 for DragStarting event support
+    #[cfg(debug_assertions)]
     unsafe {
-        let _ = CreateCoreWebView2Environment(
+        options.set_channel_search_kind(COREWEBVIEW2_CHANNEL_SEARCH_KIND_LEAST_STABLE);
+    }
+    let options: ICoreWebView2EnvironmentOptions = options.into();
+
+    unsafe {
+        let _ = CreateCoreWebView2EnvironmentWithOptions(
+            None,
+            None,
+            &options,
             &CreateCoreWebView2EnvironmentCompletedHandler::create(Box::new(move |_error, env| {
                 let Some(env) = env else { return Ok(()) };
                 create_composition_controller(
@@ -119,6 +135,22 @@ fn create_composition_controller(
                         )),
                         &mut cursor_token,
                     );
+
+                    // Subscribe to DragStarting for attachment drag-out to external apps
+                    if let Ok(cc5) = composition_controller.cast::<ICoreWebView2CompositionController5>() {
+                        let mut drag_token = 0i64;
+                        let _ = cc5.add_DragStarting(
+                            &DragStartingEventHandler::create(Box::new(move |_sender, args| {
+                                if let Some(args) = args
+                                    && handle_drag_starting(&args).unwrap_or(false)
+                                {
+                                    let _ = args.SetHandled(true);
+                                }
+                                Ok(())
+                            })),
+                            &mut drag_token,
+                        );
+                    }
 
                     // Get the base controller interface
                     let Ok(controller) = composition_controller.cast::<ICoreWebView2Controller>()
