@@ -473,16 +473,25 @@ const Main = {
     },
 
     addingOverlay: null,
+    addingOverlayTimer: null,
 
     showAddingOverlay: function () {
-        if (this.addingOverlay) return;
-        this.addingOverlay = document.createElement('div');
-        this.addingOverlay.className = 'blocking-overlay';
-        this.addingOverlay.innerHTML = '<div class="blocking-overlay-message">Adding files...</div>';
-        document.body.appendChild(this.addingOverlay);
+        if (this.addingOverlay || this.addingOverlayTimer) return;
+        // Delay showing overlay to avoid brief blink for small/fast copies
+        this.addingOverlayTimer = setTimeout(() => {
+            this.addingOverlayTimer = null;
+            this.addingOverlay = document.createElement('div');
+            this.addingOverlay.className = 'blocking-overlay';
+            this.addingOverlay.innerHTML = '<div class="blocking-overlay-message">Adding files...</div>';
+            document.body.appendChild(this.addingOverlay);
+        }, 150);
     },
 
     hideAddingOverlay: function () {
+        if (this.addingOverlayTimer) {
+            clearTimeout(this.addingOverlayTimer);
+            this.addingOverlayTimer = null;
+        }
         if (this.addingOverlay) {
             this.addingOverlay.remove();
             this.addingOverlay = null;
