@@ -3,21 +3,29 @@
 //! When the user drags an attachment from the attachments pane, WebView2 fires
 //! a DragStarting event. We intercept this to create a shell data object
 //! containing the actual blob file paths, enabling drag-drop to Explorer/email/etc.
+//!
+//! Uses CompositeDataObject to wrap shell formats with custom MIME data so
+//! internal drops can be detected via dataTransfer.getData().
 
 use crate::keva_worker::get_data_path;
 use keva_core::core::KevaCore;
 use keva_core::types::Key;
+use std::cell::Cell;
 use std::os::windows::ffi::OsStrExt;
 use std::path::PathBuf;
 use std::ptr::null_mut;
 use std::sync::LazyLock;
 use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2DragStartingEventArgs;
 use windows::Win32::Foundation::{
-    DRAGDROP_S_CANCEL, DRAGDROP_S_DROP, DRAGDROP_S_USEDEFAULTCURSORS, S_OK,
+    DRAGDROP_S_CANCEL, DRAGDROP_S_DROP, DRAGDROP_S_USEDEFAULTCURSORS, E_NOTIMPL, S_FALSE, S_OK,
 };
-use windows::Win32::System::Com::{DVASPECT_CONTENT, FORMATETC, IDataObject, TYMED_HGLOBAL};
+use windows::Win32::System::Com::{
+    DATADIR_GET, DVASPECT_CONTENT, FORMATETC, IDataObject, IDataObject_Impl, IEnumFORMATETC,
+    IEnumFORMATETC_Impl, STGMEDIUM, TYMED_HGLOBAL,
+};
 use windows::Win32::System::DataExchange::RegisterClipboardFormatW;
-use windows::Win32::System::Memory::{GlobalLock, GlobalUnlock};
+use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
+use windows_core::Free;
 use windows::Win32::System::Ole::{
     DROPEFFECT, DROPEFFECT_COPY, DROPEFFECT_NONE, DoDragDrop, IDropSource, IDropSource_Impl,
 };
@@ -35,7 +43,7 @@ static CHROMIUM_CUSTOM_CF: LazyLock<u16> = LazyLock::new(|| {
     cf as u16
 });
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 struct DragData {
     key: String,
     filenames: Vec<String>,
@@ -126,7 +134,15 @@ pub fn handle_drag_starting(
         return Ok(false);
     }
 
-    let data_obj = create_shell_data_object(&paths)?;
+    let shell_obj = create_shell_data_object(&paths)?;
+
+    // Serialize drag data for internal drop detection via Chromium custom MIME format
+    let json = serde_json::to_string(&drag_data).unwrap_or_default();
+    let custom_data = create_chromium_custom_data("application/x-keva-attachments", &json);
+
+    // Wrap shell object with custom MIME data
+    let data_obj = CompositeDataObject::wrap(shell_obj, *CHROMIUM_CUSTOM_CF, custom_data);
+
     let drop_source: IDropSource = SimpleDropSource.into();
 
     let mut effect = DROPEFFECT_NONE;
@@ -167,15 +183,15 @@ fn extract_attachment_drag_data(data_obj: &IDataObject) -> Option<DragData> {
 
 /// Parses Chromium's custom MIME data format to extract our attachment data.
 ///
-/// Format (pickle): map_size:u64, then for each entry:
-///   key_len:u32, key:utf16[key_len], padding, value_len:u32, value:utf16[value_len], padding
+/// See `create_chromium_custom_data` for the binary format specification.
 fn parse_chromium_custom_data(ptr: *mut std::ffi::c_void) -> Option<DragData> {
     const TARGET_MIME: &str = "application/x-keva-attachments";
 
     let data = ptr as *const u8;
 
     unsafe {
-        let map_size = *(data as *const u64);
+        // Skip data_len at offset 0, read pair_count at offset 4
+        let pair_count = *(data.add(4) as *const u32);
         let mut offset = 8usize;
 
         let mut read_string = || {
@@ -184,11 +200,14 @@ fn parse_chromium_custom_data(ptr: *mut std::ffi::c_void) -> Option<DragData> {
             let slice = std::slice::from_raw_parts(data.add(offset) as *const u16, len);
             let s = String::from_utf16_lossy(slice);
             offset += len * 2;
-            offset = (offset + 3) & !3;
+            // Padding: if string length is odd, skip 2 bytes
+            if !len.is_multiple_of(2) {
+                offset += 2;
+            }
             s
         };
 
-        for _ in 0..map_size {
+        for _ in 0..pair_count {
             let key = read_string();
             let value = read_string();
 
@@ -199,6 +218,273 @@ fn parse_chromium_custom_data(ptr: *mut std::ffi::c_void) -> Option<DragData> {
     }
 
     None
+}
+
+/// Serializes data into Chromium's custom MIME data format (pickle).
+///
+/// Binary structure:
+/// ```text
+/// Offset 0:   [u32 LE] data_len — byte length of everything after this field
+/// Offset 4:   [u32 LE] pair_count — number of key-value pairs
+///
+/// For each pair:
+///     [u32 LE] key_len — string length in UTF-16 code units (not bytes)
+///     [key_len × 2 bytes] key — UTF-16LE encoded string
+///     [0 or 2 bytes] padding — if key_len is odd, add 2 zero bytes
+///     [u32 LE] value_len — string length in UTF-16 code units
+///     [value_len × 2 bytes] value — UTF-16LE encoded string
+///     [0 or 2 bytes] padding — if value_len is odd, add 2 zero bytes
+/// ```
+fn create_chromium_custom_data(mime_type: &str, value: &str) -> Vec<u8> {
+    // Build payload first (pair_count + pairs)
+    let mut payload = Vec::new();
+
+    // Pair count: 1 entry (u32)
+    payload.extend_from_slice(&1u32.to_le_bytes());
+
+    // Write MIME type and value
+    write_pickle_string(&mut payload, mime_type);
+    write_pickle_string(&mut payload, value);
+
+    // Build final data with data_len prefix
+    let mut data = Vec::with_capacity(4 + payload.len());
+    data.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+    data.extend(payload);
+
+    data
+}
+
+fn write_pickle_string(data: &mut Vec<u8>, s: &str) {
+    let utf16: Vec<u16> = s.encode_utf16().collect();
+    let len = utf16.len() as u32;
+    data.extend_from_slice(&len.to_le_bytes());
+    for c in &utf16 {
+        data.extend_from_slice(&c.to_le_bytes());
+    }
+    // Padding: if string length is odd, add 2 zero bytes for 4-byte alignment
+    if !len.is_multiple_of(2) {
+        data.extend_from_slice(&[0u8, 0u8]);
+    }
+}
+
+/// Wraps a shell IDataObject to add custom MIME data for internal drop detection.
+///
+/// WebView2 exposes the Chromium custom MIME format back to JavaScript when the
+/// drop occurs within the same WebView, allowing JS to read the data via
+/// `dataTransfer.getData('application/x-keva-attachments')`.
+#[implement(IDataObject)]
+struct CompositeDataObject {
+    inner: IDataObject,
+    custom_cf: u16,
+    custom_data: Vec<u8>,
+}
+
+impl CompositeDataObject {
+    fn wrap(inner: IDataObject, custom_cf: u16, custom_data: Vec<u8>) -> IDataObject {
+        let obj = Self {
+            inner,
+            custom_cf,
+            custom_data,
+        };
+        obj.into()
+    }
+
+    fn is_custom_format(&self, pformatetc: *const FORMATETC) -> bool {
+        if pformatetc.is_null() {
+            return false;
+        }
+        let fmt = unsafe { &*pformatetc };
+        fmt.cfFormat == self.custom_cf && fmt.tymed & TYMED_HGLOBAL.0 as u32 != 0
+    }
+
+    /// Creates an STGMEDIUM containing the custom MIME data.
+    ///
+    /// The returned STGMEDIUM has `pUnkForRelease: None`, meaning the caller
+    /// owns the HGLOBAL and is responsible for freeing it (standard GetData semantics).
+    fn create_custom_medium(&self) -> windows::core::Result<STGMEDIUM> {
+        let mut hglobal = unsafe { GlobalAlloc(GMEM_MOVEABLE, self.custom_data.len()) }?;
+
+        let ptr = unsafe { GlobalLock(hglobal) };
+        if ptr.is_null() {
+            unsafe { hglobal.free() };
+            return Err(windows::core::Error::empty());
+        }
+
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                self.custom_data.as_ptr(),
+                ptr as *mut u8,
+                self.custom_data.len(),
+            );
+            let _ = GlobalUnlock(hglobal);
+        }
+
+        Ok(STGMEDIUM {
+            tymed: TYMED_HGLOBAL.0 as u32,
+            u: windows::Win32::System::Com::STGMEDIUM_0 { hGlobal: hglobal },
+            pUnkForRelease: std::mem::ManuallyDrop::new(None),
+        })
+    }
+}
+
+impl IDataObject_Impl for CompositeDataObject_Impl {
+    fn GetData(&self, pformatetc: *const FORMATETC) -> windows::core::Result<STGMEDIUM> {
+        if self.is_custom_format(pformatetc) {
+            return self.create_custom_medium();
+        }
+        unsafe { self.inner.GetData(pformatetc) }
+    }
+
+    fn GetDataHere(
+        &self,
+        pformatetc: *const FORMATETC,
+        pmedium: *mut STGMEDIUM,
+    ) -> windows::core::Result<()> {
+        unsafe { self.inner.GetDataHere(pformatetc, pmedium) }
+    }
+
+    fn QueryGetData(&self, pformatetc: *const FORMATETC) -> HRESULT {
+        if self.is_custom_format(pformatetc) {
+            return S_OK;
+        }
+        unsafe { self.inner.QueryGetData(pformatetc) }
+    }
+
+    fn GetCanonicalFormatEtc(
+        &self,
+        pformatectin: *const FORMATETC,
+        pformatetcout: *mut FORMATETC,
+    ) -> HRESULT {
+        unsafe { self.inner.GetCanonicalFormatEtc(pformatectin, pformatetcout) }
+    }
+
+    fn SetData(
+        &self,
+        _pformatetc: *const FORMATETC,
+        _pmedium: *const STGMEDIUM,
+        _frelease: BOOL,
+    ) -> windows::core::Result<()> {
+        Err(windows::core::Error::from_hresult(E_NOTIMPL))
+    }
+
+    fn EnumFormatEtc(&self, dwdirection: u32) -> windows::core::Result<IEnumFORMATETC> {
+        if dwdirection != DATADIR_GET.0 as u32 {
+            return Err(windows::core::Error::from_hresult(E_NOTIMPL));
+        }
+
+        // Collect formats from inner, then append our custom format
+        let inner_enum = unsafe { self.inner.EnumFormatEtc(dwdirection)? };
+        let mut formats = Vec::new();
+
+        loop {
+            let mut fmt = [FORMATETC::default()];
+            let mut fetched = 0u32;
+            let hr = unsafe { inner_enum.Next(&mut fmt, Some(&mut fetched)) };
+            if hr != S_OK || fetched == 0 {
+                break;
+            }
+            formats.push(fmt[0]);
+        }
+
+        // Add our custom format (Chromium Web Custom MIME Data Format)
+        formats.push(FORMATETC {
+            cfFormat: self.custom_cf,
+            ptd: null_mut(),
+            dwAspect: DVASPECT_CONTENT.0,
+            lindex: -1,
+            tymed: TYMED_HGLOBAL.0 as u32,
+        });
+
+        Ok(CompositeEnumFormatEtc::create(formats))
+    }
+
+    fn DAdvise(
+        &self,
+        _pformatetc: *const FORMATETC,
+        _advf: u32,
+        _padvsink: windows_core::Ref<'_, windows::Win32::System::Com::IAdviseSink>,
+    ) -> windows::core::Result<u32> {
+        Err(windows::core::Error::from_hresult(E_NOTIMPL))
+    }
+
+    fn DUnadvise(&self, _dwconnection: u32) -> windows::core::Result<()> {
+        Err(windows::core::Error::from_hresult(E_NOTIMPL))
+    }
+
+    fn EnumDAdvise(&self) -> windows::core::Result<windows::Win32::System::Com::IEnumSTATDATA> {
+        Err(windows::core::Error::from_hresult(E_NOTIMPL))
+    }
+}
+
+/// Enumerator for FORMATETC that includes shell formats plus our custom format.
+#[implement(IEnumFORMATETC)]
+struct CompositeEnumFormatEtc {
+    formats: Vec<FORMATETC>,
+    index: Cell<usize>,
+}
+
+impl CompositeEnumFormatEtc {
+    fn create(formats: Vec<FORMATETC>) -> IEnumFORMATETC {
+        let obj = Self {
+            formats,
+            index: Cell::new(0),
+        };
+        obj.into()
+    }
+}
+
+impl IEnumFORMATETC_Impl for CompositeEnumFormatEtc_Impl {
+    fn Next(
+        &self,
+        celt: u32,
+        rgelt: *mut FORMATETC,
+        pceltfetched: *mut u32,
+    ) -> HRESULT {
+        let mut fetched = 0u32;
+        let idx = self.index.get();
+
+        for i in 0..celt as usize {
+            if idx + i >= self.formats.len() {
+                break;
+            }
+            unsafe { *rgelt.add(i) = self.formats[idx + i] };
+            fetched += 1;
+        }
+
+        self.index.set(idx + fetched as usize);
+
+        if !pceltfetched.is_null() {
+            unsafe { *pceltfetched = fetched };
+        }
+
+        if fetched == celt {
+            S_OK
+        } else {
+            S_FALSE
+        }
+    }
+
+    fn Skip(&self, celt: u32) -> windows::core::Result<()> {
+        let idx = self.index.get();
+        let new_idx = idx.saturating_add(celt as usize);
+        self.index.set(new_idx.min(self.formats.len()));
+        // Always return Ok - we skip as many as possible, clamping at the end.
+        // COM's S_FALSE ("fewer elements than requested") isn't an error condition.
+        Ok(())
+    }
+
+    fn Reset(&self) -> windows::core::Result<()> {
+        self.index.set(0);
+        Ok(())
+    }
+
+    fn Clone(&self) -> windows::core::Result<IEnumFORMATETC> {
+        let cloned = CompositeEnumFormatEtc {
+            formats: self.formats.clone(),
+            index: Cell::new(self.index.get()),
+        };
+        Ok(cloned.into())
+    }
 }
 
 /// Simple IDropSource implementation.
