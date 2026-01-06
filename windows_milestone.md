@@ -19,7 +19,7 @@ and includes test cases for verification.
 | M9   | Attachment Operations  | Remove with confirmation, inline rename       | ✅      |
 | M10a | CompositionController  | WebView2 migration for native drag-drop       | ✅      |
 | M10  | Attachment Drag & Drop | Drag to Monaco, file drop, multi-file batch   | ✅      |
-| M11  | Attachment Drag Out    | Drag attachments to external apps (copy)      | ❌      |
+| M11  | Attachment Drag Out    | Drag attachments to external apps (copy)      | ✅      |
 | M12  | Clipboard              | Native read, paste intercept, copy shortcuts  | ❌      |
 | M13  | Edit/Preview Toggle    | Markdown renderer, att: link transform        | ❌      |
 | M14  | Trash                  | Trash section, restore, GC triggers           | ❌      |
@@ -620,14 +620,14 @@ When drop occurs back onto Keva window (detected via path prefix in `IDropTarget
 
 | TC        | Description                                     | Status |
 |-----------|-------------------------------------------------|--------|
-| TC-M11-01 | Drag single attachment to Explorer creates copy | ❌      |
-| TC-M11-02 | Drag multiple selected attachments to Explorer  | ❌      |
-| TC-M11-03 | Drag to email client attaches file              | ❌      |
-| TC-M11-04 | Drag from trashed key rejected (no drag start)  | ❌      |
-| TC-M11-05 | Escape cancels drag operation                   | ❌      |
-| TC-M11-06 | Internal drag to Monaco still inserts links     | ❌      |
-| TC-M11-07 | Internal drag to attachments pane is no-op      | ❌      |
-| TC-M11-08 | Monaco internal text drag-drop still works      | ❌      |
+| TC-M11-01 | Drag single attachment to Explorer creates copy | ✅      |
+| TC-M11-02 | Drag multiple selected attachments to Explorer  | ✅      |
+| TC-M11-03 | Drag to email client attaches file              | ✅      |
+| TC-M11-04 | Drag from trashed key rejected (no drag start)  | ✅      |
+| TC-M11-05 | Escape cancels drag operation                   | ✅      |
+| TC-M11-06 | Internal drag to Monaco still inserts links     | ✅      |
+| TC-M11-07 | Internal drag to attachments pane is no-op      | ✅      |
+| TC-M11-08 | Monaco internal text drag-drop still works      | ✅      |
 
 ---
 
