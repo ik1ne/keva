@@ -24,8 +24,10 @@ use windows::Win32::System::Com::{
     IEnumFORMATETC_Impl, STGMEDIUM, TYMED_HGLOBAL,
 };
 use windows::Win32::System::DataExchange::RegisterClipboardFormatW;
-use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
-use windows_core::Free;
+use windows::Win32::System::Memory::{
+    GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock,
+};
+use windows::Win32::System::Ole::ReleaseStgMedium;
 use windows::Win32::System::Ole::{
     DROPEFFECT, DROPEFFECT_COPY, DROPEFFECT_NONE, DoDragDrop, IDropSource, IDropSource_Impl,
 };
@@ -34,6 +36,7 @@ use windows::Win32::UI::Shell::Common::ITEMIDLIST;
 use windows::Win32::UI::Shell::{
     ILClone, ILCreateFromPathW, ILFindLastID, ILFree, ILRemoveLastID, SHCreateDataObject,
 };
+use windows_core::Free;
 use windows_core::{BOOL, HRESULT, implement, w};
 
 /// Clipboard format for Chromium's custom MIME data wrapper.
@@ -166,17 +169,20 @@ fn extract_attachment_drag_data(data_obj: &IDataObject) -> Option<DragData> {
         tymed: TYMED_HGLOBAL.0 as u32,
     };
 
-    let medium = unsafe { data_obj.GetData(&formatetc) }.ok()?;
+    let mut medium = unsafe { data_obj.GetData(&formatetc) }.ok()?;
 
     let hglobal = unsafe { medium.u.hGlobal };
+    let size = unsafe { GlobalSize(hglobal) };
     let ptr = unsafe { GlobalLock(hglobal) };
     if ptr.is_null() {
+        unsafe { ReleaseStgMedium(&mut medium) };
         return None;
     }
 
-    let result = parse_chromium_custom_data(ptr);
+    let result = parse_chromium_custom_data(ptr, size);
 
     let _ = unsafe { GlobalUnlock(hglobal) };
+    unsafe { ReleaseStgMedium(&mut medium) };
 
     result
 }
@@ -184,8 +190,13 @@ fn extract_attachment_drag_data(data_obj: &IDataObject) -> Option<DragData> {
 /// Parses Chromium's custom MIME data format to extract our attachment data.
 ///
 /// See `create_chromium_custom_data` for the binary format specification.
-fn parse_chromium_custom_data(ptr: *mut std::ffi::c_void) -> Option<DragData> {
+fn parse_chromium_custom_data(ptr: *mut std::ffi::c_void, size: usize) -> Option<DragData> {
     const TARGET_MIME: &str = "application/x-keva-attachments";
+
+    // Minimum size: data_len (4) + pair_count (4) = 8 bytes
+    if size < 8 {
+        return None;
+    }
 
     let data = ptr as *const u8;
 
@@ -195,21 +206,34 @@ fn parse_chromium_custom_data(ptr: *mut std::ffi::c_void) -> Option<DragData> {
         let mut offset = 8usize;
 
         let mut read_string = || {
+            // Need at least 4 bytes for length
+            if offset + 4 > size {
+                return None;
+            }
             let len = *(data.add(offset) as *const u32) as usize;
             offset += 4;
+
+            // Calculate string byte size with padding
+            let byte_len = len * 2;
+            let padded_len = if len.is_multiple_of(2) {
+                byte_len
+            } else {
+                byte_len + 2
+            };
+
+            if offset + padded_len > size {
+                return None;
+            }
+
             let slice = std::slice::from_raw_parts(data.add(offset) as *const u16, len);
             let s = String::from_utf16_lossy(slice);
-            offset += len * 2;
-            // Padding: if string length is odd, skip 2 bytes
-            if !len.is_multiple_of(2) {
-                offset += 2;
-            }
-            s
+            offset += padded_len;
+            Some(s)
         };
 
         for _ in 0..pair_count {
-            let key = read_string();
-            let value = read_string();
+            let key = read_string()?;
+            let value = read_string()?;
 
             if key == TARGET_MIME {
                 return serde_json::from_str(&value).ok();
@@ -355,7 +379,10 @@ impl IDataObject_Impl for CompositeDataObject_Impl {
         pformatectin: *const FORMATETC,
         pformatetcout: *mut FORMATETC,
     ) -> HRESULT {
-        unsafe { self.inner.GetCanonicalFormatEtc(pformatectin, pformatetcout) }
+        unsafe {
+            self.inner
+                .GetCanonicalFormatEtc(pformatectin, pformatetcout)
+        }
     }
 
     fn SetData(
@@ -434,12 +461,7 @@ impl CompositeEnumFormatEtc {
 }
 
 impl IEnumFORMATETC_Impl for CompositeEnumFormatEtc_Impl {
-    fn Next(
-        &self,
-        celt: u32,
-        rgelt: *mut FORMATETC,
-        pceltfetched: *mut u32,
-    ) -> HRESULT {
+    fn Next(&self, celt: u32, rgelt: *mut FORMATETC, pceltfetched: *mut u32) -> HRESULT {
         let mut fetched = 0u32;
         let idx = self.index.get();
 
@@ -457,11 +479,7 @@ impl IEnumFORMATETC_Impl for CompositeEnumFormatEtc_Impl {
             unsafe { *pceltfetched = fetched };
         }
 
-        if fetched == celt {
-            S_OK
-        } else {
-            S_FALSE
-        }
+        if fetched == celt { S_OK } else { S_FALSE }
     }
 
     fn Skip(&self, celt: u32) -> windows::core::Result<()> {
