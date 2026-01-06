@@ -20,8 +20,8 @@ and includes test cases for verification.
 | M10a | CompositionController  | WebView2 migration for native drag-drop       | ✅      |
 | M10  | Attachment Drag & Drop | Drag to Monaco, file drop, multi-file batch   | ✅      |
 | M11  | Attachment Drag Out    | Drag attachments to external apps (copy)      | ✅      |
-| M12  | Clipboard              | Native read, paste intercept, copy shortcuts  | ❌      |
-| M13  | Edit/Preview Toggle    | Markdown renderer, att: link transform        | ❌      |
+| M12  | Edit/Preview Toggle    | Markdown renderer, att: link transform        | ❌      |
+| M13  | Clipboard              | Native read, paste intercept, copy shortcuts  | ❌      |
 | M14  | Trash                  | Trash section, restore, GC triggers           | ❌      |
 | M15  | Settings               | Dialog, config persistence, theme             | ❌      |
 | M16  | Global Hotkey          | Ctrl+Alt+K registration, conflict detection   | ❌      |
@@ -631,49 +631,7 @@ When drop occurs back onto Keva window (detected via path prefix in `IDropTarget
 
 ---
 
-## M12: Clipboard
-
-**Goal:** Native clipboard integration with paste interception.
-
-**Description:** Native reads clipboard via Win32 API (CF_HDROP for files, CF_UNICODETEXT for text). WebView intercepts
-paste and requests clipboard from native. Context-aware paste behavior. Copy shortcuts for markdown, HTML, and files.
-
-**Implementation Notes:**
-
-- `OpenClipboard`, `GetClipboardData(CF_HDROP)` for files
-- `GetClipboardData(CF_UNICODETEXT)` for text
-- WebView: `addEventListener('paste', preventDefault)`
-- WebView sends `{ type: "readClipboard" }` to native
-- Paste text into attachments panel: show confirmation dialog
-
-**Copy Shortcuts:**
-
-| Shortcut   | Action                             | On Success  |
-|------------|------------------------------------|-------------|
-| Ctrl+C     | Copy selection (context-dependent) | Stay open   |
-| Ctrl+Alt+T | Copy whole markdown as plain text  | Hide window |
-| Ctrl+Alt+R | Copy rendered preview as HTML      | Hide window |
-| Ctrl+Alt+F | Copy all attachments to clipboard  | Hide window |
-
-**Test Cases:**
-
-| TC        | Description                                          | Status |
-|-----------|------------------------------------------------------|--------|
-| TC-M12-01 | Paste text into search bar                           | ❌      |
-| TC-M12-02 | Paste text into Monaco                               | ❌      |
-| TC-M12-03 | Paste files adds attachments + inserts links         | ❌      |
-| TC-M12-04 | Ctrl+C in Monaco copies selected text                | ❌      |
-| TC-M12-05 | Ctrl+C in attachments copies selected files          | ❌      |
-| TC-M12-06 | Ctrl+Alt+T copies markdown, hides window             | ❌      |
-| TC-M12-07 | Ctrl+Alt+R copies rendered HTML, hides window        | ❌      |
-| TC-M12-08 | Ctrl+Alt+F copies attachments, hides window          | ❌      |
-| TC-M12-09 | "Nothing to copy" shown when no target key           | ❌      |
-| TC-M12-10 | Paste files into search bar does nothing             | ❌      |
-| TC-M12-11 | Paste text into attachments panel shows confirmation | ❌      |
-
----
-
-## M13: Edit/Preview Toggle
+## M12: Edit/Preview Toggle
 
 **Goal:** Toggle between markdown editing and rendered preview.
 
@@ -704,14 +662,56 @@ shows rendered markdown with inline images. Attachment links (att:filename) tran
 
 | TC        | Description                                  | Status |
 |-----------|----------------------------------------------|--------|
-| TC-M13-01 | Edit tab shows Monaco editor                 | ❌      |
-| TC-M13-02 | Preview tab shows rendered markdown          | ❌      |
-| TC-M13-03 | att: image links display inline              | ❌      |
-| TC-M13-04 | att: non-image links are clickable           | ❌      |
-| TC-M13-05 | Preview updates when switching from Edit     | ❌      |
-| TC-M13-06 | Preview is read-only (no cursor, no editing) | ❌      |
-| TC-M13-07 | Broken att: link shows placeholder           | ❌      |
-| TC-M13-08 | External links open in default browser       | ❌      |
+| TC-M12-01 | Edit tab shows Monaco editor                 | ❌      |
+| TC-M12-02 | Preview tab shows rendered markdown          | ❌      |
+| TC-M12-03 | att: image links display inline              | ❌      |
+| TC-M12-04 | att: non-image links are clickable           | ❌      |
+| TC-M12-05 | Preview updates when switching from Edit     | ❌      |
+| TC-M12-06 | Preview is read-only (no cursor, no editing) | ❌      |
+| TC-M12-07 | Broken att: link shows placeholder           | ❌      |
+| TC-M12-08 | External links open in default browser       | ❌      |
+
+---
+
+## M13: Clipboard
+
+**Goal:** Native clipboard integration with paste interception.
+
+**Description:** Native reads clipboard via Win32 API (CF_HDROP for files, CF_UNICODETEXT for text). WebView intercepts
+paste and requests clipboard from native. Context-aware paste behavior. Copy shortcuts for markdown, HTML, and files.
+
+**Implementation Notes:**
+
+- `OpenClipboard`, `GetClipboardData(CF_HDROP)` for files
+- `GetClipboardData(CF_UNICODETEXT)` for text
+- WebView: `addEventListener('paste', preventDefault)`
+- WebView sends `{ type: "readClipboard" }` to native
+- Paste text into attachments panel: show confirmation dialog
+
+**Copy Shortcuts:**
+
+| Shortcut   | Action                             | On Success  |
+|------------|------------------------------------|-------------|
+| Ctrl+C     | Copy selection (context-dependent) | Stay open   |
+| Ctrl+Alt+T | Copy whole markdown as plain text  | Hide window |
+| Ctrl+Alt+R | Copy rendered preview as HTML      | Hide window |
+| Ctrl+Alt+F | Copy all attachments to clipboard  | Hide window |
+
+**Test Cases:**
+
+| TC        | Description                                          | Status |
+|-----------|------------------------------------------------------|--------|
+| TC-M13-01 | Paste text into search bar                           | ❌      |
+| TC-M13-02 | Paste text into Monaco                               | ❌      |
+| TC-M13-03 | Paste files adds attachments + inserts links         | ❌      |
+| TC-M13-04 | Ctrl+C in Monaco copies selected text                | ❌      |
+| TC-M13-05 | Ctrl+C in attachments copies selected files          | ❌      |
+| TC-M13-06 | Ctrl+Alt+T copies markdown, hides window             | ❌      |
+| TC-M13-07 | Ctrl+Alt+R copies rendered HTML, hides window        | ❌      |
+| TC-M13-08 | Ctrl+Alt+F copies attachments, hides window          | ❌      |
+| TC-M13-09 | "Nothing to copy" shown when no target key           | ❌      |
+| TC-M13-10 | Paste files into search bar does nothing             | ❌      |
+| TC-M13-11 | Paste text into attachments panel shows confirmation | ❌      |
 
 ---
 
