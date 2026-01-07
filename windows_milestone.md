@@ -20,7 +20,7 @@ and includes test cases for verification.
 | M10a | CompositionController  | WebView2 migration for native drag-drop       | ✅      |
 | M10  | Attachment Drag & Drop | Drag to Monaco, file drop, multi-file batch   | ✅      |
 | M11  | Attachment Drag Out    | Drag attachments to external apps (copy)      | ✅      |
-| M12  | Edit/Preview Toggle    | Markdown renderer, att: link transform        | ❌      |
+| M12  | Edit/Preview Toggle    | Markdown renderer, att: link transform        | ✅      |
 | M13  | Clipboard              | Native read, paste intercept, copy shortcuts  | ❌      |
 | M14  | Trash                  | Trash section, restore, GC triggers           | ❌      |
 | M15  | Settings               | Dialog, config persistence, theme             | ❌      |
@@ -664,14 +664,14 @@ shows rendered markdown. Standard markdown syntax: `![](att:file)` for inline im
 
 | TC        | Description                                  | Status |
 |-----------|----------------------------------------------|--------|
-| TC-M12-01 | Edit tab shows Monaco editor                 | ❌      |
-| TC-M12-02 | Preview tab shows rendered markdown          | ❌      |
-| TC-M12-03 | `![](att:img)` displays inline image         | ❌      |
-| TC-M12-04 | `[](att:file)` links are clickable           | ❌      |
-| TC-M12-05 | Preview updates when switching from Edit     | ❌      |
-| TC-M12-06 | Preview is read-only (no cursor, no editing) | ❌      |
-| TC-M12-07 | Broken att: link shows placeholder           | ❌      |
-| TC-M12-08 | External links open in default browser       | ❌      |
+| TC-M12-01 | Edit tab shows Monaco editor                 | ✅      |
+| TC-M12-02 | Preview tab shows rendered markdown          | ✅      |
+| TC-M12-03 | `![](att:img)` displays inline image         | ✅      |
+| TC-M12-04 | `[](att:file)` links are clickable           | ✅      |
+| TC-M12-05 | Preview updates when switching from Edit     | ✅      |
+| TC-M12-06 | Preview is read-only (no cursor, no editing) | ✅      |
+| TC-M12-07 | Broken att: link shows placeholder           | ✅      |
+| TC-M12-08 | External links open in default browser       | ✅      |
 
 ---
 
