@@ -491,10 +491,10 @@ The left pane has a separate trash section at the bottom:
 **Link Insertion Format (multiple files):**
 
 ```markdown
-[report.pdf](att:report.pdf), [data.xlsx](att:data.xlsx), [image.png](att:image.png)
+[report.pdf](att:report.pdf), [data.xlsx](att:data.xlsx), ![image.png](att:image.png)
 ```
 
-Comma-separated inline. User can reformat as needed.
+Images use `![]()` syntax for inline preview rendering. Comma-separated inline. User can reformat as needed.
 
 **Overwrite Confirmation:**
 
@@ -565,7 +565,7 @@ Duplicate filenames are not allowed within a key.
 
 **Drag from Attachments Panel (Internal):**
 
-- Drag file to Monaco → Insert `[filename](att:filename)` at drop position
+- Drag file to Monaco → Insert `[filename](att:filename)` at drop position (or `![filename](att:filename)` for images)
 
 **Drag from Attachments Panel (Export):**
 
