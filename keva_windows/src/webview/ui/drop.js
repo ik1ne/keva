@@ -290,7 +290,8 @@ const Drop = {
         if (!Editor.instance || !position || filenames.length === 0) return;
 
         const links = filenames.map(function (filename) {
-            return '[' + filename + '](att:' + filename + ')';
+            var prefix = Editor.isImageFile(filename) ? '!' : '';
+            return prefix + '[' + filename + '](att:' + filename + ')';
         }).join(', ');
 
         // 1. Focus window and editor FIRST
