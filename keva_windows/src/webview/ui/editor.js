@@ -271,8 +271,15 @@ const Editor = {
         }));
         const self = this;
         // Match both ![text](att:file) and [text](att:file)
-        // Regex allows ) in filename if followed by non-whitespace (handles "a (1).txt")
-        return markdown.replace(/(!?)\[([^\]]*)\]\(att:((?:[^)]|\)(?=[^\s\]]))+)\)/g, function (match, bang, text, filename) {
+        // Filename in URL should be URL-encoded, so [^)]+ is safe
+        return markdown.replace(/(!?)\[([^\]]*)\]\(att:([^)]+)\)/g, function (match, bang, text, urlFilename) {
+            // Decode the filename from URL (handles %20, %29, etc.)
+            var filename;
+            try {
+                filename = decodeURIComponent(urlFilename);
+            } catch (e) {
+                filename = urlFilename;
+            }
             if (!attSet.has(filename)) {
                 return match;
             }

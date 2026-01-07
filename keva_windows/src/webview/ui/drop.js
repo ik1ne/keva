@@ -291,7 +291,7 @@ const Drop = {
 
         const links = filenames.map(function (filename) {
             var prefix = Editor.isImageFile(filename) ? '!' : '';
-            return prefix + '[' + filename + '](att:' + filename + ')';
+            return prefix + '[' + filename + '](att:' + encodeURIComponent(filename) + ')';
         }).join(', ');
 
         // 1. Focus window and editor FIRST

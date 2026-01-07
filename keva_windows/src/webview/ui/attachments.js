@@ -276,8 +276,9 @@ const Attachments = {
     isReferenced: function (filename) {
         if (!Editor.instance) return false;
         const content = Editor.instance.getValue();
-        // Match [any text](att:filename)
-        const escaped = filename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // Match [any text](att:filename) - filename should be URL-encoded
+        const encoded = encodeURIComponent(filename);
+        const escaped = encoded.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const pattern = new RegExp('\\]\\(att:' + escaped + '\\)', 'i');
         return pattern.test(content);
     },
@@ -391,8 +392,8 @@ const Attachments = {
         // Update references in editor if requested (frontend handles this)
         if (updateReferences && Editor.instance) {
             const content = Editor.instance.getValue();
-            const oldPattern = '](att:' + oldFilename + ')';
-            const newPattern = '](att:' + newFilename + ')';
+            const oldPattern = '](att:' + encodeURIComponent(oldFilename) + ')';
+            const newPattern = '](att:' + encodeURIComponent(newFilename) + ')';
             const updated = content.split(oldPattern).join(newPattern);
             if (updated !== content) {
                 Editor.instance.setValue(updated);
