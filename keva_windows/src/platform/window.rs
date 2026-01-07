@@ -5,7 +5,7 @@ use crate::platform::{
     drop_target::register_drop_target,
     handlers::{
         get_resize_border, on_activate, on_command, on_create, on_destroy, on_getminmaxinfo,
-        on_keydown, on_nccalcsize, on_open_file_picker, on_paint, on_send_file_handle, on_setfocus,
+        on_direct_message, on_keydown, on_nccalcsize, on_open_file_picker, on_paint, on_setfocus,
         on_settingchange, on_size, on_trayicon, on_webview_message, scale_for_dpi,
         set_current_theme,
     },
@@ -203,7 +203,7 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             LRESULT(0)
         }
         wm::WEBVIEW_MESSAGE => on_webview_message(lparam),
-        wm::SEND_FILE_HANDLE => on_send_file_handle(lparam),
+        wm::DIRECT_MESSAGE => on_direct_message(lparam),
         wm::OPEN_FILE_PICKER => on_open_file_picker(hwnd, lparam),
         WM_CLOSE => {
             if let Some(wv) = WEBVIEW.get() {

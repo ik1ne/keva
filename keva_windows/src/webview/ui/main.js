@@ -51,7 +51,10 @@ const Main = {
             trashSection: document.getElementById('trash-section'),
             trashList: document.getElementById('trash-list'),
             trashCount: document.getElementById('trash-count'),
+            editorTabs: document.getElementById('editor-tabs'),
+            editorViewport: document.querySelector('.editor-viewport'),
             editorContainer: document.getElementById('editor-container'),
+            previewContainer: document.getElementById('preview-container'),
             emptyState: document.getElementById('empty-state'),
             attachments: document.getElementById('attachments-container'),
             addFilesBtn: document.getElementById('add-files-btn'),
@@ -61,7 +64,7 @@ const Main = {
         this.paneElements = {
             search: this.dom.searchBar,
             keyList: this.dom.leftPane,
-            editor: this.dom.editorContainer,
+            editor: this.dom.editorViewport,
             attachments: this.dom.attachments,
         };
 
@@ -76,9 +79,15 @@ const Main = {
         Editor.init({
             editorContainer: this.dom.editorContainer,
             emptyState: this.dom.emptyState,
+            editorTabs: this.dom.editorTabs,
+            editorViewport: this.dom.editorViewport,
+            previewContainer: this.dom.previewContainer,
         }, function () {
             Api.send({type: 'ready'});
         });
+
+        // Set up tab handlers
+        this.setupTabHandlers();
 
         Attachments.init({
             container: this.dom.attachments,
@@ -97,7 +106,8 @@ const Main = {
         this.initPaneClasses();
         this.updateAddFilesBtn();
         this.dom.searchInput.focus();
-        Editor.showEmpty();
+        Editor.resetState();
+        this.hideEditorUI();
     },
 
     initPaneClasses: function () {
@@ -125,7 +135,8 @@ const Main = {
                 State.data.attachments = [];
                 Attachments.render();
                 KeyList.updateSelection();
-                Editor.showEmpty();
+                Editor.resetState();
+                self.hideEditorUI();
                 self.updateAddFilesBtn();
             }
             self.updateSearchButton();
@@ -261,6 +272,106 @@ const Main = {
         });
     },
 
+    setupTabHandlers: function () {
+        const self = this;
+        const tabs = this.dom.editorTabs.querySelectorAll('.tab');
+
+        tabs.forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                const mode = tab.dataset.tab;
+                if (State.data.editorMode === mode) return;
+                self.switchEditorMode(mode);
+            });
+        });
+    },
+
+    switchEditorMode: function (mode) {
+        const editorContainer = this.dom.editorContainer;
+        const previewContainer = this.dom.previewContainer;
+        const tabs = this.dom.editorTabs.querySelectorAll('.tab');
+
+        // Set editor pane as active when switching modes
+        this.setActivePane('editor');
+
+        // Save scroll position before switch
+        if (State.data.editorMode === 'preview') {
+            Editor.previewScrollTop = previewContainer.scrollTop;
+        } else if (Editor.instance) {
+            Editor.editScrollTop = Editor.instance.getScrollTop();
+        }
+
+        State.data.editorMode = mode;
+
+        // Update tab active state
+        tabs.forEach(function (tab) {
+            if (tab.dataset.tab === mode) {
+                tab.classList.add('active');
+            } else {
+                tab.classList.remove('active');
+            }
+        });
+
+        if (mode === 'preview') {
+            editorContainer.style.display = 'none';
+            previewContainer.classList.remove('hidden');
+            previewContainer.innerHTML = Editor.renderPreview();
+            this.setupPreviewImages(previewContainer);
+            previewContainer.scrollTop = Editor.previewScrollTop || 0;
+        } else {
+            previewContainer.classList.add('hidden');
+            editorContainer.style.display = 'block';
+            if (Editor.instance) {
+                Editor.instance.focus();
+                if (Editor.editScrollTop != null) {
+                    Editor.instance.setScrollTop(Editor.editScrollTop);
+                }
+            }
+        }
+    },
+
+    setupPreviewImages: function (container) {
+        container.querySelectorAll('img').forEach(function (img) {
+            img.addEventListener('error', function () {
+                img.classList.add('broken-image');
+                img.title = 'Attachment not found: ' + (img.alt || 'unknown');
+            });
+        });
+    },
+
+    showEditorUI: function () {
+        this.dom.editorTabs.style.display = 'flex';
+        this.dom.editorViewport.style.display = 'block';
+        this.dom.emptyState.style.display = 'none';
+    },
+
+    hideEditorUI: function (message) {
+        this.dom.editorTabs.style.display = 'none';
+        this.dom.editorViewport.style.display = 'none';
+        this.dom.previewContainer.classList.add('hidden');
+        this.dom.editorContainer.style.display = 'none';
+        this.dom.emptyState.textContent = message || 'Select a key or type to search';
+        this.dom.emptyState.style.display = 'flex';
+    },
+
+    resetToEditMode: function () {
+        State.data.editorMode = 'edit';
+        Editor.editScrollTop = 0;
+        Editor.previewScrollTop = 0;
+        Editor.invalidatePreviewCache();
+
+        const tabs = this.dom.editorTabs.querySelectorAll('.tab');
+        tabs.forEach(function (tab) {
+            if (tab.dataset.tab === 'edit') {
+                tab.classList.add('active');
+            } else {
+                tab.classList.remove('active');
+            }
+        });
+
+        this.dom.previewContainer.classList.add('hidden');
+        this.dom.editorContainer.style.display = 'block';
+    },
+
     initMessageHandlers: function () {
         const self = this;
 
@@ -282,7 +393,8 @@ const Main = {
                     State.clearSelection();
                     State.data.attachments = [];
                     Attachments.render();
-                    Editor.showEmpty();
+                    Editor.resetState();
+                    self.hideEditorUI();
                     self.updateAddFilesBtn();
                 }
 
@@ -315,6 +427,9 @@ const Main = {
                 Attachments.render();
                 self.updateAddFilesBtn();
 
+                // Store keyHash for preview rendering
+                Editor.keyHash = msg.keyHash;
+
                 // Insert links if pending from drop
                 if (State.data.pendingLinkInsert) {
                     Drop.insertAttachmentLinks(
@@ -326,12 +441,18 @@ const Main = {
 
                 // Skip editor reload if already showing this key (e.g., after adding attachments)
                 if (Editor.currentKey === msg.key) {
+                    // Invalidate preview cache since attachments may have changed
+                    Editor.invalidatePreviewCache();
                     return;
                 }
+
+                // Reset to edit mode when switching keys
+                self.resetToEditMode();
 
                 // Check for FileSystemHandle in additionalObjects
                 if (event.additionalObjects && event.additionalObjects.length > 0) {
                     const handle = event.additionalObjects[0];
+                    self.showEditorUI();
                     await Editor.showWithHandle(handle, msg.key, msg.readOnly);
                 } else {
                     // No handle received - show error

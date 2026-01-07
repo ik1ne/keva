@@ -23,7 +23,14 @@
             </div>
         </div>
         <div class="right-pane">
-            <div id="editor-container"></div>
+            <div class="editor-tabs" id="editor-tabs">
+                <button class="tab active" data-tab="edit">Edit</button>
+                <button class="tab" data-tab="preview">Preview</button>
+            </div>
+            <div class="editor-viewport">
+                <div id="editor-container"></div>
+                <div id="preview-container" class="hidden"></div>
+            </div>
             <div class="empty-state" id="empty-state">Select a key or type to search</div>
             <div id="attachments-container" class="attachments-container">
                 <div class="attachments-header">
@@ -35,6 +42,9 @@
         </div>
     </div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/markdown-it@14/dist/markdown-it.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@highlightjs/cdn-assets@11/highlight.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
 <script src="utils.js"></script>
 <script src="state.js"></script>

@@ -56,7 +56,8 @@ const KeyList = {
         State.setSelectedKey(keyName, isTrashed);
         this.updateSelection();
         Main.updateSearchButton();
-        Editor.showEmpty('Loading...');
+        Editor.resetState();
+        Main.hideEditorUI('Loading...');
         Api.send({type: 'select', key: keyName});
     },
 

@@ -7,10 +7,9 @@ use crate::platform::tray::{
     IDM_LAUNCH_AT_LOGIN, IDM_QUIT, IDM_SETTINGS, IDM_SHOW, remove_tray_icon, show_tray_menu,
 };
 use crate::render::theme::{MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, Theme};
-use crate::webview::{FileHandleRequest, FilePickerRequest};
-use crate::webview::WEBVIEW;
 use crate::webview::bridge::post_message;
 use crate::webview::messages::OutgoingMessage;
+use crate::webview::{DirectOutgoingMessage, FilePickerRequest, WEBVIEW};
 use std::sync::atomic::{AtomicIsize, AtomicU8, Ordering};
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_FILE_SYSTEM_HANDLE_PERMISSION_READ_ONLY,
@@ -337,16 +336,21 @@ pub fn on_webview_message(lparam: LPARAM) -> LRESULT {
     LRESULT(0)
 }
 
-/// WM_SEND_FILE_HANDLE: Create FileSystemHandle and send to WebView with additionalObjects.
-pub fn on_send_file_handle(lparam: LPARAM) -> LRESULT {
-    // LPARAM contains a Box<FileHandleRequest> pointer from the forwarder thread
-    let ptr = lparam.0 as *mut FileHandleRequest;
+/// WM_DIRECT_MESSAGE: Create FileSystemHandle and send to WebView with additionalObjects.
+pub fn on_direct_message(lparam: LPARAM) -> LRESULT {
+    let ptr = lparam.0 as *mut DirectOutgoingMessage;
     if ptr.is_null() {
         return LRESULT(0);
     }
 
     // Reconstruct the Box and take ownership
-    let request = unsafe { Box::from_raw(ptr) };
+    let msg = unsafe { Box::from_raw(ptr) };
+
+    let DirectOutgoingMessage::Value {
+        ref content_path,
+        read_only,
+        ..
+    } = *msg;
 
     let Some(wv) = WEBVIEW.get() else {
         return LRESULT(0);
@@ -364,9 +368,9 @@ pub fn on_send_file_handle(lparam: LPARAM) -> LRESULT {
         };
 
         // Create file system handle
-        let path_str = request.content_path.to_string_lossy();
+        let path_str = content_path.to_string_lossy();
         let path_pwstr = pwstr_from_str(&path_str);
-        let permission = if request.read_only {
+        let permission = if read_only {
             COREWEBVIEW2_FILE_SYSTEM_HANDLE_PERMISSION_READ_ONLY
         } else {
             COREWEBVIEW2_FILE_SYSTEM_HANDLE_PERMISSION_READ_WRITE
@@ -401,14 +405,7 @@ pub fn on_send_file_handle(lparam: LPARAM) -> LRESULT {
             return LRESULT(0);
         };
 
-        // Create JSON message with key, readOnly flag, and attachments
-        let attachments_json = serde_json::to_string(&request.attachments).unwrap_or_default();
-        let json = format!(
-            r#"{{"type":"value","key":"{}","readOnly":{},"attachments":{}}}"#,
-            request.key.replace('\\', "\\\\").replace('"', "\\\""),
-            request.read_only,
-            attachments_json
-        );
+        let json = serde_json::to_string(&*msg).expect("Failed to serialize message");
         let json_pwstr = pwstr_from_str(&json);
 
         // Send message with additional objects

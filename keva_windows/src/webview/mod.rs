@@ -27,12 +27,21 @@ pub struct AttachmentInfo {
     pub thumbnail_url: Option<String>,
 }
 
-/// Request data for sending a FileSystemHandle to WebView.
-pub struct FileHandleRequest {
-    pub key: String,
-    pub content_path: std::path::PathBuf,
-    pub read_only: bool,
-    pub attachments: Vec<AttachmentInfo>,
+/// Messages sent directly from UI thread to WebView (not via forwarder).
+///
+/// These messages require UI thread APIs like `PostWebMessageAsJsonWithAdditionalObjects`
+/// and cannot be routed through the forwarder thread.
+#[derive(Serialize)]
+#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+pub enum DirectOutgoingMessage {
+    Value {
+        key: String,
+        key_hash: String,
+        #[serde(skip)]
+        content_path: std::path::PathBuf,
+        read_only: bool,
+        attachments: Vec<AttachmentInfo>,
+    },
 }
 
 /// Request data for opening a file picker.

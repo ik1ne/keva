@@ -1,7 +1,7 @@
 //! Background worker thread for KevaCore and SearchEngine operations.
 
 use crate::webview::messages::{ExactMatch, OutgoingMessage, RenameResultType};
-use crate::webview::{AttachmentInfo, FileHandleRequest, wm};
+use crate::webview::{AttachmentInfo, DirectOutgoingMessage, wm};
 use keva_core::core::KevaCore;
 use keva_core::types::{Config, Key, LifecycleState, SavedConfig};
 use keva_search::{SearchConfig, SearchEngine, SearchQuery};
@@ -202,6 +202,8 @@ fn handle_get_value(keva: &mut KevaCore, key_str: &str, hwnd: HWND) -> Option<()
         let _ = keva.touch(&key, now);
     }
 
+    let key_hash = KevaCore::key_to_path(&key).to_string_lossy().into_owned();
+
     // Build attachment info with thumbnail URLs (paths are relative to thumbnails dir)
     let thumbnail_paths = keva.thumbnail_paths(&key).unwrap_or_default();
     let attachments: Vec<AttachmentInfo> = value
@@ -225,8 +227,9 @@ fn handle_get_value(keva: &mut KevaCore, key_str: &str, hwnd: HWND) -> Option<()
     // Post directly to UI thread, bypassing forwarder.
     // FileSystemHandle creation requires the UI thread, so routing through
     // the forwarder would just add an unnecessary thread hop.
-    let request = Box::new(FileHandleRequest {
+    let msg = Box::new(DirectOutgoingMessage::Value {
         key: key_str.to_string(),
+        key_hash,
         content_path: keva.content_path(&key),
         read_only,
         attachments,
@@ -234,9 +237,9 @@ fn handle_get_value(keva: &mut KevaCore, key_str: &str, hwnd: HWND) -> Option<()
     unsafe {
         let _ = PostMessageW(
             Some(hwnd),
-            wm::SEND_FILE_HANDLE,
+            wm::DIRECT_MESSAGE,
             WPARAM(0),
-            LPARAM(Box::into_raw(request) as isize),
+            LPARAM(Box::into_raw(msg) as isize),
         );
     }
     Some(())

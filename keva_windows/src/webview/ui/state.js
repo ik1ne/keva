@@ -16,6 +16,7 @@ const State = {
         currentTheme: 'dark',
         activePane: 'search',
         attachments: [],
+        editorMode: 'edit',
     },
 
     setSelectedKey: function (key, isTrashed) {

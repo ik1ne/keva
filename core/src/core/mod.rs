@@ -33,11 +33,6 @@ pub mod error {
     }
 }
 
-fn key_to_path(key: &Key) -> PathBuf {
-    let hash = blake3::hash(key.as_str().as_bytes());
-    PathBuf::from(hash.to_hex().as_str())
-}
-
 pub struct KevaCore {
     base_path: PathBuf,
     db: Database,
@@ -73,13 +68,19 @@ impl KevaCore {
         &self.base_path
     }
 
+    /// Returns the blake3 hash of the key as a path component.
+    pub fn key_to_path(key: &Key) -> PathBuf {
+        let hash = blake3::hash(key.as_str().as_bytes());
+        PathBuf::from(hash.to_hex().as_str())
+    }
+
     /// Computes the absolute path to an attachment blob file.
     ///
     /// This is a static method that doesn't require a KevaCore instance,
     /// useful for code that needs to resolve attachment paths independently
     /// (e.g., drag-drop handlers on the main thread).
     pub fn attachment_blob_path(base_path: &Path, key: &Key, filename: &str) -> PathBuf {
-        let key_hash = key_to_path(key);
+        let key_hash = Self::key_to_path(key);
         base_path.join("blobs").join(key_hash).join(filename)
     }
 }
@@ -103,7 +104,7 @@ impl KevaCore {
 /// Content operations.
 impl KevaCore {
     pub fn create(&mut self, key: &Key, now: SystemTime) -> Result<Value, KevaError> {
-        let key_hash = key_to_path(key);
+        let key_hash = Self::key_to_path(key);
 
         let value: latest_value::Value = self.db.create(key, now)?;
 
@@ -112,7 +113,7 @@ impl KevaCore {
     }
 
     pub fn content_path(&self, key: &Key) -> PathBuf {
-        let key_hash = key_to_path(key);
+        let key_hash = Self::key_to_path(key);
         self.file.content_file_path(&key_hash)
     }
 
@@ -125,7 +126,7 @@ impl KevaCore {
 /// Attachment operations.
 impl KevaCore {
     pub fn attachment_path(&self, key: &Key, filename: &str) -> PathBuf {
-        let key_hash = key_to_path(key);
+        let key_hash = Self::key_to_path(key);
         self.file.attachment_path(&key_hash, filename)
     }
 
@@ -137,7 +138,7 @@ impl KevaCore {
         files: Vec<(PathBuf, String)>,
         now: SystemTime,
     ) -> Result<(), KevaError> {
-        let key_hash = key_to_path(key);
+        let key_hash = Self::key_to_path(key);
 
         for (source_path, target_filename) in files {
             // Remove existing attachment if present (overwrite behavior)
@@ -179,7 +180,7 @@ impl KevaCore {
         filename: &str,
         now: SystemTime,
     ) -> Result<(), KevaError> {
-        let key_hash = key_to_path(key);
+        let key_hash = Self::key_to_path(key);
 
         self.db.remove_attachment(key, filename, now)?;
 
@@ -204,7 +205,7 @@ impl KevaCore {
             return Err(KevaError::DestinationExists);
         }
 
-        let key_hash = key_to_path(key);
+        let key_hash = Self::key_to_path(key);
 
         self.db
             .rename_attachment(key, old_filename, new_filename, now)?;
@@ -224,7 +225,7 @@ impl KevaCore {
     /// Returns filename -> thumbnail relative path map for attachments with thumbnails.
     /// Paths are relative to the thumbnails directory (`data_dir()/thumbnails`).
     pub fn thumbnail_paths(&mut self, key: &Key) -> Result<HashMap<String, PathBuf>, KevaError> {
-        let key_hash = key_to_path(key);
+        let key_hash = Self::key_to_path(key);
         let value = self.db.get(key)?.ok_or(DatabaseError::NotFound)?;
         let mut result = HashMap::new();
 
@@ -267,8 +268,8 @@ impl KevaCore {
             return Err(KevaError::DestinationExists);
         }
 
-        let old_hash = key_to_path(old_key);
-        let new_hash = key_to_path(new_key);
+        let old_hash = Self::key_to_path(old_key);
+        let new_hash = Self::key_to_path(new_key);
 
         // Rename in database
         self.db.rename(old_key, new_key, now)?;
@@ -296,7 +297,7 @@ impl KevaCore {
 
     /// Permanently deletes a key.
     pub fn purge(&mut self, key: &Key) -> Result<(), KevaError> {
-        let key_hash = key_to_path(key);
+        let key_hash = Self::key_to_path(key);
         self.db.purge(key)?;
         self.file.remove_all(&key_hash)?;
         Ok(())
@@ -311,7 +312,7 @@ impl KevaCore {
 
         // Clean up files for purged keys
         for key in &gc_result.purged {
-            let key_hash = key_to_path(key);
+            let key_hash = Self::key_to_path(key);
             self.file.remove_all(&key_hash)?;
         }
 
@@ -321,7 +322,7 @@ impl KevaCore {
             .active_keys()?
             .iter()
             .chain(self.db.trashed_keys()?.iter())
-            .map(key_to_path)
+            .map(Self::key_to_path)
             .collect();
 
         let mut orphaned_files_removed = 0;

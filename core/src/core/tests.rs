@@ -882,7 +882,7 @@ mod maintenance {
             .add_attachments(&key, vec![(file_path, "test.txt".into())], now)
             .unwrap();
 
-        let key_hash = key_to_path(&key);
+        let key_hash = KevaCore::key_to_path(&key);
         let blob_dir = temp.path().join("blobs").join(&key_hash);
         assert!(blob_dir.exists());
 
@@ -906,7 +906,7 @@ mod maintenance {
 
         storage.create(&key, now).unwrap();
 
-        let key_hash = key_to_path(&key);
+        let key_hash = KevaCore::key_to_path(&key);
         let content_file = temp
             .path()
             .join("content")

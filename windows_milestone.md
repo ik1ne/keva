@@ -636,13 +636,13 @@ When drop occurs back onto Keva window (detected via path prefix in `IDropTarget
 **Goal:** Toggle between markdown editing and rendered preview.
 
 **Description:** Two-tab interface in right top pane: Edit and Preview. Edit mode shows Monaco editor. Preview mode
-shows rendered markdown with inline images. Attachment links (att:filename) transformed to blob paths for display.
+shows rendered markdown. Standard markdown syntax: `![](att:file)` for inline images, `[](att:file)` for clickable links.
 
 **Implementation Notes:**
 
-- Markdown renderer: marked.js or markdown-it
-- `att:filename` → blob path transformation for images
-- Non-image att: links remain clickable (open file)
+- Markdown renderer: markdown-it
+- `![text](att:image)` → inline image via virtual host URL
+- `[text](att:file)` → clickable link (NavigationStarting opens file)
 - Preview is read-only
 - Sanitization: DOMPurify to prevent XSS
 - Broken att: link: show placeholder icon with tooltip
@@ -651,11 +651,13 @@ shows rendered markdown with inline images. Attachment links (att:filename) tran
 **Link Transformation:**
 
 ```markdown
-<!-- Source -->
-[image.png](att:image.png)
+<!-- Image syntax: renders inline -->
+![photo](att:photo.jpg)
+<!-- → <img src="https://keva-data.local/blobs/{hash}/photo.jpg"> -->
 
-<!-- Preview renders as -->
-<img src="file:///path/to/blobs/{key_hash}/image.png">
+<!-- Link syntax: clickable -->
+[document](att:doc.pdf)
+<!-- → <a href="att:{hash}/doc.pdf">document</a> (opens via NavigationStarting) -->
 ```
 
 **Test Cases:**
@@ -664,8 +666,8 @@ shows rendered markdown with inline images. Attachment links (att:filename) tran
 |-----------|----------------------------------------------|--------|
 | TC-M12-01 | Edit tab shows Monaco editor                 | ❌      |
 | TC-M12-02 | Preview tab shows rendered markdown          | ❌      |
-| TC-M12-03 | att: image links display inline              | ❌      |
-| TC-M12-04 | att: non-image links are clickable           | ❌      |
+| TC-M12-03 | `![](att:img)` displays inline image         | ❌      |
+| TC-M12-04 | `[](att:file)` links are clickable           | ❌      |
 | TC-M12-05 | Preview updates when switching from Edit     | ❌      |
 | TC-M12-06 | Preview is read-only (no cursor, no editing) | ❌      |
 | TC-M12-07 | Broken att: link shows placeholder           | ❌      |

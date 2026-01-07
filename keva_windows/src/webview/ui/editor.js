@@ -6,10 +6,17 @@ const Editor = {
     dom: null,
     currentHandle: null,
     currentKey: null,
+    keyHash: null,
     isReadOnly: false,
     isSaving: false,
     isLargeFile: false,
     placeholderElement: null,
+    previewCache: {html: null},
+    editScrollTop: 0,
+    previewScrollTop: 0,
+    markdownIt: null,
+
+    IMAGE_EXTENSIONS: new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']),
 
     init: function (dom, callback) {
         this.dom = dom;
@@ -43,6 +50,7 @@ const Editor = {
                     self.scheduleSave();
                 }
                 self.updatePlaceholder();
+                self.invalidatePreviewCache();
             });
 
             self.instance.onDidFocusEditorWidget(function () {
@@ -70,9 +78,6 @@ const Editor = {
         this.currentHandle = handle;
         this.currentKey = key;
         this.isReadOnly = readOnly;
-
-        this.dom.emptyState.style.display = 'none';
-        this.dom.editorContainer.style.display = 'block';
         this.hideError();
 
         if (!this.instance) return;
@@ -160,19 +165,19 @@ const Editor = {
         }
     },
 
-    showEmpty: function (message) {
+    resetState: function () {
         this.currentHandle = null;
         this.currentKey = null;
-        this.dom.emptyState.textContent = message || 'Select a key or type to search';
-        this.dom.emptyState.style.display = 'flex';
-        this.dom.editorContainer.style.display = 'none';
+        this.keyHash = null;
+        this.invalidatePreviewCache();
         this.hideError();
     },
 
     showError: function (message) {
         this.dom.emptyState.textContent = message;
         this.dom.emptyState.style.display = 'flex';
-        this.dom.editorContainer.style.display = 'none';
+        if (this.dom.editorTabs) this.dom.editorTabs.style.display = 'none';
+        if (this.dom.editorViewport) this.dom.editorViewport.style.display = 'none';
     },
 
     showWriteError: function () {
@@ -253,5 +258,82 @@ const Editor = {
         if (this.instance) {
             monaco.editor.setTheme(theme === 'light' ? 'vs' : 'vs-dark');
         }
+    },
+
+    isImageFile: function (filename) {
+        const ext = (filename.split('.').pop() || '').toLowerCase();
+        return this.IMAGE_EXTENSIONS.has(ext);
+    },
+
+    transformAttLinks: function (markdown, keyHash, attachments) {
+        const attSet = new Set(attachments.map(function (a) {
+            return a.filename;
+        }));
+        const self = this;
+        // Match both ![text](att:file) and [text](att:file)
+        // Regex allows ) in filename if followed by non-whitespace (handles "a (1).txt")
+        return markdown.replace(/(!?)\[([^\]]*)\]\(att:((?:[^)]|\)(?=[^\s\]]))+)\)/g, function (match, bang, text, filename) {
+            if (!attSet.has(filename)) {
+                return match;
+            }
+            var encodedName = encodeURIComponent(filename);
+            if (bang && self.isImageFile(filename)) {
+                // ![text](att:file) for images: render inline via virtual host
+                return '![' + text + '](https://keva-data.local/blobs/' + keyHash + '/' + encodedName + ')';
+            } else {
+                // [text](att:file) or non-images: clickable link via NavigationStarting
+                return '[' + text + '](att:' + keyHash + '/' + encodedName + ')';
+            }
+        });
+    },
+
+    initMarkdownIt: function () {
+        if (this.markdownIt) return;
+        this.markdownIt = window.markdownit({
+            html: false,
+            linkify: true,
+            highlight: function (str, lang) {
+                if (lang && window.hljs && window.hljs.getLanguage(lang)) {
+                    try {
+                        return window.hljs.highlight(str, {language: lang}).value;
+                    } catch (e) {
+                        // ignore
+                    }
+                }
+                return '';
+            }
+        });
+        // Allow att: scheme in links
+        var defined = this.markdownIt.validateLink;
+        this.markdownIt.validateLink = function (url) {
+            if (url.startsWith('att:')) return true;
+            return defined(url);
+        };
+    },
+
+    renderPreview: function () {
+        if (!this.instance) return '';
+
+        if (this.previewCache.html !== null) {
+            return this.previewCache.html;
+        }
+
+        this.initMarkdownIt();
+
+        const content = this.instance.getValue();
+        const transformed = this.transformAttLinks(content, this.keyHash, State.data.attachments);
+        const rawHtml = this.markdownIt.render(transformed);
+        // Allow att: scheme for attachment links
+        const cleanHtml = window.DOMPurify.sanitize(rawHtml, {
+            ADD_ATTR: ['target'],
+            ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel|att):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i
+        });
+
+        this.previewCache.html = cleanHtml;
+        return cleanHtml;
+    },
+
+    invalidatePreviewCache: function () {
+        this.previewCache.html = null;
     }
 };

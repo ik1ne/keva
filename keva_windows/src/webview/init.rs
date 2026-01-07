@@ -15,18 +15,19 @@ use std::thread;
 use webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_CHANNEL_SEARCH_KIND_LEAST_STABLE;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW, CreateCoreWebView2EnvironmentWithOptions,
-    ICoreWebView2, ICoreWebView2CompositionController5, ICoreWebView2Controller,
+    ICoreWebView2, ICoreWebView2_3, ICoreWebView2CompositionController5, ICoreWebView2Controller,
     ICoreWebView2Environment, ICoreWebView2Environment3, ICoreWebView2EnvironmentOptions,
-    ICoreWebView2Settings9, ICoreWebView2WebMessageReceivedEventArgs, ICoreWebView2_3,
+    ICoreWebView2Settings9, ICoreWebView2WebMessageReceivedEventArgs,
 };
 use webview2_com::{
     CoreWebView2EnvironmentOptions, CreateCoreWebView2CompositionControllerCompletedHandler,
     CreateCoreWebView2EnvironmentCompletedHandler, CursorChangedEventHandler,
-    DragStartingEventHandler, WebMessageReceivedEventHandler,
+    DragStartingEventHandler, NavigationStartingEventHandler, WebMessageReceivedEventHandler,
 };
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::System::Com::CoTaskMemFree;
-use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, SetCursor, HCURSOR};
+use windows::Win32::UI::Shell::ShellExecuteW;
+use windows::Win32::UI::WindowsAndMessaging::{HCURSOR, PostMessageW, SW_SHOWNORMAL, SetCursor};
 use windows::core::{Interface, PWSTR, w};
 
 #[expect(clippy::too_many_arguments)]
@@ -124,20 +125,20 @@ fn create_composition_controller(
                     let comp_controller_for_cursor = composition_controller.clone();
                     let mut cursor_token = 0i64;
                     let _ = composition_controller.add_CursorChanged(
-                        &CursorChangedEventHandler::create(Box::new(
-                            move |_sender, _args| {
-                                let mut cursor = HCURSOR::default();
-                                if comp_controller_for_cursor.Cursor(&mut cursor).is_ok() {
-                                    SetCursor(Some(cursor));
-                                }
-                                Ok(())
-                            },
-                        )),
+                        &CursorChangedEventHandler::create(Box::new(move |_sender, _args| {
+                            let mut cursor = HCURSOR::default();
+                            if comp_controller_for_cursor.Cursor(&mut cursor).is_ok() {
+                                SetCursor(Some(cursor));
+                            }
+                            Ok(())
+                        })),
                         &mut cursor_token,
                     );
 
                     // Subscribe to DragStarting for attachment drag-out to external apps
-                    if let Ok(cc5) = composition_controller.cast::<ICoreWebView2CompositionController5>() {
+                    if let Ok(cc5) =
+                        composition_controller.cast::<ICoreWebView2CompositionController5>()
+                    {
                         let mut drag_token = 0i64;
                         let _ = cc5.add_DragStarting(
                             &DragStartingEventHandler::create(Box::new(move |_sender, args| {
@@ -283,6 +284,65 @@ fn setup_webview(
                 },
             )),
             &mut token,
+        );
+
+        // Handle navigation for att: links and external URLs
+        let mut nav_token = 0i64;
+        let _ = webview.add_NavigationStarting(
+            &NavigationStartingEventHandler::create(Box::new(move |_webview_opt, args| {
+                let Some(args) = args else { return Ok(()) };
+
+                let mut uri_pwstr = PWSTR::null();
+                if args.Uri(&mut uri_pwstr).is_err() || uri_pwstr.is_null() {
+                    return Ok(());
+                }
+                let uri = super::bridge::pwstr_to_string(uri_pwstr);
+                CoTaskMemFree(Some(uri_pwstr.as_ptr() as *const c_void));
+
+                // Allow internal navigation to our virtual hosts
+                if uri.starts_with("http://keva.local/")
+                    || uri.starts_with("https://keva-data.local/")
+                {
+                    return Ok(());
+                }
+
+                // Cancel navigation and handle externally
+                let _ = args.SetCancel(true);
+
+                if let Some(relative) = uri.strip_prefix("att:") {
+                    // att:{keyHash}/{encodedFilename} -> open file with default app
+                    let decoded = percent_encoding::percent_decode_str(relative)
+                        .decode_utf8_lossy();
+                    let path = get_data_path().join("blobs").join(decoded.as_ref());
+                    let path_wide: Vec<u16> = path
+                        .to_string_lossy()
+                        .encode_utf16()
+                        .chain(std::iter::once(0))
+                        .collect();
+                    ShellExecuteW(
+                        None,
+                        w!("open"),
+                        PWSTR(path_wide.as_ptr() as *mut _),
+                        None,
+                        None,
+                        SW_SHOWNORMAL,
+                    );
+                } else {
+                    // External URL (http, https, mailto, etc.) -> delegate to OS
+                    let uri_wide: Vec<u16> = uri.encode_utf16().chain(std::iter::once(0)).collect();
+                    ShellExecuteW(
+                        None,
+                        w!("open"),
+                        PWSTR(uri_wide.as_ptr() as *mut _),
+                        None,
+                        None,
+                        SW_SHOWNORMAL,
+                    );
+                }
+
+                Ok(())
+            })),
+            &mut nav_token,
         );
 
         Some(webview)

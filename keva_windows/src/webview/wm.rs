@@ -8,9 +8,9 @@ pub const SHUTDOWN_COMPLETE: u32 = WM_APP + 1;
 /// LPARAM contains a Box<String> pointer to the JSON message.
 pub const WEBVIEW_MESSAGE: u32 = WM_APP + 2;
 
-/// Posted by worker to send FileSystemHandle to WebView.
-/// LPARAM contains a Box<FileHandleRequest> pointer.
-pub const SEND_FILE_HANDLE: u32 = WM_APP + 3;
+/// Posted by worker to send DirectOutgoingMessage to WebView.
+/// LPARAM contains a Box<DirectOutgoingMessage> pointer.
+pub const DIRECT_MESSAGE: u32 = WM_APP + 3;
 
 /// Posted by bridge to open file picker on UI thread.
 /// LPARAM contains a Box<FilePickerRequest> pointer.
