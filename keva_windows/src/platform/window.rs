@@ -5,18 +5,15 @@ use crate::platform::{
     drop_target::register_drop_target,
     handlers::{
         get_resize_border, on_activate, on_command, on_create, on_destroy, on_getminmaxinfo,
-        on_direct_message, on_keydown, on_nccalcsize, on_open_file_picker, on_paint, on_setfocus,
-        on_settingchange, on_size, on_trayicon, on_webview_message, scale_for_dpi,
-        set_current_theme,
+        on_keydown, on_nccalcsize, on_open_file_picker, on_paint, on_setfocus, on_settingchange,
+        on_size, on_trayicon, on_webview_message, scale_for_dpi, set_current_theme,
     },
     hit_test::hit_test,
     input::{forward_mouse_message, forward_pointer_message},
     tray::{WM_TRAYICON, add_tray_icon},
 };
 use crate::render::theme::{Theme, WINDOW_HEIGHT, WINDOW_WIDTH};
-use crate::webview::messages::OutgoingMessage;
-use crate::webview::{WEBVIEW, bridge::post_message, init_webview, wm};
-use std::sync::mpsc;
+use crate::webview::{OutgoingMessage, WEBVIEW, bridge::post_message, init_webview, wm};
 use windows::{
     Win32::{
         Foundation::{HWND, LPARAM, LRESULT, TRUE, WPARAM},
@@ -100,13 +97,10 @@ pub fn run() -> Result<()> {
             None,
         )?;
 
-        // Create response channel for worker → forwarder communication
-        let (response_tx, response_rx) = mpsc::channel::<OutgoingMessage>();
+        // Start worker thread (owns KevaCore + SearchEngine, posts directly to UI thread)
+        let request_tx = keva_worker::start(hwnd);
 
-        // Start worker thread (owns KevaCore + SearchEngine)
-        let request_tx = keva_worker::start(hwnd, response_tx);
-
-        // Create WebView (will spawn forwarder thread when ready)
+        // Create WebView
         let (border_x, border_y) = get_resize_border();
         init_webview(
             hwnd,
@@ -116,7 +110,6 @@ pub fn run() -> Result<()> {
             window_height - 2 * border_y,
             initial_theme,
             request_tx,
-            response_rx,
         );
 
         add_tray_icon(hwnd)?;
@@ -203,7 +196,6 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
             LRESULT(0)
         }
         wm::WEBVIEW_MESSAGE => on_webview_message(lparam),
-        wm::DIRECT_MESSAGE => on_direct_message(lparam),
         wm::OPEN_FILE_PICKER => on_open_file_picker(hwnd, lparam),
         WM_CLOSE => {
             if let Some(wv) = WEBVIEW.get() {

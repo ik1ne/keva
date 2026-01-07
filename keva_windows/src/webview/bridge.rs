@@ -1,9 +1,8 @@
 //! WebView message bridge.
 
-use super::WEBVIEW;
-use super::messages::{IncomingMessage, OutgoingMessage};
+use super::messages::IncomingMessage;
 use super::wm;
-use super::FilePickerRequest;
+use super::{FilePickerRequest, OutgoingMessage, WEBVIEW};
 use crate::keva_worker::Request;
 use crate::platform::drop_target::take_dropped_paths;
 use crate::render::theme::Theme;

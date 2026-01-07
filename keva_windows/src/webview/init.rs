@@ -1,16 +1,13 @@
 //! WebView2 initialization.
 
 use super::bridge::handle_webview_message;
-use super::messages::OutgoingMessage;
-use super::{WEBVIEW, WebView, wm};
+use super::{WEBVIEW, WebView};
 use crate::keva_worker::{Request, get_data_path};
 use crate::platform::composition::CompositionHost;
 use crate::platform::drag_out::handle_drag_starting;
 use crate::render::theme::Theme;
 use std::ffi::c_void;
-use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
-use std::thread;
 #[cfg(debug_assertions)]
 use webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_CHANNEL_SEARCH_KIND_LEAST_STABLE;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
@@ -24,13 +21,12 @@ use webview2_com::{
     CreateCoreWebView2EnvironmentCompletedHandler, CursorChangedEventHandler,
     DragStartingEventHandler, NavigationStartingEventHandler, WebMessageReceivedEventHandler,
 };
-use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+use windows::Win32::Foundation::HWND;
 use windows::Win32::System::Com::CoTaskMemFree;
 use windows::Win32::UI::Shell::ShellExecuteW;
-use windows::Win32::UI::WindowsAndMessaging::{HCURSOR, PostMessageW, SW_SHOWNORMAL, SetCursor};
+use windows::Win32::UI::WindowsAndMessaging::{HCURSOR, SW_SHOWNORMAL, SetCursor};
 use windows::core::{Interface, PWSTR, w};
 
-#[expect(clippy::too_many_arguments)]
 pub fn init_webview(
     hwnd: HWND,
     x: i32,
@@ -39,7 +35,6 @@ pub fn init_webview(
     height: i32,
     theme: Theme,
     request_tx: Sender<Request>,
-    response_rx: Receiver<OutgoingMessage>,
 ) {
     // Create DirectComposition host first
     let composition_host = match CompositionHost::new(hwnd) {
@@ -75,7 +70,6 @@ pub fn init_webview(
                     theme,
                     env,
                     request_tx,
-                    response_rx,
                     composition_host,
                 );
                 Ok(())
@@ -94,7 +88,6 @@ fn create_composition_controller(
     theme: Theme,
     env: ICoreWebView2Environment,
     request_tx: Sender<Request>,
-    response_rx: Receiver<OutgoingMessage>,
     composition_host: CompositionHost,
 ) {
     unsafe {
@@ -215,38 +208,11 @@ fn create_composition_controller(
                         .set(wv)
                         .unwrap_or_else(|_| panic!("Failed to set webview"));
 
-                    // Start forwarder thread now that WEBVIEW is set
-                    start_forwarder_thread(hwnd, response_rx);
-
                     Ok(())
                 },
             )),
         );
     }
-}
-
-/// Spawns a thread that forwards worker responses to WebView via UI thread.
-///
-/// WebView2 requires PostWebMessageAsJson to be called from the UI thread.
-/// This thread serializes messages and posts wm::WEBVIEW_MESSAGE to marshal
-/// the call to the UI thread's wndproc.
-fn start_forwarder_thread(hwnd: HWND, response_rx: Receiver<OutgoingMessage>) {
-    let hwnd_raw = hwnd.0 as isize;
-    thread::spawn(move || {
-        let hwnd = HWND(hwnd_raw as *mut _);
-        for msg in response_rx {
-            let json = serde_json::to_string(&msg).expect("Failed to serialize message");
-            let ptr = Box::into_raw(Box::new(json));
-            unsafe {
-                let _ = PostMessageW(
-                    Some(hwnd),
-                    wm::WEBVIEW_MESSAGE,
-                    WPARAM(0),
-                    LPARAM(ptr as isize),
-                );
-            }
-        }
-    });
 }
 
 fn setup_webview(

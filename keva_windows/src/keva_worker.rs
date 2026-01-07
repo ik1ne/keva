@@ -1,13 +1,12 @@
 //! Background worker thread for KevaCore and SearchEngine operations.
 
-use crate::webview::messages::{ExactMatch, OutgoingMessage, RenameResultType};
-use crate::webview::{AttachmentInfo, DirectOutgoingMessage, wm};
+use crate::webview::{AttachmentInfo, ExactMatch, OutgoingMessage, RenameResultType, wm};
 use keva_core::core::KevaCore;
 use keva_core::types::{Config, Key, LifecycleState, SavedConfig};
 use keva_search::{SearchConfig, SearchEngine, SearchQuery};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::mpsc::{self, Sender};
+use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, SystemTime};
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
@@ -77,10 +76,9 @@ pub enum Request {
 
 /// Starts the worker thread.
 ///
-/// The worker owns KevaCore and SearchEngine. It handles all requests and sends
-/// responses via `response_tx`. The caller should pass `response_rx` to the
-/// forwarder thread for WebView delivery.
-pub fn start(hwnd: HWND, response_tx: Sender<OutgoingMessage>) -> Sender<Request> {
+/// The worker owns KevaCore and SearchEngine. It handles all requests and posts
+/// responses directly to the UI thread via PostMessageW.
+pub fn start(hwnd: HWND) -> mpsc::Sender<Request> {
     let (request_tx, request_rx) = mpsc::channel::<Request>();
 
     let notify_tx = request_tx.clone();
@@ -98,17 +96,29 @@ pub fn start(hwnd: HWND, response_tx: Sender<OutgoingMessage>) -> Sender<Request
         });
         let search = SearchEngine::new(active_keys, trashed_keys, SearchConfig::default(), notify);
 
-        worker_loop(keva, search, request_rx, response_tx, hwnd);
+        worker_loop(keva, search, request_rx, hwnd);
     });
 
     request_tx
+}
+
+/// Posts an OutgoingMessage to the UI thread for WebView delivery.
+fn post_response(hwnd: HWND, msg: OutgoingMessage) {
+    let ptr = Box::into_raw(Box::new(msg));
+    unsafe {
+        let _ = PostMessageW(
+            Some(hwnd),
+            wm::WEBVIEW_MESSAGE,
+            WPARAM(0),
+            LPARAM(ptr as isize),
+        );
+    }
 }
 
 fn worker_loop(
     mut keva: KevaCore,
     mut search: SearchEngine,
     requests: mpsc::Receiver<Request>,
-    responses: Sender<OutgoingMessage>,
     hwnd: HWND,
 ) {
     let mut current_query = String::new();
@@ -119,43 +129,36 @@ fn worker_loop(
     for request in requests {
         match request {
             Request::WebviewReady => {
-                let _ = responses.send(OutgoingMessage::CoreReady);
+                post_response(hwnd, OutgoingMessage::CoreReady);
             }
             Request::GetValue { key } => {
-                let _ = handle_get_value(&mut keva, &key, hwnd);
+                handle_get_value(&mut keva, &key, hwnd);
             }
             Request::Save { key, content } => {
                 handle_save(&mut keva, &key, &content);
             }
             Request::Create { key } => {
-                handle_create(&mut keva, &mut search, &key, &current_query, &responses);
+                handle_create(&mut keva, &mut search, &key, &current_query, hwnd);
             }
             Request::Rename {
                 old_key,
                 new_key,
                 force,
             } => {
-                handle_rename(
-                    &mut keva,
-                    &mut search,
-                    &old_key,
-                    &new_key,
-                    force,
-                    &responses,
-                );
+                handle_rename(&mut keva, &mut search, &old_key, &new_key, force, hwnd);
             }
             Request::Trash { key } => {
-                handle_trash(&mut keva, &mut search, &key, &current_query, &responses);
+                handle_trash(&mut keva, &mut search, &key, &current_query, hwnd);
             }
             Request::Search { query } => {
                 current_query = query.clone();
                 search.set_query(SearchQuery::Fuzzy(query));
                 search.tick();
-                send_search_results(&search, &current_query, &responses);
+                send_search_results(&search, &current_query, hwnd);
             }
             Request::SearchTick => {
                 if search.tick() {
-                    send_search_results(&search, &current_query, &responses);
+                    send_search_results(&search, &current_query, hwnd);
                 }
             }
             Request::Touch { key } => {
@@ -164,7 +167,7 @@ fn worker_loop(
                 }
             }
             Request::FilesSelected { key, files } => {
-                handle_files_selected(&key, files, &responses);
+                handle_files_selected(&key, files, hwnd);
             }
             Request::AddAttachments { key, files } => {
                 handle_add_attachments(&mut keva, &key, files, hwnd);
@@ -193,14 +196,19 @@ fn worker_loop(
     }
 }
 
-fn handle_get_value(keva: &mut KevaCore, key_str: &str, hwnd: HWND) -> Option<()> {
-    let now = SystemTime::now();
-    let key = Key::try_from(key_str).ok()?;
-    let value = keva.get(&key).ok().flatten()?;
-    let read_only = matches!(value.metadata.lifecycle_state, LifecycleState::Trash { .. });
-    if !read_only {
-        let _ = keva.touch(&key, now);
-    }
+fn handle_get_value(keva: &mut KevaCore, key_str: &str, hwnd: HWND) {
+    let Some((value, read_only, key)) = (|| {
+        let now = SystemTime::now();
+        let key = Key::try_from(key_str).ok()?;
+        let value = keva.get(&key).ok().flatten()?;
+        let read_only = matches!(value.metadata.lifecycle_state, LifecycleState::Trash { .. });
+        if !read_only {
+            let _ = keva.touch(&key, now);
+        }
+        Some((value, read_only, key))
+    })() else {
+        return;
+    };
 
     let key_hash = KevaCore::key_to_path(&key).to_string_lossy().into_owned();
 
@@ -224,25 +232,16 @@ fn handle_get_value(keva: &mut KevaCore, key_str: &str, hwnd: HWND) -> Option<()
         })
         .collect();
 
-    // Post directly to UI thread, bypassing forwarder.
-    // FileSystemHandle creation requires the UI thread, so routing through
-    // the forwarder would just add an unnecessary thread hop.
-    let msg = Box::new(DirectOutgoingMessage::Value {
-        key: key_str.to_string(),
-        key_hash,
-        content_path: keva.content_path(&key),
-        read_only,
-        attachments,
-    });
-    unsafe {
-        let _ = PostMessageW(
-            Some(hwnd),
-            wm::DIRECT_MESSAGE,
-            WPARAM(0),
-            LPARAM(Box::into_raw(msg) as isize),
-        );
-    }
-    Some(())
+    post_response(
+        hwnd,
+        OutgoingMessage::Value {
+            key: key_str.to_string(),
+            key_hash,
+            content_path: keva.content_path(&key),
+            read_only,
+            attachments,
+        },
+    );
 }
 
 fn handle_save(keva: &mut KevaCore, key_str: &str, content: &str) {
@@ -254,16 +253,19 @@ fn handle_save(keva: &mut KevaCore, key_str: &str, content: &str) {
     }
 }
 
-fn handle_files_selected(key_str: &str, files: Vec<PathBuf>, responses: &Sender<OutgoingMessage>) {
+fn handle_files_selected(key_str: &str, files: Vec<PathBuf>, hwnd: HWND) {
     let files: Vec<String> = files
         .into_iter()
         .map(|path| path.to_string_lossy().to_string())
         .collect();
 
-    let _ = responses.send(OutgoingMessage::FilesSelected {
-        key: key_str.to_string(),
-        files,
-    });
+    post_response(
+        hwnd,
+        OutgoingMessage::FilesSelected {
+            key: key_str.to_string(),
+            files,
+        },
+    );
 }
 
 fn handle_add_attachments(
@@ -285,7 +287,7 @@ fn handle_add_attachments(
         .add_attachments(&key, files, SystemTime::now())
         .is_ok()
     {
-        let _ = handle_get_value(keva, key_str, hwnd);
+        handle_get_value(keva, key_str, hwnd);
     }
 }
 
@@ -298,7 +300,7 @@ fn handle_remove_attachment(keva: &mut KevaCore, key_str: &str, filename: &str, 
         .remove_attachment(&key, filename, SystemTime::now())
         .is_ok()
     {
-        let _ = handle_get_value(keva, key_str, hwnd);
+        handle_get_value(keva, key_str, hwnd);
     }
 }
 
@@ -323,7 +325,7 @@ fn handle_rename_attachment(
         .rename_attachment(&key, old_filename, new_filename, SystemTime::now())
         .is_ok()
     {
-        let _ = handle_get_value(keva, key_str, hwnd);
+        handle_get_value(keva, key_str, hwnd);
     }
 }
 
@@ -341,7 +343,7 @@ fn handle_add_dropped_files(
         .add_attachments(&key, files, SystemTime::now())
         .is_ok()
     {
-        let _ = handle_get_value(keva, key_str, hwnd);
+        handle_get_value(keva, key_str, hwnd);
     }
 }
 
@@ -350,19 +352,22 @@ fn handle_create(
     search: &mut SearchEngine,
     key_str: &str,
     current_query: &str,
-    responses: &Sender<OutgoingMessage>,
+    hwnd: HWND,
 ) {
     let success = try_create(keva, search, key_str).is_some();
 
-    let _ = responses.send(OutgoingMessage::KeyCreated {
-        key: key_str.to_string(),
-        success,
-    });
+    post_response(
+        hwnd,
+        OutgoingMessage::KeyCreated {
+            key: key_str.to_string(),
+            success,
+        },
+    );
 
     if success {
         search.set_query(SearchQuery::Fuzzy(current_query.to_string()));
         search.tick();
-        send_search_results(search, current_query, responses);
+        send_search_results(search, current_query, hwnd);
     }
 }
 
@@ -379,14 +384,17 @@ fn handle_rename(
     old_key_str: &str,
     new_key_str: &str,
     force: bool,
-    responses: &Sender<OutgoingMessage>,
+    hwnd: HWND,
 ) {
     let result = try_rename(keva, search, old_key_str, new_key_str, force);
-    let _ = responses.send(OutgoingMessage::RenameResult {
-        old_key: old_key_str.to_string(),
-        new_key: new_key_str.to_string(),
-        result: result.unwrap_or_else(|e| e),
-    });
+    post_response(
+        hwnd,
+        OutgoingMessage::RenameResult {
+            old_key: old_key_str.to_string(),
+            new_key: new_key_str.to_string(),
+            result: result.unwrap_or_else(|e| e),
+        },
+    );
 }
 
 fn try_rename(
@@ -419,7 +427,7 @@ fn handle_trash(
     search: &mut SearchEngine,
     key_str: &str,
     current_query: &str,
-    responses: &Sender<OutgoingMessage>,
+    hwnd: HWND,
 ) {
     let now = SystemTime::now();
     if let Ok(key) = Key::try_from(key_str)
@@ -428,15 +436,11 @@ fn handle_trash(
         search.trash(&key);
         search.set_query(SearchQuery::Fuzzy(current_query.to_string()));
         search.tick();
-        send_search_results(search, current_query, responses);
+        send_search_results(search, current_query, hwnd);
     }
 }
 
-fn send_search_results(
-    search: &SearchEngine,
-    current_query: &str,
-    responses: &Sender<OutgoingMessage>,
-) {
+fn send_search_results(search: &SearchEngine, current_query: &str, hwnd: HWND) {
     let active_keys: Vec<String> = search
         .active_results()
         .iter()
@@ -462,11 +466,14 @@ fn send_search_results(
         })
         .unwrap_or(ExactMatch::None);
 
-    let _ = responses.send(OutgoingMessage::SearchResults {
-        active_keys,
-        trashed_keys,
-        exact_match,
-    });
+    post_response(
+        hwnd,
+        OutgoingMessage::SearchResults {
+            active_keys,
+            trashed_keys,
+            exact_match,
+        },
+    );
 }
 
 fn open_keva() -> KevaCore {

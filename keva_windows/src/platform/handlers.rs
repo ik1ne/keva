@@ -8,8 +8,7 @@ use crate::platform::tray::{
 };
 use crate::render::theme::{MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, Theme};
 use crate::webview::bridge::post_message;
-use crate::webview::messages::OutgoingMessage;
-use crate::webview::{DirectOutgoingMessage, FilePickerRequest, WEBVIEW};
+use crate::webview::{FilePickerRequest, OutgoingMessage, WEBVIEW};
 use std::sync::atomic::{AtomicIsize, AtomicU8, Ordering};
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_FILE_SYSTEM_HANDLE_PERMISSION_READ_ONLY,
@@ -315,106 +314,90 @@ pub fn on_settingchange(hwnd: HWND, lparam: LPARAM) -> LRESULT {
     LRESULT(0)
 }
 
-/// WM_WEBVIEW_MESSAGE: Forward JSON message to WebView (marshaled from forwarder thread).
+/// WM_WEBVIEW_MESSAGE: Forward OutgoingMessage to WebView.
+/// Value variant uses PostWebMessageAsJsonWithAdditionalObjects for FileSystemHandle.
 pub fn on_webview_message(lparam: LPARAM) -> LRESULT {
-    // LPARAM contains a Box<String> pointer from the forwarder thread
-    let ptr = lparam.0 as *mut String;
+    let ptr = lparam.0 as *mut OutgoingMessage;
     if ptr.is_null() {
         return LRESULT(0);
     }
 
-    // Reconstruct the Box and take ownership (will be dropped at end of scope)
-    let json = unsafe { Box::from_raw(ptr) };
-
-    if let Some(wv) = WEBVIEW.get() {
-        // Keep Vec alive until PostWebMessageAsJson returns
-        let wide: Vec<u16> = json.encode_utf16().chain(std::iter::once(0)).collect();
-        let msg_pwstr = windows::core::PWSTR(wide.as_ptr() as *mut u16);
-        let _ = unsafe { wv.webview.PostWebMessageAsJson(msg_pwstr) };
-    }
-
-    LRESULT(0)
-}
-
-/// WM_DIRECT_MESSAGE: Create FileSystemHandle and send to WebView with additionalObjects.
-pub fn on_direct_message(lparam: LPARAM) -> LRESULT {
-    let ptr = lparam.0 as *mut DirectOutgoingMessage;
-    if ptr.is_null() {
-        return LRESULT(0);
-    }
-
-    // Reconstruct the Box and take ownership
     let msg = unsafe { Box::from_raw(ptr) };
-
-    let DirectOutgoingMessage::Value {
-        ref content_path,
-        read_only,
-        ..
-    } = *msg;
 
     let Some(wv) = WEBVIEW.get() else {
         return LRESULT(0);
     };
 
-    unsafe {
-        // Cast to required interfaces
-        let Ok(env14) = wv.env.cast::<ICoreWebView2Environment14>() else {
-            eprintln!("[FileHandle] ICoreWebView2Environment14 not available");
-            return LRESULT(0);
-        };
-        let Ok(webview23) = wv.webview.cast::<ICoreWebView2_23>() else {
-            eprintln!("[FileHandle] ICoreWebView2_23 not available");
-            return LRESULT(0);
-        };
+    // Value messages need FileSystemHandle creation
+    if let OutgoingMessage::Value {
+        ref content_path,
+        read_only,
+        ..
+    } = *msg
+    {
+        unsafe {
+            let Ok(env14) = wv.env.cast::<ICoreWebView2Environment14>() else {
+                eprintln!("[FileHandle] ICoreWebView2Environment14 not available");
+                return LRESULT(0);
+            };
+            let Ok(webview23) = wv.webview.cast::<ICoreWebView2_23>() else {
+                eprintln!("[FileHandle] ICoreWebView2_23 not available");
+                return LRESULT(0);
+            };
 
-        // Create file system handle
-        let path_str = content_path.to_string_lossy();
-        let path_pwstr = pwstr_from_str(&path_str);
-        let permission = if read_only {
-            COREWEBVIEW2_FILE_SYSTEM_HANDLE_PERMISSION_READ_ONLY
-        } else {
-            COREWEBVIEW2_FILE_SYSTEM_HANDLE_PERMISSION_READ_WRITE
-        };
+            let path_str = content_path.to_string_lossy();
+            let path_pwstr = pwstr_from_str(&path_str);
+            let permission = if read_only {
+                COREWEBVIEW2_FILE_SYSTEM_HANDLE_PERMISSION_READ_ONLY
+            } else {
+                COREWEBVIEW2_FILE_SYSTEM_HANDLE_PERMISSION_READ_WRITE
+            };
 
-        let handle = match env14.CreateWebFileSystemFileHandle(path_pwstr, permission) {
-            Ok(h) => h,
-            Err(e) => {
-                eprintln!("[FileHandle] CreateWebFileSystemFileHandle failed: {:?}", e);
+            let handle = match env14.CreateWebFileSystemFileHandle(path_pwstr, permission) {
+                Ok(h) => h,
+                Err(e) => {
+                    eprintln!("[FileHandle] CreateWebFileSystemFileHandle failed: {:?}", e);
+                    return LRESULT(0);
+                }
+            };
+
+            let handle_iunknown: windows::core::IUnknown = match handle.cast() {
+                Ok(u) => u,
+                Err(e) => {
+                    eprintln!("[FileHandle] Failed to cast handle to IUnknown: {:?}", e);
+                    return LRESULT(0);
+                }
+            };
+            let mut items = [Some(handle_iunknown)];
+            let mut collection: Option<ICoreWebView2ObjectCollection> = None;
+
+            if let Err(e) = env14.CreateObjectCollection(1, items.as_mut_ptr(), &mut collection) {
+                eprintln!("[FileHandle] CreateObjectCollection failed: {:?}", e);
                 return LRESULT(0);
             }
-        };
 
-        // Create object collection with the handle
-        let handle_iunknown: windows::core::IUnknown = match handle.cast() {
-            Ok(u) => u,
-            Err(e) => {
-                eprintln!("[FileHandle] Failed to cast handle to IUnknown: {:?}", e);
+            let Some(objects) = collection else {
+                eprintln!("[FileHandle] CreateObjectCollection returned None");
                 return LRESULT(0);
-            }
-        };
-        let mut items = [Some(handle_iunknown)];
-        let mut collection: Option<ICoreWebView2ObjectCollection> = None;
+            };
 
-        if let Err(e) = env14.CreateObjectCollection(1, items.as_mut_ptr(), &mut collection) {
-            eprintln!("[FileHandle] CreateObjectCollection failed: {:?}", e);
-            return LRESULT(0);
+            let json = serde_json::to_string(&*msg).expect("Failed to serialize message");
+            let json_pwstr = pwstr_from_str(&json);
+
+            if let Err(e) =
+                webview23.PostWebMessageAsJsonWithAdditionalObjects(json_pwstr, &*objects)
+            {
+                eprintln!(
+                    "[FileHandle] PostWebMessageAsJsonWithAdditionalObjects failed: {:?}",
+                    e
+                );
+            }
         }
-
-        let Some(objects) = collection else {
-            eprintln!("[FileHandle] CreateObjectCollection returned None");
-            return LRESULT(0);
-        };
-
+    } else {
         let json = serde_json::to_string(&*msg).expect("Failed to serialize message");
-        let json_pwstr = pwstr_from_str(&json);
-
-        // Send message with additional objects
-        if let Err(e) = webview23.PostWebMessageAsJsonWithAdditionalObjects(json_pwstr, &*objects) {
-            eprintln!(
-                "[FileHandle] PostWebMessageAsJsonWithAdditionalObjects failed: {:?}",
-                e
-            );
-        }
+        let wide: Vec<u16> = json.encode_utf16().chain(std::iter::once(0)).collect();
+        let msg_pwstr = windows::core::PWSTR(wide.as_ptr() as *mut u16);
+        let _ = unsafe { wv.webview.PostWebMessageAsJson(msg_pwstr) };
     }
 
     LRESULT(0)

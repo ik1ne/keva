@@ -4,14 +4,11 @@ use windows::Win32::UI::WindowsAndMessaging::WM_APP;
 /// Posted by worker when shutdown is complete.
 pub const SHUTDOWN_COMPLETE: u32 = WM_APP + 1;
 
-/// Posted by forwarder to marshal PostWebMessageAsJson to UI thread.
-/// LPARAM contains a Box<String> pointer to the JSON message.
+/// Posted by worker to send OutgoingMessage to WebView.
+/// LPARAM contains a Box<OutgoingMessage> pointer.
+/// Value variant uses PostWebMessageAsJsonWithAdditionalObjects for FileSystemHandle.
 pub const WEBVIEW_MESSAGE: u32 = WM_APP + 2;
-
-/// Posted by worker to send DirectOutgoingMessage to WebView.
-/// LPARAM contains a Box<DirectOutgoingMessage> pointer.
-pub const DIRECT_MESSAGE: u32 = WM_APP + 3;
 
 /// Posted by bridge to open file picker on UI thread.
 /// LPARAM contains a Box<FilePickerRequest> pointer.
-pub const OPEN_FILE_PICKER: u32 = WM_APP + 4;
+pub const OPEN_FILE_PICKER: u32 = WM_APP + 3;
