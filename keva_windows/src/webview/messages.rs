@@ -67,4 +67,15 @@ pub enum IncomingMessage {
         /// Each file: [index, resolved_filename]
         files: Vec<(usize, String)>,
     },
+    /// Add files from clipboard using cached paths.
+    AddClipboardFiles {
+        key: String,
+        /// Each file: [index, resolved_filename]
+        files: Vec<(usize, String)>,
+    },
+    /// Copy files to clipboard.
+    CopyFiles {
+        key: String,
+        filenames: Vec<String>,
+    },
 }

@@ -262,6 +262,10 @@ const Main = {
                     Drop.clearDropCursor();
                     return;
                 }
+                // Don't hide if conflict dialog is open (it handles Escape itself)
+                if (ConflictDialog.overlay) {
+                    return;
+                }
                 Api.send({type: 'hide'});
             } else if (e.key === 's' && e.ctrlKey && !e.altKey && !e.shiftKey) {
                 e.preventDefault();
@@ -269,6 +273,25 @@ const Main = {
                 self.dom.searchInput.focus();
                 self.dom.searchInput.select();
             }
+        });
+
+        // Copy event handler for attachments pane
+        document.addEventListener('copy', function (e) {
+            if (State.data.activePane === 'attachments' && Attachments.selectedIndices.size > 0) {
+                e.preventDefault();
+                const selectedItems = Attachments.getSelectedItems();
+                const filenames = selectedItems.map(function (item) {
+                    return item.dataset.filename;
+                });
+                if (filenames.length > 0 && State.data.selectedKey) {
+                    Api.send({
+                        type: 'copyFiles',
+                        key: State.data.selectedKey,
+                        filenames: filenames
+                    });
+                }
+            }
+            // Otherwise, let browser handle copy (Monaco, search, etc.)
         });
     },
 
@@ -427,8 +450,9 @@ const Main = {
                 Attachments.render();
                 self.updateAddFilesBtn();
 
-                // Store keyHash for preview rendering
+                // Store keyHash and blobsPath for preview rendering
                 Editor.keyHash = msg.keyHash;
+                Editor.blobsPath = msg.blobsPath;
 
                 // Insert links if pending from drop
                 if (State.data.pendingLinkInsert) {
@@ -439,10 +463,18 @@ const Main = {
                     State.data.pendingLinkInsert = null;
                 }
 
+                // Check for pending copy action (from Ctrl+Alt+T/R/F with exact match)
+                const pendingCopyAction = State.data.pendingCopyAction;
+                State.data.pendingCopyAction = null;
+
                 // Skip editor reload if already showing this key (e.g., after adding attachments)
                 if (Editor.currentKey === msg.key) {
                     // Invalidate preview cache since attachments may have changed
                     Editor.invalidatePreviewCache();
+                    // Handle pending copy (files action can proceed, content already loaded)
+                    if (pendingCopyAction) {
+                        self.performCopy(pendingCopyAction);
+                    }
                     return;
                 }
 
@@ -454,6 +486,10 @@ const Main = {
                     const handle = event.additionalObjects[0];
                     self.showEditorUI();
                     await Editor.showWithHandle(handle, msg.key, msg.readOnly);
+                    // Handle pending copy after editor is loaded
+                    if (pendingCopyAction) {
+                        self.performCopy(pendingCopyAction);
+                    }
                 } else {
                     // No handle received - show error
                     console.error('[Main] No FileSystemHandle in message');
@@ -507,39 +543,159 @@ const Main = {
             },
 
             filesSelected: function (msg) {
-                // Build set of existing attachment names
-                const existingNames = new Set();
-                for (let i = 0; i < State.data.attachments.length; i++) {
-                    existingNames.add(State.data.attachments[i].filename);
-                }
-
-                // Extract filename from path and detect conflicts
-                const conflicts = [];
-                const nonConflicts = [];
+                // Build file list (id = path for file picker)
+                const fileList = [];
                 for (let i = 0; i < msg.files.length; i++) {
                     const path = msg.files[i];
-                    const filename = path.split(/[/\\]/).pop();
-                    if (existingNames.has(filename)) {
-                        conflicts.push([path, filename]);
-                    } else {
-                        nonConflicts.push([path, filename]);
-                    }
+                    fileList.push({ id: path, filename: path.split(/[/\\]/).pop() });
                 }
+                const result = ConflictDialog.checkConflicts(fileList);
 
-                if (conflicts.length > 0) {
-                    ConflictDialog.show(msg.key, conflicts, nonConflicts);
+                if (result.conflicts.length > 0) {
+                    ConflictDialog.show(msg.key, result.conflicts, result.nonConflicts);
                 } else {
-                    // No conflicts - add all files with original filenames
-                    const files = [];
-                    for (let i = 0; i < nonConflicts.length; i++) {
-                        files.push([nonConflicts[i][0], nonConflicts[i][1]]);
-                    }
                     State.data.isCopying = true;
                     self.showAddingOverlay();
-                    Api.send({type: 'addAttachments', key: msg.key, files: files});
+                    Api.send({type: 'addAttachments', key: msg.key, files: result.nonConflicts});
+                }
+            },
+
+            filesPasted: function (msg) {
+                // Reject if search bar focused or no key selected
+                if (State.data.activePane === 'search') return;
+                if (!State.data.selectedKey) return;
+                if (State.data.isSelectedTrashed) {
+                    Drop.showToast('Cannot add files to trashed key');
+                    return;
+                }
+
+                // Determine if we should insert links (editor focused)
+                const insertLinks = (State.data.activePane === 'editor');
+                const editorPosition = insertLinks && Editor.instance
+                    ? Editor.instance.getPosition()
+                    : null;
+
+                // Build file list and check for conflicts
+                const fileList = [];
+                for (let i = 0; i < msg.files.length; i++) {
+                    fileList.push({ id: i, filename: msg.files[i] });
+                }
+                const result = ConflictDialog.checkConflicts(fileList);
+
+                if (result.conflicts.length > 0) {
+                    ConflictDialog.show(State.data.selectedKey, result.conflicts, result.nonConflicts, insertLinks, editorPosition, self.sendClipboardFiles.bind(self));
+                } else {
+                    self.sendClipboardFiles(State.data.selectedKey, result.nonConflicts, insertLinks, editorPosition);
+                }
+            },
+
+            doCopy: function (msg) {
+                const action = msg.action;
+
+                if (action === 'markdown' || action === 'html') {
+                    // Check if content is ready
+                    if (State.data.selectedKey && Editor.instance && Editor.instance.getValue()) {
+                        self.performCopy(action);
+                    } else if (State.data.exactMatch === 'active') {
+                        // Exact match but content not loaded yet, trigger load and wait
+                        State.data.pendingCopyAction = action;
+                        const key = self.dom.searchInput.value.trim();
+                        State.data.selectedKey = key;
+                        Api.send({type: 'select', key: key});
+                    } else {
+                        Drop.showToast('Nothing to copy');
+                    }
+                } else if (action === 'files') {
+                    // Check if we have attachments to copy
+                    if (State.data.selectedKey && State.data.attachments.length > 0) {
+                        const filenames = State.data.attachments.map(function (a) {
+                            return a.filename;
+                        });
+                        Api.send({
+                            type: 'copyFiles',
+                            key: State.data.selectedKey,
+                            filenames: filenames
+                        });
+                    } else if (State.data.exactMatch === 'active') {
+                        // Exact match but content not loaded yet, trigger load and wait
+                        State.data.pendingCopyAction = action;
+                        const key = self.dom.searchInput.value.trim();
+                        State.data.selectedKey = key;
+                        Api.send({type: 'select', key: key});
+                    } else {
+                        Drop.showToast('No attachments to copy');
+                    }
+                }
+            },
+
+            copyResult: function (msg) {
+                if (msg.success) {
+                    Api.send({type: 'hide'});
+                } else {
+                    Drop.showToast('Failed to copy files');
                 }
             }
         };
+    },
+
+    sendClipboardFiles: function (key, files, insertLinks, editorPosition) {
+        if (files.length === 0) return;
+
+        State.data.isCopying = true;
+        this.showAddingOverlay();
+
+        // Store pending link insertion info
+        if (insertLinks && editorPosition) {
+            State.data.pendingLinkInsert = {
+                files: files.map(function (f) { return f[1]; }), // filenames
+                position: editorPosition
+            };
+        }
+
+        Api.send({
+            type: 'addClipboardFiles',
+            key: key,
+            files: files // [[index, filename], ...]
+        });
+    },
+
+    performCopy: function (action) {
+        if (action === 'markdown') {
+            const text = Editor.instance ? Editor.instance.getValue() : '';
+            if (!text) {
+                Drop.showToast('Nothing to copy');
+                return;
+            }
+            navigator.clipboard.writeText(text).then(function () {
+                Api.send({type: 'hide'});
+            }).catch(function () {
+                Drop.showToast('Failed to copy');
+            });
+        } else if (action === 'html') {
+            const html = Editor.instance ? Editor.renderPreviewForExport() : '';
+            if (!html) {
+                Drop.showToast('Nothing to copy');
+                return;
+            }
+            navigator.clipboard.writeText(html).then(function () {
+                Api.send({type: 'hide'});
+            }).catch(function () {
+                Drop.showToast('Failed to copy');
+            });
+        } else if (action === 'files') {
+            if (State.data.attachments.length === 0) {
+                Drop.showToast('No attachments to copy');
+                return;
+            }
+            const filenames = State.data.attachments.map(function (a) {
+                return a.filename;
+            });
+            Api.send({
+                type: 'copyFiles',
+                key: State.data.selectedKey,
+                filenames: filenames
+            });
+        }
     },
 
     setupMessageHandler: function () {

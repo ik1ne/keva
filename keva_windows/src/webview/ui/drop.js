@@ -87,7 +87,7 @@ const Drop = {
         // Check if drop is on a key item in the list
         const keyItem = e.target.closest('.key-item');
         if (keyItem) {
-            return { type: 'keyItem', key: keyItem.dataset.key };
+            return {type: 'keyItem', key: keyItem.dataset.key};
         }
 
         // Default - treat as attachments pane drop
@@ -131,37 +131,21 @@ const Drop = {
             }
         }
 
-        // Build file list with indices
+        // Build file list and check for conflicts
         const fileList = [];
         for (let i = 0; i < files.length; i++) {
-            fileList.push({ index: i, filename: files[i].name });
+            fileList.push({ id: i, filename: files[i].name });
         }
-
-        // Check for conflicts with existing attachments
-        const existingNames = new Set();
-        for (let i = 0; i < State.data.attachments.length; i++) {
-            existingNames.add(State.data.attachments[i].filename);
-        }
-
-        const conflicts = [];
-        const nonConflicts = [];
-        for (let i = 0; i < fileList.length; i++) {
-            const file = fileList[i];
-            if (existingNames.has(file.filename)) {
-                conflicts.push([file.index, file.filename]);
-            } else {
-                nonConflicts.push([file.index, file.filename]);
-            }
-        }
+        const result = ConflictDialog.checkConflicts(fileList);
 
         // Store drop context for link insertion
         const insertLinks = (dropTarget === 'editor');
         const editorPosition = insertLinks ? this.getEditorDropPosition(e) : null;
 
-        if (conflicts.length > 0) {
-            DropConflictDialog.show(targetKey, conflicts, nonConflicts, insertLinks, editorPosition);
+        if (result.conflicts.length > 0) {
+            ConflictDialog.show(targetKey, result.conflicts, result.nonConflicts, insertLinks, editorPosition, Drop.sendDroppedFiles.bind(Drop));
         } else {
-            this.sendDroppedFiles(targetKey, nonConflicts, insertLinks, editorPosition);
+            this.sendDroppedFiles(targetKey, result.nonConflicts, insertLinks, editorPosition);
         }
     },
 
@@ -210,7 +194,7 @@ const Drop = {
         const endColumn = lines.length === 1
             ? position.column + textData.length
             : lines[lines.length - 1].length + 1;
-        const endPos = { lineNumber: endLine, column: endColumn };
+        const endPos = {lineNumber: endLine, column: endColumn};
 
         Editor.instance.setPosition(endPos);
 
@@ -274,7 +258,9 @@ const Drop = {
         // Store pending link insertion info
         if (insertLinks && editorPosition) {
             State.data.pendingLinkInsert = {
-                files: files.map(function (f) { return f[1]; }), // filenames
+                files: files.map(function (f) {
+                    return f[1];
+                }), // filenames
                 position: editorPosition
             };
         }
@@ -311,7 +297,7 @@ const Drop = {
 
         // 3. Move cursor to end of inserted content
         const endColumn = position.column + links.length;
-        const endPos = { lineNumber: position.lineNumber, column: endColumn };
+        const endPos = {lineNumber: position.lineNumber, column: endColumn};
 
         Editor.instance.setPosition(endPos);
 
@@ -332,220 +318,5 @@ const Drop = {
                 toast.remove();
             }, 300);
         }, 2000);
-    }
-};
-
-// Conflict dialog for dropped files (uses indices instead of paths)
-const DropConflictDialog = {
-    overlay: null,
-    key: null,
-    conflicts: [],
-    pending: [],
-    takenNames: null,
-    applyToAll: false,
-    resolutions: [],
-    insertLinks: false,
-    editorPosition: null,
-
-    show: function (key, conflicts, nonConflicts, insertLinks, editorPosition) {
-        this.key = key;
-        this.conflicts = conflicts.slice();
-        this.pending = nonConflicts.slice();
-        this.applyToAll = false;
-        this.resolutions = [];
-        this.insertLinks = insertLinks;
-        this.editorPosition = editorPosition;
-
-        // Build initial set of taken filenames
-        this.takenNames = new Set();
-        for (let i = 0; i < State.data.attachments.length; i++) {
-            this.takenNames.add(State.data.attachments[i].filename);
-        }
-
-        this.createOverlay();
-        this.showCurrentConflict();
-    },
-
-    createOverlay: function () {
-        if (this.overlay) {
-            this.overlay.remove();
-        }
-
-        this.overlay = document.createElement('div');
-        this.overlay.className = 'conflict-overlay';
-        this.overlay.innerHTML =
-            '<div class="conflict-dialog" tabindex="-1">' +
-            '  <div class="conflict-title">File already exists</div>' +
-            '  <div class="conflict-filename"></div>' +
-            '  <div class="conflict-buttons">' +
-            '    <button class="conflict-btn" data-action="overwrite">Overwrite</button>' +
-            '    <button class="conflict-btn" data-action="rename">Keep Both</button>' +
-            '    <button class="conflict-btn" data-action="skip">Skip</button>' +
-            '  </div>' +
-            '  <label class="conflict-apply-all">' +
-            '    <input type="checkbox" id="drop-apply-to-all"> Apply to all' +
-            '  </label>' +
-            '</div>';
-
-        document.body.appendChild(this.overlay);
-
-        const self = this;
-        const buttons = this.overlay.querySelectorAll('.conflict-btn');
-        for (let i = 0; i < buttons.length; i++) {
-            buttons[i].addEventListener('click', function () {
-                self.handleAction(this.dataset.action);
-            });
-        }
-
-        this.overlay.querySelector('#drop-apply-to-all').addEventListener('change', function () {
-            self.applyToAll = this.checked;
-        });
-
-        var checkbox = this.overlay.querySelector('#drop-apply-to-all');
-
-        this.overlay.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') {
-                e.stopPropagation();
-                self.cancel();
-            } else if (e.key === 'Tab') {
-                e.preventDefault();
-                var focusables = Array.prototype.slice.call(buttons);
-                if (checkbox.offsetParent !== null) {
-                    focusables.push(checkbox);
-                }
-                var currentIndex = focusables.indexOf(document.activeElement);
-                var nextIndex;
-                if (e.shiftKey) {
-                    nextIndex = currentIndex <= 0 ? focusables.length - 1 : currentIndex - 1;
-                } else {
-                    nextIndex = currentIndex >= focusables.length - 1 ? 0 : currentIndex + 1;
-                }
-                focusables[nextIndex].focus();
-            }
-        });
-
-        var dialog = this.overlay.querySelector('.conflict-dialog');
-        this.overlay.addEventListener('click', function (e) {
-            if (!e.target.closest('button') && !e.target.closest('input')) {
-                dialog.focus();
-            }
-        });
-
-        buttons[0].focus();
-    },
-
-    showCurrentConflict: function () {
-        if (this.conflicts.length === 0) {
-            this.finish();
-            return;
-        }
-
-        const conflict = this.conflicts[0];
-        const filename = conflict[1];
-
-        this.overlay.querySelector('.conflict-filename').textContent =
-            '"' + filename + '" already exists.';
-
-        const applyAllLabel = this.overlay.querySelector('.conflict-apply-all');
-        if (this.conflicts.length > 1) {
-            applyAllLabel.style.display = 'block';
-            applyAllLabel.querySelector('input').nextSibling.textContent =
-                ' Apply to all (' + this.conflicts.length + ' remaining)';
-        } else {
-            applyAllLabel.style.display = 'none';
-        }
-    },
-
-    handleAction: function (action) {
-        if (this.applyToAll) {
-            for (let i = 0; i < this.conflicts.length; i++) {
-                this.resolveFile(this.conflicts[i], action);
-            }
-            this.conflicts = [];
-        } else {
-            const conflict = this.conflicts.shift();
-            this.resolveFile(conflict, action);
-        }
-
-        this.recheckPending();
-        this.showCurrentConflict();
-    },
-
-    resolveFile: function (file, action) {
-        const index = file[0];
-        const filename = file[1];
-
-        if (action === 'skip') {
-            return;
-        }
-
-        if (action === 'rename') {
-            const newName = this.findNextAvailableName(filename);
-            this.resolutions.push([index, newName]);
-            this.takenNames.add(newName);
-        } else if (action === 'overwrite') {
-            this.resolutions.push([index, filename]);
-        }
-    },
-
-    findNextAvailableName: function (filename) {
-        const dotIndex = filename.lastIndexOf('.');
-        let stem, ext;
-        if (dotIndex > 0) {
-            stem = filename.substring(0, dotIndex);
-            ext = filename.substring(dotIndex);
-        } else {
-            stem = filename;
-            ext = '';
-        }
-
-        let counter = 1;
-        let newName;
-        do {
-            newName = stem + ' (' + counter + ')' + ext;
-            counter++;
-        } while (this.takenNames.has(newName));
-
-        return newName;
-    },
-
-    recheckPending: function () {
-        const stillPending = [];
-        for (let i = 0; i < this.pending.length; i++) {
-            const file = this.pending[i];
-            if (this.takenNames.has(file[1])) {
-                this.conflicts.push(file);
-            } else {
-                stillPending.push(file);
-            }
-        }
-        this.pending = stillPending;
-    },
-
-    cancel: function () {
-        if (this.overlay) {
-            this.overlay.remove();
-            this.overlay = null;
-        }
-    },
-
-    finish: function () {
-        if (this.overlay) {
-            this.overlay.remove();
-            this.overlay = null;
-        }
-
-        // Add remaining pending files
-        for (let i = 0; i < this.pending.length; i++) {
-            const index = this.pending[i][0];
-            const filename = this.pending[i][1];
-            this.resolutions.push([index, filename]);
-        }
-
-        if (this.resolutions.length === 0) {
-            return;
-        }
-
-        Drop.sendDroppedFiles(this.key, this.resolutions, this.insertLinks, this.editorPosition);
     }
 };

@@ -7,6 +7,7 @@ const Editor = {
     currentHandle: null,
     currentKey: null,
     keyHash: null,
+    blobsPath: null,
     isReadOnly: false,
     isSaving: false,
     isLargeFile: false,
@@ -294,6 +295,22 @@ const Editor = {
         });
     },
 
+    // Transform attachment links to file:// URLs for export (e.g., copy HTML)
+    transformForExport: function (html, keyHash, blobsPath) {
+        // Replace virtual host URLs with file:// URLs
+        var virtualHostPattern = /https:\/\/keva-data\.local\/blobs\//g;
+        var filePrefix = 'file:///' + blobsPath + '/';
+        html = html.replace(virtualHostPattern, filePrefix);
+
+        // Replace att: links with file:// URLs
+        var attPattern = /att:([^"]+)/g;
+        html = html.replace(attPattern, function(match, path) {
+            return 'file:///' + blobsPath + '/' + path;
+        });
+
+        return html;
+    },
+
     initMarkdownIt: function () {
         if (this.markdownIt) return;
         this.markdownIt = window.markdownit({
@@ -310,7 +327,7 @@ const Editor = {
                 return '';
             }
         });
-        // Allow att: scheme in links
+        // Allow att: scheme in links (for attachment URLs)
         var defined = this.markdownIt.validateLink;
         this.markdownIt.validateLink = function (url) {
             if (url.startsWith('att:')) return true;
@@ -338,6 +355,12 @@ const Editor = {
 
         this.previewCache.html = cleanHtml;
         return cleanHtml;
+    },
+
+    // Render preview with file:// URLs for external use (copy HTML)
+    renderPreviewForExport: function () {
+        const html = this.renderPreview();
+        return this.transformForExport(html, this.keyHash, this.blobsPath);
     },
 
     invalidatePreviewCache: function () {

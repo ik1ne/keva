@@ -1,23 +1,51 @@
 'use strict';
 
+// Reusable conflict dialog for file operations (drop, clipboard paste, file picker)
 const ConflictDialog = {
+    /// Partitions files into conflicts/nonConflicts based on existing attachments.
+    /// fileList: array of {id, filename} where id is index or path
+    /// Returns: {conflicts: [[id, filename], ...], nonConflicts: [[id, filename], ...]}
+    checkConflicts: function (fileList) {
+        const existingNames = new Set();
+        for (let i = 0; i < State.data.attachments.length; i++) {
+            existingNames.add(State.data.attachments[i].filename);
+        }
+
+        const conflicts = [];
+        const nonConflicts = [];
+        for (let i = 0; i < fileList.length; i++) {
+            const file = fileList[i];
+            if (existingNames.has(file.filename)) {
+                conflicts.push([file.id, file.filename]);
+            } else {
+                nonConflicts.push([file.id, file.filename]);
+            }
+        }
+        return { conflicts: conflicts, nonConflicts: nonConflicts };
+    },
+
     overlay: null,
     key: null,
     conflicts: [],
-    pending: [],      // Files not yet resolved: [path, filename]
-    takenNames: null, // Set of filenames that are taken
+    pending: [],
+    takenNames: null,
     applyToAll: false,
     resolutions: [],
+    insertLinks: false,
+    editorPosition: null,
+    onFinish: null,
 
-    show: function (key, conflicts, nonConflicts) {
+    show: function (key, conflicts, nonConflicts, insertLinks, editorPosition, onFinish) {
         this.key = key;
         this.conflicts = conflicts.slice();
         this.pending = nonConflicts.slice();
         this.applyToAll = false;
         this.resolutions = [];
+        this.insertLinks = insertLinks;
+        this.editorPosition = editorPosition;
+        this.onFinish = onFinish;
 
-        // Build initial set of taken filenames from existing attachments only.
-        // Pending files are NOT included - they may become conflicts as we resolve.
+        // Build initial set of taken filenames
         this.takenNames = new Set();
         for (let i = 0; i < State.data.attachments.length; i++) {
             this.takenNames.add(State.data.attachments[i].filename);
@@ -44,7 +72,7 @@ const ConflictDialog = {
             '    <button class="conflict-btn" data-action="skip">Skip</button>' +
             '  </div>' +
             '  <label class="conflict-apply-all">' +
-            '    <input type="checkbox" id="apply-to-all"> Apply to all' +
+            '    <input type="checkbox" id="conflict-apply-to-all"> Apply to all' +
             '  </label>' +
             '</div>';
 
@@ -58,11 +86,11 @@ const ConflictDialog = {
             });
         }
 
-        this.overlay.querySelector('#apply-to-all').addEventListener('change', function () {
+        this.overlay.querySelector('#conflict-apply-to-all').addEventListener('change', function () {
             self.applyToAll = this.checked;
         });
 
-        var checkbox = this.overlay.querySelector('#apply-to-all');
+        var checkbox = this.overlay.querySelector('#conflict-apply-to-all');
 
         this.overlay.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') {
@@ -70,7 +98,6 @@ const ConflictDialog = {
                 self.cancel();
             } else if (e.key === 'Tab') {
                 e.preventDefault();
-                // Build focusables list dynamically (checkbox may be hidden)
                 var focusables = Array.prototype.slice.call(buttons);
                 if (checkbox.offsetParent !== null) {
                     focusables.push(checkbox);
@@ -86,7 +113,6 @@ const ConflictDialog = {
             }
         });
 
-        // Restore keyboard focus without selecting a button
         var dialog = this.overlay.querySelector('.conflict-dialog');
         this.overlay.addEventListener('click', function (e) {
             if (!e.target.closest('button') && !e.target.closest('input')) {
@@ -94,7 +120,6 @@ const ConflictDialog = {
             }
         });
 
-        // Focus first button
         buttons[0].focus();
     },
 
@@ -122,43 +147,37 @@ const ConflictDialog = {
 
     handleAction: function (action) {
         if (this.applyToAll) {
-            // Apply to all remaining conflicts
             for (let i = 0; i < this.conflicts.length; i++) {
                 this.resolveFile(this.conflicts[i], action);
             }
             this.conflicts = [];
         } else {
-            // Apply to current conflict only
             const conflict = this.conflicts.shift();
             this.resolveFile(conflict, action);
         }
 
-        // Check if any pending files now conflict
         this.recheckPending();
         this.showCurrentConflict();
     },
 
     resolveFile: function (file, action) {
-        const path = file[0];
+        const index = file[0];
         const filename = file[1];
 
         if (action === 'skip') {
-            // Don't add to resolutions
             return;
         }
 
         if (action === 'rename') {
             const newName = this.findNextAvailableName(filename);
-            this.resolutions.push([path, newName]);
+            this.resolutions.push([index, newName]);
             this.takenNames.add(newName);
         } else if (action === 'overwrite') {
-            this.resolutions.push([path, filename]);
-            // Filename remains taken (overwriting existing)
+            this.resolutions.push([index, filename]);
         }
     },
 
     findNextAvailableName: function (filename) {
-        // Frontend is the source of truth for rename decisions
         const dotIndex = filename.lastIndexOf('.');
         let stem, ext;
         if (dotIndex > 0) {
@@ -180,7 +199,6 @@ const ConflictDialog = {
     },
 
     recheckPending: function () {
-        // Move any pending files that now conflict to the conflicts list
         const stillPending = [];
         for (let i = 0; i < this.pending.length; i++) {
             const file = this.pending[i];
@@ -206,25 +224,19 @@ const ConflictDialog = {
             this.overlay = null;
         }
 
-        // Add remaining pending files with their original filenames
+        // Add remaining pending files
         for (let i = 0; i < this.pending.length; i++) {
-            const path = this.pending[i][0];
+            const index = this.pending[i][0];
             const filename = this.pending[i][1];
-            this.resolutions.push([path, filename]);
+            this.resolutions.push([index, filename]);
         }
 
-        // Skip sending if all files were skipped
         if (this.resolutions.length === 0) {
             return;
         }
 
-        State.data.isCopying = true;
-        Main.showAddingOverlay();
-
-        Api.send({
-            type: 'addAttachments',
-            key: this.key,
-            files: this.resolutions
-        });
+        if (this.onFinish) {
+            this.onFinish(this.key, this.resolutions, this.insertLinks, this.editorPosition);
+        }
     }
 };

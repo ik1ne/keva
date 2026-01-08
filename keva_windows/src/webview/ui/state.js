@@ -12,6 +12,7 @@ const State = {
         isShuttingDown: false,
         pendingSelectKey: null,
         pendingLinkInsert: null,
+        pendingCopyAction: null,
         focusEditorOnLoad: false,
         currentTheme: 'dark',
         activePane: 'search',

@@ -1,8 +1,9 @@
 //! WebView2 initialization.
 
-use super::bridge::handle_webview_message;
-use super::{WEBVIEW, WebView};
+use super::bridge::{handle_webview_message, post_message};
+use super::{CopyAction, OutgoingMessage, WEBVIEW, WebView};
 use crate::keva_worker::{Request, get_data_path};
+use crate::platform::clipboard::{read_clipboard, set_clipboard_paths};
 use crate::platform::composition::CompositionHost;
 use crate::platform::drag_out::handle_drag_starting;
 use crate::render::theme::Theme;
@@ -11,18 +12,24 @@ use std::sync::mpsc::Sender;
 #[cfg(debug_assertions)]
 use webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_CHANNEL_SEARCH_KIND_LEAST_STABLE;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
-    COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW, CreateCoreWebView2EnvironmentWithOptions,
-    ICoreWebView2, ICoreWebView2_3, ICoreWebView2CompositionController5, ICoreWebView2Controller,
-    ICoreWebView2Environment, ICoreWebView2Environment3, ICoreWebView2EnvironmentOptions,
-    ICoreWebView2Settings9, ICoreWebView2WebMessageReceivedEventArgs,
+    COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW, COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN,
+    COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN, CreateCoreWebView2EnvironmentWithOptions,
+    ICoreWebView2, ICoreWebView2_3, ICoreWebView2AcceleratorKeyPressedEventArgs,
+    ICoreWebView2CompositionController5, ICoreWebView2Controller, ICoreWebView2Environment,
+    ICoreWebView2Environment3, ICoreWebView2EnvironmentOptions, ICoreWebView2Settings9,
+    ICoreWebView2WebMessageReceivedEventArgs,
 };
 use webview2_com::{
-    CoreWebView2EnvironmentOptions, CreateCoreWebView2CompositionControllerCompletedHandler,
+    AcceleratorKeyPressedEventHandler, CoreWebView2EnvironmentOptions,
+    CreateCoreWebView2CompositionControllerCompletedHandler,
     CreateCoreWebView2EnvironmentCompletedHandler, CursorChangedEventHandler,
     DragStartingEventHandler, NavigationStartingEventHandler, WebMessageReceivedEventHandler,
 };
 use windows::Win32::Foundation::HWND;
 use windows::Win32::System::Com::CoTaskMemFree;
+use windows::Win32::UI::Input::KeyboardAndMouse::{
+    GetKeyState, VK_CONTROL, VK_F, VK_MENU, VK_R, VK_T, VK_V,
+};
 use windows::Win32::UI::Shell::ShellExecuteW;
 use windows::Win32::UI::WindowsAndMessaging::{HCURSOR, SW_SHOWNORMAL, SetCursor};
 use windows::core::{Interface, PWSTR, w};
@@ -157,6 +164,27 @@ fn create_composition_controller(
                         return Ok(());
                     };
 
+                    // Subscribe to AcceleratorKeyPressed to intercept shortcuts
+                    {
+                        let webview = webview.clone();
+                        let mut accel_token = 0i64;
+                        let _ =
+                            controller.add_AcceleratorKeyPressed(
+                                &AcceleratorKeyPressedEventHandler::create(Box::new(
+                                    move |_sender,
+                                          args: Option<
+                                        ICoreWebView2AcceleratorKeyPressedEventArgs,
+                                    >| {
+                                        if let Some(args) = args {
+                                            handle_accelerator_key(hwnd, &webview, &args);
+                                        }
+                                        Ok(())
+                                    },
+                                )),
+                                &mut accel_token,
+                            );
+                    }
+
                     let _ = controller.SetIsVisible(true);
 
                     let wv = WebView {
@@ -193,7 +221,7 @@ fn create_composition_controller(
                             COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW,
                         );
                     }
-                    let _ = wv.webview.Navigate(w!("http://keva.local/index.html"));
+                    let _ = wv.webview.Navigate(w!("https://keva.local/index.html"));
 
                     let script = match theme {
                         Theme::Dark => w!("document.documentElement.dataset.theme='dark';"),
@@ -266,7 +294,7 @@ fn setup_webview(
                 CoTaskMemFree(Some(uri_pwstr.as_ptr() as *const c_void));
 
                 // Allow internal navigation to our virtual hosts
-                if uri.starts_with("http://keva.local/")
+                if uri.starts_with("https://keva.local/")
                     || uri.starts_with("https://keva-data.local/")
                 {
                     return Ok(());
@@ -277,8 +305,8 @@ fn setup_webview(
 
                 if let Some(relative) = uri.strip_prefix("att:") {
                     // att:{keyHash}/{encodedFilename} -> open file with default app
-                    let decoded = percent_encoding::percent_decode_str(relative)
-                        .decode_utf8_lossy();
+                    let decoded =
+                        percent_encoding::percent_decode_str(relative).decode_utf8_lossy();
                     let path = get_data_path().join("blobs").join(decoded.as_ref());
                     let path_wide: Vec<u16> = path
                         .to_string_lossy()
@@ -312,5 +340,96 @@ fn setup_webview(
         );
 
         Some(webview)
+    }
+}
+
+/// Handles accelerator key events intercepted from WebView2.
+///
+/// This runs when WebView2 is about to process an accelerator key (Ctrl+*, Alt+*, Escape).
+/// We intercept specific shortcuts here and call `SetHandled(true)` to prevent WebView
+/// from processing them.
+fn handle_accelerator_key(
+    hwnd: HWND,
+    webview: &ICoreWebView2,
+    args: &ICoreWebView2AcceleratorKeyPressedEventArgs,
+) {
+    unsafe {
+        // Only handle key down events
+        let mut kind =
+            webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_KEY_EVENT_KIND(0);
+        if args.KeyEventKind(&mut kind).is_err() {
+            return;
+        }
+        if kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN
+            && kind != COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN
+        {
+            return;
+        }
+
+        // Filter out auto-repeated keys
+        let mut status = webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_PHYSICAL_KEY_STATUS::default();
+        if args.PhysicalKeyStatus(&mut status).is_ok() && status.WasKeyDown.as_bool() {
+            return;
+        }
+
+        let mut virtual_key = 0u32;
+        if args.VirtualKey(&mut virtual_key).is_err() {
+            return;
+        }
+
+        let ctrl_down = GetKeyState(VK_CONTROL.0 as i32) < 0;
+        let alt_down = GetKeyState(VK_MENU.0 as i32) < 0;
+
+        // Ctrl+V: check for files in clipboard
+        if virtual_key == VK_V.0 as u32 && ctrl_down && !alt_down {
+            let content = read_clipboard(hwnd);
+            if !content.files.is_empty() {
+                let _ = args.SetHandled(true);
+                let filenames: Vec<String> = content
+                    .files
+                    .iter()
+                    .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
+                    .collect();
+                set_clipboard_paths(content.files);
+                post_message(webview, &OutgoingMessage::FilesPasted { files: filenames });
+            }
+            // If no files, let WebView handle text paste
+            return;
+        }
+
+        // Ctrl+Alt+T: Copy markdown
+        if virtual_key == VK_T.0 as u32 && ctrl_down && alt_down {
+            let _ = args.SetHandled(true);
+            post_message(
+                webview,
+                &OutgoingMessage::DoCopy {
+                    action: CopyAction::Markdown,
+                },
+            );
+            return;
+        }
+
+        // Ctrl+Alt+R: Copy HTML (rendered preview)
+        if virtual_key == VK_R.0 as u32 && ctrl_down && alt_down {
+            let _ = args.SetHandled(true);
+            post_message(
+                webview,
+                &OutgoingMessage::DoCopy {
+                    action: CopyAction::Html,
+                },
+            );
+            return;
+        }
+
+        // Ctrl+Alt+F: Copy files
+        if virtual_key == VK_F.0 as u32 && ctrl_down && alt_down {
+            let _ = args.SetHandled(true);
+            post_message(
+                webview,
+                &OutgoingMessage::DoCopy {
+                    action: CopyAction::Files,
+                },
+            );
+        }
     }
 }

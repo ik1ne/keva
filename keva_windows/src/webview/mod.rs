@@ -66,11 +66,34 @@ pub enum OutgoingMessage {
     Value {
         key: String,
         key_hash: String,
+        /// Base path to blobs directory for constructing file:// URLs.
+        blobs_path: String,
         #[serde(skip)]
         content_path: std::path::PathBuf,
         read_only: bool,
         attachments: Vec<AttachmentInfo>,
     },
+    /// Files pasted from clipboard (paths cached in native).
+    FilesPasted {
+        files: Vec<String>,
+    },
+    /// Signal JS to perform a copy action.
+    DoCopy {
+        action: CopyAction,
+    },
+    /// Result of copy operation.
+    CopyResult {
+        success: bool,
+    },
+}
+
+/// Copy action type for DoCopy message.
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CopyAction {
+    Markdown,
+    Html,
+    Files,
 }
 
 /// Exact match status for current search query.

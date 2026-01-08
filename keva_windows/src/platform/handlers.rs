@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicIsize, AtomicU8, Ordering};
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_FILE_SYSTEM_HANDLE_PERMISSION_READ_ONLY,
     COREWEBVIEW2_FILE_SYSTEM_HANDLE_PERMISSION_READ_WRITE,
-    COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC, ICoreWebView2_23, ICoreWebView2Environment14,
+    COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC, ICoreWebView2Environment14, ICoreWebView2_23,
     ICoreWebView2ObjectCollection,
 };
 use webview2_com::pwstr_from_str;
@@ -26,7 +26,6 @@ use windows::Win32::{
     },
     UI::{
         HiDpi::GetDpiForSystem,
-        Input::KeyboardAndMouse::VK_ESCAPE,
         WindowsAndMessaging::{
             GetClientRect, GetSystemMetrics, GetWindowRect, IsWindowVisible, MINMAXINFO,
             NCCALCSIZE_PARAMS, PostMessageW, PostQuitMessage, SM_CXPADDEDBORDER, SM_CXSIZEFRAME,
@@ -155,24 +154,11 @@ pub fn on_activate(wparam: WPARAM, lparam: LPARAM) {
 /// WM_SETFOCUS: Transfer focus to WebView2 CompositionController.
 pub fn on_setfocus() {
     if let Some(wv) = WEBVIEW.get() {
-        let _ = unsafe { wv.controller.MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC) };
+        let _ = unsafe {
+            wv.controller
+                .MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC)
+        };
     }
-}
-
-/// WM_KEYDOWN: Hide window on Esc, restoring focus to previous window.
-pub fn on_keydown(hwnd: HWND, wparam: WPARAM) -> Option<LRESULT> {
-    let virtual_key = wparam.0 as u16;
-    if virtual_key == VK_ESCAPE.0 {
-        let prev = PREV_FOREGROUND.load(Ordering::Relaxed);
-        unsafe {
-            if prev != 0 {
-                let _ = SetForegroundWindow(HWND(prev as *mut _));
-            }
-            let _ = ShowWindow(hwnd, SW_HIDE);
-        }
-        return Some(LRESULT(0));
-    }
-    None
 }
 
 /// Shows window, brings to foreground, and signals WebView to restore focus.
@@ -182,7 +168,10 @@ fn show_and_focus_window(hwnd: HWND) {
         let _ = SetForegroundWindow(hwnd);
     }
     if let Some(wv) = WEBVIEW.get() {
-        let _ = unsafe { wv.controller.MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC) };
+        let _ = unsafe {
+            wv.controller
+                .MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC)
+        };
         post_message(&wv.webview, &OutgoingMessage::Focus);
     }
 }

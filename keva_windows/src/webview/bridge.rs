@@ -3,7 +3,8 @@
 use super::messages::IncomingMessage;
 use super::wm;
 use super::{FilePickerRequest, OutgoingMessage, WEBVIEW};
-use crate::keva_worker::Request;
+use crate::keva_worker::{get_data_path, Request};
+use crate::platform::clipboard::{take_clipboard_paths, write_files};
 use crate::platform::drop_target::take_dropped_paths;
 use crate::render::theme::Theme;
 use std::sync::mpsc::Sender;
@@ -133,6 +134,47 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
                     key,
                     files: resolved_files,
                 });
+            }
+        }
+        IncomingMessage::AddClipboardFiles { key, files } => {
+            // Get cached paths from clipboard and match by index
+            let cached_paths = take_clipboard_paths();
+            let resolved_files: Vec<(std::path::PathBuf, String)> = files
+                .into_iter()
+                .filter_map(|(index, filename)| {
+                    cached_paths.get(index).map(|path| (path.clone(), filename))
+                })
+                .collect();
+
+            if !resolved_files.is_empty() {
+                let _ = request_tx.send(Request::AddClipboardFiles {
+                    key,
+                    files: resolved_files,
+                });
+            }
+        }
+        IncomingMessage::CopyFiles { key, filenames } => {
+            // Build full paths and write to clipboard
+            let success = if let Ok(key_obj) = keva_core::types::Key::try_from(key.as_str()) {
+                let key_hash = keva_core::core::KevaCore::key_to_path(&key_obj);
+                let blobs_dir = get_data_path().join("blobs").join(&key_hash);
+                let paths: Vec<std::path::PathBuf> = filenames
+                    .into_iter()
+                    .map(|name| blobs_dir.join(&name))
+                    .filter(|path| path.exists())
+                    .collect();
+
+                if paths.is_empty() {
+                    false
+                } else {
+                    write_files(parent_hwnd, &paths)
+                }
+            } else {
+                false
+            };
+
+            if let Some(wv) = WEBVIEW.get() {
+                post_message(&wv.webview, &OutgoingMessage::CopyResult { success });
             }
         }
     }

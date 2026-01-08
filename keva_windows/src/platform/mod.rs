@@ -1,5 +1,6 @@
 //! Win32 platform abstractions.
 
+pub mod clipboard;
 pub mod composition;
 pub mod drag_out;
 pub mod drop_target;

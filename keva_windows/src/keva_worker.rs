@@ -71,6 +71,12 @@ pub enum Request {
         /// (source_path, target_filename)
         files: Vec<(PathBuf, String)>,
     },
+    /// Add files from clipboard using cached paths.
+    AddClipboardFiles {
+        key: String,
+        /// (source_path, target_filename)
+        files: Vec<(PathBuf, String)>,
+    },
     Shutdown,
 }
 
@@ -186,6 +192,9 @@ fn worker_loop(
             Request::AddDroppedFiles { key, files } => {
                 handle_add_dropped_files(&mut keva, &key, files, hwnd);
             }
+            Request::AddClipboardFiles { key, files } => {
+                handle_add_dropped_files(&mut keva, &key, files, hwnd);
+            }
             Request::Shutdown => {
                 unsafe {
                     let _ = PostMessageW(Some(hwnd), wm::SHUTDOWN_COMPLETE, WPARAM(0), LPARAM(0));
@@ -232,11 +241,17 @@ fn handle_get_value(keva: &mut KevaCore, key_str: &str, hwnd: HWND) {
         })
         .collect();
 
+    let blobs_path = get_data_path()
+        .join("blobs")
+        .to_string_lossy()
+        .replace('\\', "/");
+
     post_response(
         hwnd,
         OutgoingMessage::Value {
             key: key_str.to_string(),
             key_hash,
+            blobs_path,
             content_path: keva.content_path(&key),
             read_only,
             attachments,
