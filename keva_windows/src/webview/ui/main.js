@@ -454,11 +454,11 @@ const Main = {
                 Editor.keyHash = msg.keyHash;
                 Editor.blobsPath = msg.blobsPath;
 
-                // Insert links if pending from drop
+                // Insert links if pending from drop/paste
                 if (State.data.pendingLinkInsert) {
                     Drop.insertAttachmentLinks(
                         State.data.pendingLinkInsert.files,
-                        State.data.pendingLinkInsert.position
+                        State.data.pendingLinkInsert.selection
                     );
                     State.data.pendingLinkInsert = null;
                 }
@@ -571,8 +571,9 @@ const Main = {
 
                 // Determine if we should insert links (editor focused)
                 const insertLinks = (State.data.activePane === 'editor');
-                const editorPosition = insertLinks && Editor.instance
-                    ? Editor.instance.getPosition()
+                // Use selection to replace selected text when pasting
+                const editorSelection = insertLinks && Editor.instance
+                    ? Editor.instance.getSelection()
                     : null;
 
                 // Build file list and check for conflicts
@@ -583,9 +584,9 @@ const Main = {
                 const result = ConflictDialog.checkConflicts(fileList);
 
                 if (result.conflicts.length > 0) {
-                    ConflictDialog.show(State.data.selectedKey, result.conflicts, result.nonConflicts, insertLinks, editorPosition, self.sendClipboardFiles.bind(self));
+                    ConflictDialog.show(State.data.selectedKey, result.conflicts, result.nonConflicts, insertLinks, editorSelection, self.sendClipboardFiles.bind(self));
                 } else {
-                    self.sendClipboardFiles(State.data.selectedKey, result.nonConflicts, insertLinks, editorPosition);
+                    self.sendClipboardFiles(State.data.selectedKey, result.nonConflicts, insertLinks, editorSelection);
                 }
             },
 
@@ -638,17 +639,17 @@ const Main = {
         };
     },
 
-    sendClipboardFiles: function (key, files, insertLinks, editorPosition) {
+    sendClipboardFiles: function (key, files, insertLinks, editorSelection) {
         if (files.length === 0) return;
 
         State.data.isCopying = true;
         this.showAddingOverlay();
 
-        // Store pending link insertion info
-        if (insertLinks && editorPosition) {
+        // Store pending link insertion info (selection replaces selected text)
+        if (insertLinks && editorSelection) {
             State.data.pendingLinkInsert = {
                 files: files.map(function (f) { return f[1]; }), // filenames
-                position: editorPosition
+                selection: editorSelection
             };
         }
 

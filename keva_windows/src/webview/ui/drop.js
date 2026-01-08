@@ -255,13 +255,13 @@ const Drop = {
         State.data.isCopying = true;
         Main.showAddingOverlay();
 
-        // Store pending link insertion info
+        // Store pending link insertion info (position converted to selection format)
         if (insertLinks && editorPosition) {
             State.data.pendingLinkInsert = {
                 files: files.map(function (f) {
                     return f[1];
                 }), // filenames
-                position: editorPosition
+                selection: editorPosition // insertAttachmentLinks handles both formats
             };
         }
 
@@ -272,8 +272,9 @@ const Drop = {
         });
     },
 
-    insertAttachmentLinks: function (filenames, position) {
-        if (!Editor.instance || !position || filenames.length === 0) return;
+    // Accepts either a position {lineNumber, column} or selection {startLineNumber, startColumn, endLineNumber, endColumn}
+    insertAttachmentLinks: function (filenames, positionOrSelection) {
+        if (!Editor.instance || !positionOrSelection || filenames.length === 0) return;
 
         const links = filenames.map(function (filename) {
             var prefix = Editor.isImageFile(filename) ? '!' : '';
@@ -284,24 +285,39 @@ const Drop = {
         window.focus();
         Editor.instance.focus();
 
-        // 2. Insert content at position
+        // 2. Build range - selection replaces selected text, position inserts at point
+        var range;
+        if (positionOrSelection.startLineNumber !== undefined) {
+            // Selection object from getSelection()
+            range = {
+                startLineNumber: positionOrSelection.startLineNumber,
+                startColumn: positionOrSelection.startColumn,
+                endLineNumber: positionOrSelection.endLineNumber,
+                endColumn: positionOrSelection.endColumn
+            };
+        } else {
+            // Position object from getEditorDropPosition()
+            range = {
+                startLineNumber: positionOrSelection.lineNumber,
+                startColumn: positionOrSelection.column,
+                endLineNumber: positionOrSelection.lineNumber,
+                endColumn: positionOrSelection.column
+            };
+        }
+
+        // 3. Insert/replace content
         Editor.instance.executeEdits('drop', [{
-            range: {
-                startLineNumber: position.lineNumber,
-                startColumn: position.column,
-                endLineNumber: position.lineNumber,
-                endColumn: position.column
-            },
+            range: range,
             text: links
         }]);
 
-        // 3. Move cursor to end of inserted content
-        const endColumn = position.column + links.length;
-        const endPos = {lineNumber: position.lineNumber, column: endColumn};
+        // 4. Move cursor to end of inserted content
+        const endColumn = range.startColumn + links.length;
+        const endPos = { lineNumber: range.startLineNumber, column: endColumn };
 
         Editor.instance.setPosition(endPos);
 
-        // 4. Reveal the position
+        // 5. Reveal the position
         Editor.instance.revealPositionInCenter(endPos);
     },
 
