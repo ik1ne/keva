@@ -713,7 +713,6 @@ paste and requests clipboard from native. Context-aware paste behavior. Copy sho
 | TC-M13-08 | Ctrl+Alt+F copies attachments, hides window          | ❌      |
 | TC-M13-09 | "Nothing to copy" shown when no target key           | ❌      |
 | TC-M13-10 | Paste files into search bar does nothing             | ❌      |
-| TC-M13-11 | Paste text into attachments panel shows confirmation | ❌      |
 
 ---
 

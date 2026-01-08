@@ -482,10 +482,10 @@ The left pane has a separate trash section at the bottom:
 | Active Pane  | Clipboard | Action                                      |
 |--------------|-----------|---------------------------------------------|
 | Search bar   | Text      | Insert into search bar                      |
-| Search bar   | Files     | Do nothing; User must press enter first     |     
+| Search bar   | Files     | Do nothing; User must press enter first     |
 | Right top    | Text      | Insert at cursor (Monaco)                   |
 | Right top    | Files     | Add to attachments + insert links at cursor |
-| Right bottom | Text      | Show confirmation dialog                    |
+| Right bottom | Text      | Do nothing                                  |
 | Right bottom | Files     | Add to attachments                          |
 
 **Link Insertion Format (multiple files):**
