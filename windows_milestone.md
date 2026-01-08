@@ -686,9 +686,9 @@ paste and requests clipboard from native. Context-aware paste behavior. Copy sho
 
 - `OpenClipboard`, `GetClipboardData(CF_HDROP)` for files
 - `GetClipboardData(CF_UNICODETEXT)` for text
-- WebView: `addEventListener('paste', preventDefault)`
-- WebView sends `{ type: "readClipboard" }` to native
-- Paste text into attachments panel: show confirmation dialog
+- Native intercepts Ctrl+V via `AcceleratorKeyPressed` event
+- Native sends `FilesPasted` message to JS with filenames
+- Escape handled by JS (allows dialogs to intercept)
 
 **Copy Shortcuts:**
 
@@ -703,16 +703,16 @@ paste and requests clipboard from native. Context-aware paste behavior. Copy sho
 
 | TC        | Description                                          | Status |
 |-----------|------------------------------------------------------|--------|
-| TC-M13-01 | Paste text into search bar                           | ❌      |
-| TC-M13-02 | Paste text into Monaco                               | ❌      |
-| TC-M13-03 | Paste files adds attachments + inserts links         | ❌      |
-| TC-M13-04 | Ctrl+C in Monaco copies selected text                | ❌      |
-| TC-M13-05 | Ctrl+C in attachments copies selected files          | ❌      |
-| TC-M13-06 | Ctrl+Alt+T copies markdown, hides window             | ❌      |
-| TC-M13-07 | Ctrl+Alt+R copies rendered HTML, hides window        | ❌      |
-| TC-M13-08 | Ctrl+Alt+F copies attachments, hides window          | ❌      |
-| TC-M13-09 | "Nothing to copy" shown when no target key           | ❌      |
-| TC-M13-10 | Paste files into search bar does nothing             | ❌      |
+| TC-M13-01 | Paste text into search bar                           | ✅      |
+| TC-M13-02 | Paste text into Monaco                               | ✅      |
+| TC-M13-03 | Paste files adds attachments + inserts links         | ✅      |
+| TC-M13-04 | Ctrl+C in Monaco copies selected text                | ✅      |
+| TC-M13-05 | Ctrl+C in attachments copies selected files          | ✅      |
+| TC-M13-06 | Ctrl+Alt+T copies markdown, hides window             | ✅      |
+| TC-M13-07 | Ctrl+Alt+R copies rendered HTML, hides window        | ✅      |
+| TC-M13-08 | Ctrl+Alt+F copies attachments, hides window          | ✅      |
+| TC-M13-09 | "Nothing to copy" shown when no target key           | ✅      |
+| TC-M13-10 | Paste files into search bar does nothing             | ✅      |
 
 ---
 
