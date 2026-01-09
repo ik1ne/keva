@@ -4,6 +4,8 @@ pub use config::{Config, SavedConfig};
 pub(crate) mod key;
 pub use key::{Key, KeyError, MAX_KEY_LENGTH};
 
+pub(crate) mod metadata;
+
 pub(crate) mod value;
 pub use value::PublicValue as Value;
 pub use value::{Attachment, LifecycleState, Metadata};

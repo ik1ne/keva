@@ -331,6 +331,7 @@ dependencies = [
  "postcard",
  "redb",
  "serde",
+ "serde_json",
  "tempfile",
  "thiserror",
 ]

@@ -11,7 +11,7 @@ use crate::types::{Config, Key};
 use error::KevaError;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 pub(crate) mod db;
 pub(crate) mod file_storage;
@@ -348,6 +348,11 @@ impl KevaCore {
             keys_purged: gc_result.purged,
             orphaned_files_removed,
         })
+    }
+
+    /// Returns true if maintenance should run (never run or interval elapsed).
+    pub fn should_run_maintenance(&self, now: SystemTime, interval: Duration) -> bool {
+        self.db.should_run_maintenance(now, interval)
     }
 }
 

@@ -3,17 +3,19 @@
 //! This module handles all redb operations including:
 //! - Main key-value storage (Key → VersionedValue)
 //! - TTL tracking tables for garbage collection
+//! - Metadata storage (JSON strings)
 
 use crate::core::db::error::DatabaseError;
 use crate::core::db::ttl_table::TtlTable;
 use crate::core::file_storage::FileStorage;
-use crate::types::value::versioned_value::VersionedValue;
+use crate::types::metadata::MaintenanceMetadata;
 use crate::types::value::versioned_value::latest_value::{
     Attachment, LifecycleState, Metadata, Value,
 };
+use crate::types::value::versioned_value::VersionedValue;
 use crate::types::{Config, Key, TtlKey};
 use redb::{ReadableDatabase, ReadableTable, TableDefinition};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 pub mod error {
     use thiserror::Error;
@@ -63,6 +65,12 @@ mod ttl_table;
 /// Main table: Key → VersionedValue
 const MAIN_TABLE: TableDefinition<Key, VersionedValue> = TableDefinition::new("main");
 
+/// Metadata table: &str → JSON string
+const METADATA_TABLE: TableDefinition<&str, &str> = TableDefinition::new("metadata");
+
+/// Metadata key for maintenance tracking.
+const METADATA_KEY_MAINTENANCE: &str = "maintenance";
+
 /// TTL table tracking when Active keys expire to Trash.
 const ACTIVE_EXPIRY: TtlTable = TtlTable::new("ttl_trashed");
 
@@ -95,6 +103,7 @@ impl Database {
         let write_txn = db.begin_write()?;
         {
             let _ = write_txn.open_table(MAIN_TABLE)?;
+            let _ = write_txn.open_table(METADATA_TABLE)?;
             ACTIVE_EXPIRY.init(&write_txn)?;
             TRASH_EXPIRY.init(&write_txn)?;
         }
@@ -499,7 +508,7 @@ impl Database {
 
 /// Maintenance operations.
 impl Database {
-    /// Performs garbage collection.
+    /// Performs garbage collection and updates last_run_at timestamp.
     pub fn gc(&mut self, now: SystemTime) -> Result<GcResult, DatabaseError> {
         let (to_trash, to_purge) = {
             let read_txn = self.db.begin_read()?;
@@ -511,6 +520,9 @@ impl Database {
         };
 
         if to_trash.is_empty() && to_purge.is_empty() {
+            self.set_maintenance_metadata(&MaintenanceMetadata {
+                last_run_at: Some(now),
+            })?;
             return Ok(GcResult::default());
         }
 
@@ -553,6 +565,14 @@ impl Database {
                     result.purged.push(key);
                 }
             }
+
+            // Update maintenance timestamp
+            let metadata = MaintenanceMetadata {
+                last_run_at: Some(now),
+            };
+            let json = serde_json::to_string(&metadata).expect("serialization failed");
+            let mut meta_table = write_txn.open_table(METADATA_TABLE)?;
+            meta_table.insert(METADATA_KEY_MAINTENANCE, json.as_str())?;
         }
 
         write_txn.commit()?;
@@ -621,6 +641,42 @@ impl Database {
         };
         TRASH_EXPIRY.insert(txn, &ttl_key)?;
         Ok(())
+    }
+}
+
+/// Metadata operations.
+impl Database {
+    fn get_maintenance_metadata(&self) -> Option<MaintenanceMetadata> {
+        let read_txn = self.db.begin_read().ok()?;
+        let table = read_txn.open_table(METADATA_TABLE).ok()?;
+        let guard = table.get(METADATA_KEY_MAINTENANCE).ok()??;
+        serde_json::from_str(guard.value()).ok()
+    }
+
+    fn set_maintenance_metadata(
+        &mut self,
+        metadata: &MaintenanceMetadata,
+    ) -> Result<(), DatabaseError> {
+        let json = serde_json::to_string(metadata).expect("serialization failed");
+        let write_txn = self.db.begin_write()?;
+        {
+            let mut table = write_txn.open_table(METADATA_TABLE)?;
+            table.insert(METADATA_KEY_MAINTENANCE, json.as_str())?;
+        }
+        write_txn.commit()?;
+        Ok(())
+    }
+
+    fn last_maintenance_at(&self) -> Option<SystemTime> {
+        self.get_maintenance_metadata()?.last_run_at
+    }
+
+    /// Returns true if maintenance should run (never run or interval elapsed).
+    pub fn should_run_maintenance(&self, now: SystemTime, interval: Duration) -> bool {
+        match self.last_maintenance_at() {
+            None => true,
+            Some(last) => now.duration_since(last).map(|d| d >= interval).unwrap_or(true),
+        }
     }
 }
 
