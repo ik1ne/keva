@@ -30,6 +30,12 @@ const Editor = {
         this.placeholderElement.style.display = 'none';
         dom.editorContainer.appendChild(this.placeholderElement);
 
+        // Container for Monaco overflow widgets (popovers) outside clipped editor area.
+        // Needs monaco-editor class for proper styling of widgets.
+        this.overflowContainer = document.createElement('div');
+        this.overflowContainer.className = 'monaco-editor';
+        document.body.appendChild(this.overflowContainer);
+
         require.config({paths: {'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs'}});
         require(['vs/editor/editor.main'], function () {
             self.instance = monaco.editor.create(dom.editorContainer, {
@@ -42,7 +48,9 @@ const Editor = {
                 wordWrap: 'on',
                 scrollBeyondLastLine: false,
                 readOnlyMessage: {value: 'Restore from trash to edit', isTrusted: true},
-                dropIntoEditor: {enabled: false}
+                dropIntoEditor: {enabled: false},
+                fixedOverflowWidgets: true,
+                overflowWidgetsDomNode: self.overflowContainer
             });
 
             self.instance.onDidChangeModelContent(function () {
@@ -304,7 +312,7 @@ const Editor = {
 
         // Replace att: links with file:// URLs
         var attPattern = /att:([^"]+)/g;
-        html = html.replace(attPattern, function(match, path) {
+        html = html.replace(attPattern, function (match, path) {
             return 'file:///' + blobsPath + '/' + path;
         });
 
