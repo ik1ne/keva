@@ -6,11 +6,11 @@ use keva_core::types::{Config, Key, LifecycleState, SavedConfig};
 use keva_search::{SearchConfig, SearchEngine, SearchQuery};
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::mpsc;
+use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
-use windows::Win32::UI::WindowsAndMessaging::PostMessageW;
+use windows::Win32::UI::WindowsAndMessaging::{IsWindowVisible, PostMessageW};
 
 pub enum Request {
     /// WebView is ready - respond with CoreReady after init is done.
@@ -31,6 +31,12 @@ pub enum Request {
         force: bool,
     },
     Trash {
+        key: String,
+    },
+    Restore {
+        key: String,
+    },
+    Purge {
         key: String,
     },
     Search {
@@ -70,6 +76,11 @@ pub enum Request {
         key: String,
         /// (source_path, target_filename)
         files: Vec<(PathBuf, String)>,
+    },
+    /// Run maintenance (GC and orphan cleanup).
+    /// If force is false, only runs if should_run_maintenance returns true.
+    Maintenance {
+        force: bool,
     },
     Shutdown,
 }
@@ -126,7 +137,28 @@ fn worker_loop(
     // Set empty query to trigger initial SearchResults
     search.set_query(SearchQuery::Fuzzy(String::new()));
 
-    for request in requests {
+    // Run maintenance on launch if needed (>24h since last run)
+    handle_maintenance(&mut keva, &mut search, &current_query, false, hwnd);
+    let mut next_maintenance = Instant::now() + MAINTENANCE_INTERVAL;
+
+    loop {
+        let timeout = next_maintenance.saturating_duration_since(Instant::now());
+        let request = match requests.recv_timeout(timeout) {
+            Ok(req) => Some(req),
+            Err(RecvTimeoutError::Timeout) => {
+                // Timer fired - only run if window is hidden to avoid UI state issues
+                let is_visible = unsafe { IsWindowVisible(hwnd).as_bool() };
+                if !is_visible {
+                    handle_maintenance(&mut keva, &mut search, &current_query, false, hwnd);
+                }
+                next_maintenance = Instant::now() + MAINTENANCE_INTERVAL;
+                continue;
+            }
+            Err(RecvTimeoutError::Disconnected) => break,
+        };
+
+        let Some(request) = request else { continue };
+
         match request {
             Request::WebviewReady => {
                 post_response(hwnd, OutgoingMessage::CoreReady);
@@ -149,6 +181,12 @@ fn worker_loop(
             }
             Request::Trash { key } => {
                 handle_trash(&mut keva, &mut search, &key, &current_query, hwnd);
+            }
+            Request::Restore { key } => {
+                handle_restore(&mut keva, &mut search, &key, &current_query, hwnd);
+            }
+            Request::Purge { key } => {
+                handle_purge(&mut keva, &mut search, &key, &current_query, hwnd);
             }
             Request::Search { query } => {
                 current_query = query.clone();
@@ -181,10 +219,22 @@ fn worker_loop(
                 new_filename,
                 force,
             } => {
-                handle_rename_attachment(&mut keva, &key, &old_filename, &new_filename, force, hwnd);
+                handle_rename_attachment(
+                    &mut keva,
+                    &key,
+                    &old_filename,
+                    &new_filename,
+                    force,
+                    hwnd,
+                );
             }
             Request::AddFiles { key, files } => {
                 handle_add_files(&mut keva, &key, files, hwnd);
+            }
+            Request::Maintenance { force } => {
+                handle_maintenance(&mut keva, &mut search, &current_query, force, hwnd);
+                // Reset timer after any maintenance (manual or scheduled)
+                next_maintenance = Instant::now() + MAINTENANCE_INTERVAL;
             }
             Request::Shutdown => {
                 unsafe {
@@ -289,10 +339,7 @@ fn handle_add_attachments(
         .map(|(path, name)| (PathBuf::from(path), name))
         .collect();
 
-    if keva
-        .add_attachments(&key, files, SystemTime::now())
-        .is_ok()
-    {
+    if keva.add_attachments(&key, files, SystemTime::now()).is_ok() {
         handle_get_value(keva, key_str, hwnd);
     }
 }
@@ -335,20 +382,12 @@ fn handle_rename_attachment(
     }
 }
 
-fn handle_add_files(
-    keva: &mut KevaCore,
-    key_str: &str,
-    files: Vec<(PathBuf, String)>,
-    hwnd: HWND,
-) {
+fn handle_add_files(keva: &mut KevaCore, key_str: &str, files: Vec<(PathBuf, String)>, hwnd: HWND) {
     let Ok(key) = Key::try_from(key_str) else {
         return;
     };
 
-    if keva
-        .add_attachments(&key, files, SystemTime::now())
-        .is_ok()
-    {
+    if keva.add_attachments(&key, files, SystemTime::now()).is_ok() {
         handle_get_value(keva, key_str, hwnd);
     }
 }
@@ -440,6 +479,79 @@ fn handle_trash(
         && keva.trash(&key, now).is_ok()
     {
         search.trash(&key);
+        search.set_query(SearchQuery::Fuzzy(current_query.to_string()));
+        search.tick();
+        send_search_results(search, current_query, hwnd);
+    }
+}
+
+fn handle_restore(
+    keva: &mut KevaCore,
+    search: &mut SearchEngine,
+    key_str: &str,
+    current_query: &str,
+    hwnd: HWND,
+) {
+    let now = SystemTime::now();
+    if let Ok(key) = Key::try_from(key_str)
+        && keva.restore(&key, now).is_ok()
+    {
+        search.restore(&key);
+        search.set_query(SearchQuery::Fuzzy(current_query.to_string()));
+        search.tick();
+        send_search_results(search, current_query, hwnd);
+    }
+}
+
+fn handle_purge(
+    keva: &mut KevaCore,
+    search: &mut SearchEngine,
+    key_str: &str,
+    current_query: &str,
+    hwnd: HWND,
+) {
+    if let Ok(key) = Key::try_from(key_str)
+        && keva.purge(&key).is_ok()
+    {
+        search.remove(&key);
+        search.set_query(SearchQuery::Fuzzy(current_query.to_string()));
+        search.tick();
+        send_search_results(search, current_query, hwnd);
+    }
+}
+
+/// 24 hours interval for periodic maintenance check.
+const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
+
+fn handle_maintenance(
+    keva: &mut KevaCore,
+    search: &mut SearchEngine,
+    current_query: &str,
+    force: bool,
+    hwnd: HWND,
+) {
+    let now = SystemTime::now();
+
+    if !force && !keva.should_run_maintenance(now, MAINTENANCE_INTERVAL) {
+        return;
+    }
+
+    let Ok(outcome) = keva.maintenance(now) else {
+        return;
+    };
+
+    // Update search engine with auto-trashed and purged keys
+    let mut changed = false;
+    for key in &outcome.keys_trashed {
+        search.trash(key);
+        changed = true;
+    }
+    for key in &outcome.keys_purged {
+        search.remove(key);
+        changed = true;
+    }
+
+    if changed {
         search.set_query(SearchQuery::Fuzzy(current_query.to_string()));
         search.tick();
         send_search_results(search, current_query, hwnd);

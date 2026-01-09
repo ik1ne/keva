@@ -32,6 +32,12 @@ pub enum IncomingMessage {
     Trash {
         key: String,
     },
+    Restore {
+        key: String,
+    },
+    Purge {
+        key: String,
+    },
     Touch {
         key: String,
     },

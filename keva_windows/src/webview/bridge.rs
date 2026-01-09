@@ -62,11 +62,19 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
         IncomingMessage::Trash { key } => {
             let _ = request_tx.send(Request::Trash { key });
         }
+        IncomingMessage::Restore { key } => {
+            let _ = request_tx.send(Request::Restore { key });
+        }
+        IncomingMessage::Purge { key } => {
+            let _ = request_tx.send(Request::Purge { key });
+        }
         IncomingMessage::Touch { key } => {
             let _ = request_tx.send(Request::Touch { key });
         }
         IncomingMessage::Hide => {
             let _ = unsafe { ShowWindow(parent_hwnd, SW_HIDE) };
+            // Run maintenance on window hide
+            let _ = request_tx.send(Request::Maintenance { force: true });
         }
         IncomingMessage::ShutdownAck => {
             let _ = request_tx.send(Request::Shutdown);

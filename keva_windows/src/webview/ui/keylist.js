@@ -32,6 +32,10 @@ const KeyList = {
             return '<div class="trash-item" tabindex="-1" data-key="' + Utils.escapeHtml(key) + '" onclick="KeyList.requestSelect(\'' + Utils.escapeJs(key) + '\')">' +
                 '<span class="trash-icon">T</span>' +
                 '<span class="key-name">' + Utils.escapeHtml(key) + '</span>' +
+                '<div class="key-actions">' +
+                '<button class="key-action-btn" onclick="event.stopPropagation(); KeyList.restore(\'' + Utils.escapeJs(key) + '\')" title="Restore">&#8634;</button>' +
+                '<button class="key-action-btn trash-purge" onclick="event.stopPropagation(); KeyList.purge(\'' + Utils.escapeJs(key) + '\')" title="Delete permanently">&#128465;</button>' +
+                '</div>' +
                 '</div>';
         }).join('');
         this.updateSelection();
@@ -240,5 +244,25 @@ const KeyList = {
 
     trash: function (keyName) {
         Api.send({type: 'trash', key: keyName});
+    },
+
+    restore: function (keyName) {
+        Api.send({type: 'restore', key: keyName});
+    },
+
+    purge: function (keyName) {
+        var self = this;
+        Dialog.show({
+            message: 'Permanently delete "' + keyName + '"? This cannot be undone.',
+            buttons: [
+                { label: 'Cancel', action: 'cancel' },
+                { label: 'Delete', action: 'delete', primary: true }
+            ],
+            onClose: function (action) {
+                if (action === 'delete') {
+                    Api.send({type: 'purge', key: keyName});
+                }
+            }
+        });
     }
 };

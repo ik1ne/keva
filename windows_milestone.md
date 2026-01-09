@@ -22,7 +22,7 @@ and includes test cases for verification.
 | M11  | Attachment Drag Out    | Drag attachments to external apps (copy)      | ✅      |
 | M12  | Edit/Preview Toggle    | Markdown renderer, att: link transform        | ✅      |
 | M13  | Clipboard              | Native read, paste intercept, copy shortcuts  | ✅      |
-| M14  | Trash                  | Trash section, restore, GC triggers           | ❌      |
+| M14  | Trash                  | Trash section, restore, GC triggers           | ✅      |
 | M15  | Settings               | Dialog, config persistence, theme             | ❌      |
 | M16  | Global Hotkey          | Ctrl+Alt+K registration, conflict detection   | ❌      |
 | M17  | Single Instance        | Named mutex, activate existing window         | ❌      |
@@ -636,7 +636,8 @@ When drop occurs back onto Keva window (detected via path prefix in `IDropTarget
 **Goal:** Toggle between markdown editing and rendered preview.
 
 **Description:** Two-tab interface in right top pane: Edit and Preview. Edit mode shows Monaco editor. Preview mode
-shows rendered markdown. Standard markdown syntax: `![](att:file)` for inline images, `[](att:file)` for clickable links.
+shows rendered markdown. Standard markdown syntax: `![](att:file)` for inline images, `[](att:file)` for clickable
+links.
 
 **Implementation Notes:**
 
@@ -701,18 +702,18 @@ paste and requests clipboard from native. Context-aware paste behavior. Copy sho
 
 **Test Cases:**
 
-| TC        | Description                                          | Status |
-|-----------|------------------------------------------------------|--------|
-| TC-M13-01 | Paste text into search bar                           | ✅      |
-| TC-M13-02 | Paste text into Monaco                               | ✅      |
-| TC-M13-03 | Paste files adds attachments + inserts links         | ✅      |
-| TC-M13-04 | Ctrl+C in Monaco copies selected text                | ✅      |
-| TC-M13-05 | Ctrl+C in attachments copies selected files          | ✅      |
-| TC-M13-06 | Ctrl+Alt+T copies markdown, hides window             | ✅      |
-| TC-M13-07 | Ctrl+Alt+R copies rendered HTML, hides window        | ✅      |
-| TC-M13-08 | Ctrl+Alt+F copies attachments, hides window          | ✅      |
-| TC-M13-09 | "Nothing to copy" shown when no target key           | ✅      |
-| TC-M13-10 | Paste files into search bar does nothing             | ✅      |
+| TC        | Description                                   | Status |
+|-----------|-----------------------------------------------|--------|
+| TC-M13-01 | Paste text into search bar                    | ✅      |
+| TC-M13-02 | Paste text into Monaco                        | ✅      |
+| TC-M13-03 | Paste files adds attachments + inserts links  | ✅      |
+| TC-M13-04 | Ctrl+C in Monaco copies selected text         | ✅      |
+| TC-M13-05 | Ctrl+C in attachments copies selected files   | ✅      |
+| TC-M13-06 | Ctrl+Alt+T copies markdown, hides window      | ✅      |
+| TC-M13-07 | Ctrl+Alt+R copies rendered HTML, hides window | ✅      |
+| TC-M13-08 | Ctrl+Alt+F copies attachments, hides window   | ✅      |
+| TC-M13-09 | "Nothing to copy" shown when no target key    | ✅      |
+| TC-M13-10 | Paste files into search bar does nothing      | ✅      |
 
 ---
 
@@ -721,7 +722,7 @@ paste and requests clipboard from native. Context-aware paste behavior. Copy sho
 **Goal:** Trash section with restore and permanent delete.
 
 **Description:** Trash section in left pane shows trashed keys. Restore button moves key back to active. Permanent
-delete button removes key and files. GC runs on window hide and periodically.
+delete button removes key and files. GC runs on window hide and periodically via timer.
 
 **Implementation Notes:**
 
@@ -729,26 +730,37 @@ delete button removes key and files. GC runs on window hide and periodically.
 - Click required to enter trash section from active keys
 - Arrow navigation within trash section (bounded)
 - Trashed keys are read-only (must restore to edit)
-- Periodic GC: check elapsed time on window show (simpler than timer)
-- GC must handle currently selected key being trashed (clear selection, refresh UI)
+- Restore/purge buttons appear on hover and when selected
+- Purge shows confirmation dialog before permanent deletion
+- Periodic GC uses `recv_timeout` in worker loop (no separate thread)
+- GC skips when window is visible to avoid UI state issues (current key being trashed)
 
 **GC Triggers:**
 
-- Window hide → `maintenance()`
-- Window show if >24h since last GC → `maintenance()`
-- NOT on app quit (fast exit)
+| Trigger              | Condition      | Behavior                            |
+|----------------------|----------------|-------------------------------------|
+| App launch           | Check interval | Runs if >24h since last maintenance |
+| Window hide          | Always         | Runs immediately, resets timer      |
+| Periodic timer (24h) | Window hidden  | Only runs when window is hidden     |
+
+Timer resets after any maintenance run. NOT triggered on app quit (fast exit).
 
 **Test Cases:**
 
-| TC        | Description                                       | Status |
-|-----------|---------------------------------------------------|--------|
-| TC-M14-01 | Trash section shows trashed keys                  | ❌      |
-| TC-M14-02 | Restore button moves key to active                | ❌      |
-| TC-M14-03 | Permanent delete removes key and files            | ❌      |
-| TC-M14-04 | Trashed key content is read-only                  | ❌      |
-| TC-M14-05 | Drop onto trashed key rejected                    | ❌      |
-| TC-M14-06 | Arrow keys navigate within trash section          | ❌      |
-| TC-M14-07 | Click required to enter trash section from active | ❌      |
+| TC        | Description                                                    | Status |
+|-----------|----------------------------------------------------------------|--------|
+| TC-M14-01 | Trash section shows trashed keys                               | ✅      |
+| TC-M14-02 | Restore button moves key to active                             | ✅      |
+| TC-M14-03 | Permanent delete removes key and files                         | ✅      |
+| TC-M14-04 | Trashed key content is read-only                               | ✅      |
+| TC-M14-05 | Drop onto trashed key rejected                                 | ✅      |
+| TC-M14-06 | Arrow keys navigate within trash section                       | ✅      |
+| TC-M14-07 | Click required to enter trash section from active              | ✅      |
+| TC-M14-08 | Maintenance runs on app launch if >24h since last              | ✅      |
+| TC-M14-09 | Maintenance runs on window hide                                | ✅      |
+| TC-M14-10 | Periodic timer runs maintenance when window hidden             | ✅      |
+| TC-M14-11 | Periodic timer skips when window is visible                    | ✅      |
+| TC-M14-12 | Hide resets periodic timer (frequent hides prevent timer fire) | ✅      |
 
 ---
 

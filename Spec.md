@@ -678,12 +678,18 @@ are permanent with no restoration.
 
 **Triggers:**
 
-- Window hide
-- Periodically while running (fixed: 1 day)
+| Trigger | Condition | Behavior |
+|---------|-----------|----------|
+| App launch | Check interval | Runs if >24h since last maintenance |
+| Window hide | Always | Runs immediately, resets timer |
+| Periodic timer (24h) | Window hidden | Only runs when window is hidden to avoid UI state issues |
+
+**Timer reset:** Any maintenance run resets the 24h timer. If user hides window frequently (<24h), the periodic timer never fires.
 
 **NOT triggered on:**
 
 - App quit (for fast exit)
+- While window is visible (avoids trashing/purging currently viewed items)
 
 ## 7. Error Handling
 
