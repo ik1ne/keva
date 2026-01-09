@@ -412,6 +412,7 @@ const Main = {
                 State.data.trashedKeys = msg.trashedKeys;
                 State.data.exactMatch = msg.exactMatch;
 
+                var trashStateChanged = false;
                 if (State.data.selectedKey && !State.isKeyVisible(State.data.selectedKey)) {
                     State.clearSelection();
                     State.data.attachments = [];
@@ -419,11 +420,32 @@ const Main = {
                     Editor.resetState();
                     self.hideEditorUI();
                     self.updateAddFilesBtn();
+                } else if (State.data.selectedKey) {
+                    // Update readonly state if key moved between active and trashed
+                    var isTrashed = msg.trashedKeys.indexOf(State.data.selectedKey) !== -1;
+                    trashStateChanged = State.data.isSelectedTrashed !== isTrashed;
+                    if (trashStateChanged) {
+                        State.data.isSelectedTrashed = isTrashed;
+                        Editor.isReadOnly = isTrashed;
+                        if (Editor.instance) {
+                            Editor.instance.updateOptions({readOnly: isTrashed});
+                        }
+                        Editor.updatePlaceholder();
+                        Attachments.render();
+                        self.updateAddFilesBtn();
+                    }
                 }
 
                 KeyList.render();
                 KeyList.renderTrash();
                 self.updateSearchButton();
+
+                // Focus the selected key in its new list after trash/restore
+                if (State.data.selectedKey && trashStateChanged) {
+                    const selector = State.data.isSelectedTrashed ? '.trash-item' : '.key-item';
+                    const item = document.querySelector(selector + '[data-key="' + CSS.escape(State.data.selectedKey) + '"]');
+                    if (item) item.focus();
+                }
 
                 if (State.data.pendingSelectKey) {
                     // Only process if key exists in results (handles race with async search)
