@@ -4,8 +4,7 @@ use super::messages::IncomingMessage;
 use super::wm;
 use super::{FilePickerRequest, OutgoingMessage, WEBVIEW};
 use crate::keva_worker::{get_data_path, Request};
-use crate::platform::clipboard::{take_clipboard_paths, write_files};
-use crate::platform::drop_target::take_dropped_paths;
+use crate::platform::clipboard::{take_pending_file_paths, write_files};
 use crate::render::theme::Theme;
 use std::sync::mpsc::Sender;
 use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2;
@@ -119,9 +118,9 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
                 force,
             });
         }
-        IncomingMessage::AddDroppedFiles { key, files } => {
-            // Get cached paths from IDropTarget and match by index
-            let cached_paths = take_dropped_paths();
+        IncomingMessage::AddFiles { key, files } => {
+            // Get cached paths (from drop or clipboard) and match by index
+            let cached_paths = take_pending_file_paths();
             let resolved_files: Vec<(std::path::PathBuf, String)> = files
                 .into_iter()
                 .filter_map(|(index, filename)| {
@@ -130,24 +129,7 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
                 .collect();
 
             if !resolved_files.is_empty() {
-                let _ = request_tx.send(Request::AddDroppedFiles {
-                    key,
-                    files: resolved_files,
-                });
-            }
-        }
-        IncomingMessage::AddClipboardFiles { key, files } => {
-            // Get cached paths from clipboard and match by index
-            let cached_paths = take_clipboard_paths();
-            let resolved_files: Vec<(std::path::PathBuf, String)> = files
-                .into_iter()
-                .filter_map(|(index, filename)| {
-                    cached_paths.get(index).map(|path| (path.clone(), filename))
-                })
-                .collect();
-
-            if !resolved_files.is_empty() {
-                let _ = request_tx.send(Request::AddClipboardFiles {
+                let _ = request_tx.send(Request::AddFiles {
                     key,
                     files: resolved_files,
                 });

@@ -143,9 +143,9 @@ const Drop = {
         const editorPosition = insertLinks ? this.getEditorDropPosition(e) : null;
 
         if (result.conflicts.length > 0) {
-            ConflictDialog.show(targetKey, result.conflicts, result.nonConflicts, insertLinks, editorPosition, Drop.sendDroppedFiles.bind(Drop));
+            ConflictDialog.show(targetKey, result.conflicts, result.nonConflicts, insertLinks, editorPosition, Main.sendFiles.bind(Main));
         } else {
-            this.sendDroppedFiles(targetKey, result.nonConflicts, insertLinks, editorPosition);
+            Main.sendFiles(targetKey, result.nonConflicts, insertLinks, editorPosition);
         }
     },
 
@@ -247,29 +247,6 @@ const Drop = {
             return target.position;
         }
         return null;
-    },
-
-    sendDroppedFiles: function (key, files, insertLinks, editorPosition) {
-        if (files.length === 0) return;
-
-        State.data.isCopying = true;
-        Main.showAddingOverlay();
-
-        // Store pending link insertion info (position converted to selection format)
-        if (insertLinks && editorPosition) {
-            State.data.pendingLinkInsert = {
-                files: files.map(function (f) {
-                    return f[1];
-                }), // filenames
-                selection: editorPosition // insertAttachmentLinks handles both formats
-            };
-        }
-
-        Api.send({
-            type: 'addDroppedFiles',
-            key: key,
-            files: files // [[index, filename], ...]
-        });
     },
 
     // Accepts either a position {lineNumber, column} or selection {startLineNumber, startColumn, endLineNumber, endColumn}

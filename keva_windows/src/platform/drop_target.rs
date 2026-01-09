@@ -4,13 +4,13 @@
 //! file drops from Explorer. This allows us to extract file paths via CF_HDROP
 //! before forwarding the drop event to WebView2.
 
+use crate::platform::clipboard::set_pending_file_paths;
 use crate::platform::handlers::get_resize_border;
 use crate::webview::WEBVIEW;
 use std::cell::Cell;
 use std::ffi::OsString;
 use std::os::windows::ffi::OsStringExt;
 use std::path::PathBuf;
-use std::sync::RwLock;
 use std::time::Instant;
 use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2CompositionController3;
 use windows::Win32::Foundation::{HWND, POINT, POINTL};
@@ -23,15 +23,6 @@ use windows::Win32::System::Ole::{
 use windows::Win32::System::SystemServices::MODIFIERKEYS_FLAGS;
 use windows::Win32::UI::Shell::{DragQueryFileW, HDROP};
 use windows::core::{Interface, Ref};
-
-/// Cached file paths from the most recent drag operation.
-/// Indexed by order (0, 1, 2, ...) to match File objects in JS.
-static DROPPED_PATHS: RwLock<Vec<PathBuf>> = RwLock::new(Vec::new());
-
-/// Retrieves and clears the cached dropped file paths.
-pub fn take_dropped_paths() -> Vec<PathBuf> {
-    std::mem::take(&mut *DROPPED_PATHS.write().unwrap())
-}
 
 /// Throttle DragOver forwarding to ~30fps to avoid overwhelming WebView2.
 const DRAGOVER_THROTTLE_MS: u128 = 33;
@@ -154,7 +145,7 @@ impl IDropTarget_Impl for DropTarget_Impl {
         // Extract and cache file paths from the data object
         if let Ok(data_obj) = pdataobj.ok() {
             let paths = extract_paths_from_hdrop(data_obj);
-            *DROPPED_PATHS.write().unwrap() = paths;
+            set_pending_file_paths(paths);
         }
 
         // Forward to WebView2 CompositionController3

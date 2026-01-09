@@ -584,9 +584,9 @@ const Main = {
                 const result = ConflictDialog.checkConflicts(fileList);
 
                 if (result.conflicts.length > 0) {
-                    ConflictDialog.show(State.data.selectedKey, result.conflicts, result.nonConflicts, insertLinks, editorSelection, self.sendClipboardFiles.bind(self));
+                    ConflictDialog.show(State.data.selectedKey, result.conflicts, result.nonConflicts, insertLinks, editorSelection, self.sendFiles.bind(self));
                 } else {
-                    self.sendClipboardFiles(State.data.selectedKey, result.nonConflicts, insertLinks, editorSelection);
+                    self.sendFiles(State.data.selectedKey, result.nonConflicts, insertLinks, editorSelection);
                 }
             },
 
@@ -639,22 +639,22 @@ const Main = {
         };
     },
 
-    sendClipboardFiles: function (key, files, insertLinks, editorSelection) {
+    sendFiles: function (key, files, insertLinks, editorPosition) {
         if (files.length === 0) return;
 
         State.data.isCopying = true;
         this.showAddingOverlay();
 
-        // Store pending link insertion info (selection replaces selected text)
-        if (insertLinks && editorSelection) {
+        // Store pending link insertion info
+        if (insertLinks && editorPosition) {
             State.data.pendingLinkInsert = {
                 files: files.map(function (f) { return f[1]; }), // filenames
-                selection: editorSelection
+                selection: editorPosition // insertAttachmentLinks handles both position and selection
             };
         }
 
         Api.send({
-            type: 'addClipboardFiles',
+            type: 'addFiles',
             key: key,
             files: files // [[index, filename], ...]
         });

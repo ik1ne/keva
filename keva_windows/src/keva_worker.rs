@@ -65,14 +65,8 @@ pub enum Request {
         /// If true, overwrite existing file with same name.
         force: bool,
     },
-    /// Add dropped files using cached paths from IDropTarget.
-    AddDroppedFiles {
-        key: String,
-        /// (source_path, target_filename)
-        files: Vec<(PathBuf, String)>,
-    },
-    /// Add files from clipboard using cached paths.
-    AddClipboardFiles {
+    /// Add files from drop or clipboard.
+    AddFiles {
         key: String,
         /// (source_path, target_filename)
         files: Vec<(PathBuf, String)>,
@@ -189,11 +183,8 @@ fn worker_loop(
             } => {
                 handle_rename_attachment(&mut keva, &key, &old_filename, &new_filename, force, hwnd);
             }
-            Request::AddDroppedFiles { key, files } => {
-                handle_add_dropped_files(&mut keva, &key, files, hwnd);
-            }
-            Request::AddClipboardFiles { key, files } => {
-                handle_add_dropped_files(&mut keva, &key, files, hwnd);
+            Request::AddFiles { key, files } => {
+                handle_add_files(&mut keva, &key, files, hwnd);
             }
             Request::Shutdown => {
                 unsafe {
@@ -344,7 +335,7 @@ fn handle_rename_attachment(
     }
 }
 
-fn handle_add_dropped_files(
+fn handle_add_files(
     keva: &mut KevaCore,
     key_str: &str,
     files: Vec<(PathBuf, String)>,

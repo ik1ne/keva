@@ -14,8 +14,8 @@ use windows::Win32::UI::Shell::{DragQueryFileW, HDROP};
 
 const CF_UNICODETEXT: u32 = 13;
 
-/// Cached file paths from clipboard read (for subsequent AddClipboardFiles request).
-static CLIPBOARD_PATHS: RwLock<Vec<PathBuf>> = RwLock::new(Vec::new());
+/// Cached file paths for pending add operation (from drop or clipboard).
+static PENDING_FILE_PATHS: RwLock<Vec<PathBuf>> = RwLock::new(Vec::new());
 
 /// Clipboard content that was read.
 pub struct ClipboardContent {
@@ -77,16 +77,16 @@ pub fn read_clipboard(hwnd: HWND) -> ClipboardContent {
     content
 }
 
-/// Stores file paths from clipboard for later retrieval.
-pub fn set_clipboard_paths(paths: Vec<PathBuf>) {
-    if let Ok(mut guard) = CLIPBOARD_PATHS.write() {
+/// Stores file paths for later retrieval (used by both drop and clipboard paste).
+pub fn set_pending_file_paths(paths: Vec<PathBuf>) {
+    if let Ok(mut guard) = PENDING_FILE_PATHS.write() {
         *guard = paths;
     }
 }
 
-/// Takes cached clipboard file paths (clears the cache).
-pub fn take_clipboard_paths() -> Vec<PathBuf> {
-    CLIPBOARD_PATHS
+/// Takes cached file paths (clears the cache).
+pub fn take_pending_file_paths() -> Vec<PathBuf> {
+    PENDING_FILE_PATHS
         .write()
         .map(|mut guard| std::mem::take(&mut *guard))
         .unwrap_or_default()

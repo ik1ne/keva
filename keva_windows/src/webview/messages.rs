@@ -60,15 +60,9 @@ pub enum IncomingMessage {
         /// If true, overwrite existing file with same name.
         force: bool,
     },
-    /// Add dropped files using cached paths from IDropTarget.
-    /// Files are referenced by index (matching order in JS drop event).
-    AddDroppedFiles {
-        key: String,
-        /// Each file: [index, resolved_filename]
-        files: Vec<(usize, String)>,
-    },
-    /// Add files from clipboard using cached paths.
-    AddClipboardFiles {
+    /// Add files from drop or clipboard using cached paths.
+    /// Files are referenced by index (matching order in JS event).
+    AddFiles {
         key: String,
         /// Each file: [index, resolved_filename]
         files: Vec<(usize, String)>,

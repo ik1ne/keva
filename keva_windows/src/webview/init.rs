@@ -3,7 +3,7 @@
 use super::bridge::{handle_webview_message, post_message};
 use super::{CopyAction, OutgoingMessage, WEBVIEW, WebView};
 use crate::keva_worker::{Request, get_data_path};
-use crate::platform::clipboard::{read_clipboard, set_clipboard_paths};
+use crate::platform::clipboard::{read_clipboard, set_pending_file_paths};
 use crate::platform::composition::CompositionHost;
 use crate::platform::drag_out::handle_drag_starting;
 use crate::render::theme::Theme;
@@ -390,7 +390,7 @@ fn handle_accelerator_key(
                     .iter()
                     .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
                     .collect();
-                set_clipboard_paths(content.files);
+                set_pending_file_paths(content.files);
                 post_message(webview, &OutgoingMessage::FilesPasted { files: filenames });
             }
             // If no files, let WebView handle text paste
