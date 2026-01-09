@@ -21,7 +21,7 @@ and includes test cases for verification.
 | M10  | Attachment Drag & Drop | Drag to Monaco, file drop, multi-file batch   | ✅      |
 | M11  | Attachment Drag Out    | Drag attachments to external apps (copy)      | ✅      |
 | M12  | Edit/Preview Toggle    | Markdown renderer, att: link transform        | ✅      |
-| M13  | Clipboard              | Native read, paste intercept, copy shortcuts  | ❌      |
+| M13  | Clipboard              | Native read, paste intercept, copy shortcuts  | ✅      |
 | M14  | Trash                  | Trash section, restore, GC triggers           | ❌      |
 | M15  | Settings               | Dialog, config persistence, theme             | ❌      |
 | M16  | Global Hotkey          | Ctrl+Alt+K registration, conflict detection   | ❌      |
