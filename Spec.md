@@ -678,13 +678,14 @@ are permanent with no restoration.
 
 **Triggers:**
 
-| Trigger | Condition | Behavior |
-|---------|-----------|----------|
-| App launch | Check interval | Runs if >24h since last maintenance |
-| Window hide | Always | Runs immediately, resets timer |
-| Periodic timer (24h) | Window hidden | Only runs when window is hidden to avoid UI state issues |
+| Trigger              | Condition      | Behavior                                                 | 
+|----------------------|----------------|----------------------------------------------------------|
+| App launch           | Check interval | Runs if >24h since last maintenance                      |
+| Window hide          | Always         | Runs immediately, resets timer                           |
+| Periodic timer (24h) | Window hidden  | Only runs when window is hidden to avoid UI state issues |
 
-**Timer reset:** Any maintenance run resets the 24h timer. If user hides window frequently (<24h), the periodic timer never fires.
+**Timer reset:** Any maintenance run resets the 24h timer. If user hides window frequently (<24h), the periodic timer
+never fires.
 
 **NOT triggered on:**
 
