@@ -28,8 +28,14 @@ const Main = {
 
     selectOrCreateKey: function (query) {
         if (State.data.exactMatch !== 'none') {
-            State.data.focusEditorOnLoad = true;
-            KeyList.requestSelect(query);
+            if (query === State.data.selectedKey) {
+                // Already selected, just focus editor
+                this.setActivePane('editor');
+                if (Editor.instance) Editor.instance.focus();
+            } else {
+                State.data.focusEditorOnLoad = true;
+                KeyList.requestSelect(query);
+            }
         } else {
             State.data.pendingSelectKey = query;
             State.data.focusEditorOnLoad = true;
@@ -156,6 +162,7 @@ const Main = {
         // Search enter key and arrow navigation
         this.dom.searchInput.addEventListener('keydown', function (e) {
             if (e.key === 'Enter') {
+                e.preventDefault();
                 const query = self.dom.searchInput.value.trim();
                 if (query) {
                     self.selectOrCreateKey(query);
@@ -413,7 +420,10 @@ const Main = {
                 State.data.exactMatch = msg.exactMatch;
 
                 var trashStateChanged = false;
-                if (State.data.selectedKey && !State.isKeyVisible(State.data.selectedKey)) {
+                // Check if selected key is exact match (O(1) lookup, valid even if async search hasn't found it)
+                var searchQuery = self.dom.searchInput.value.trim();
+                var isSelectedExactMatch = State.data.selectedKey === searchQuery && msg.exactMatch !== 'none';
+                if (State.data.selectedKey && !State.isKeyVisible(State.data.selectedKey) && !isSelectedExactMatch) {
                     State.clearSelection();
                     State.data.attachments = [];
                     Attachments.render();
@@ -421,8 +431,11 @@ const Main = {
                     self.hideEditorUI();
                     self.updateAddFilesBtn();
                 } else if (State.data.selectedKey) {
-                    // Update readonly state if key moved between active and trashed
-                    var isTrashed = msg.trashedKeys.indexOf(State.data.selectedKey) !== -1;
+                    // Update readonly state if key moved between active and trashed.
+                    // Use exactMatch for O(1) lookup when key matches query, fall back to results array.
+                    var isTrashed = isSelectedExactMatch
+                        ? msg.exactMatch === 'trashed'
+                        : msg.trashedKeys.indexOf(State.data.selectedKey) !== -1;
                     trashStateChanged = State.data.isSelectedTrashed !== isTrashed;
                     if (trashStateChanged) {
                         State.data.isSelectedTrashed = isTrashed;
