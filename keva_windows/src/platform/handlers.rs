@@ -27,11 +27,12 @@ use windows::Win32::{
     UI::{
         HiDpi::GetDpiForSystem,
         WindowsAndMessaging::{
-            GetClientRect, GetSystemMetrics, GetWindowRect, IsWindowVisible, MINMAXINFO,
-            NCCALCSIZE_PARAMS, PostMessageW, PostQuitMessage, SM_CXPADDEDBORDER, SM_CXSIZEFRAME,
-            SM_CYSIZEFRAME, SW_HIDE, SW_SHOW, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOOWNERZORDER,
-            SWP_NOSIZE, SWP_NOZORDER, SetForegroundWindow, SetWindowPos, ShowWindow,
-            USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_LBUTTONUP, WM_RBUTTONUP, WVR_VALIDRECTS,
+            GetClientRect, GetSystemMetrics, GetWindowRect, IsWindowVisible, IsZoomed,
+            MINMAXINFO, NCCALCSIZE_PARAMS, PostMessageW, PostQuitMessage, SM_CXPADDEDBORDER,
+            SM_CXSIZEFRAME, SW_HIDE, SW_SHOW, SWP_FRAMECHANGED, SWP_NOMOVE,
+            SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, SetForegroundWindow, SetWindowPos,
+            ShowWindow, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_LBUTTONUP, WM_RBUTTONUP,
+            WVR_VALIDRECTS,
         },
     },
 };
@@ -61,16 +62,6 @@ fn get_current_theme() -> Theme {
 
 pub fn scale_for_dpi(logical: i32, dpi: u32) -> i32 {
     (logical as i64 * dpi as i64 / USER_DEFAULT_SCREEN_DPI as i64) as i32
-}
-
-/// Returns system resize border size (includes padding for touch targets).
-pub fn get_resize_border() -> (i32, i32) {
-    unsafe {
-        let padded = GetSystemMetrics(SM_CXPADDEDBORDER);
-        let border_x = GetSystemMetrics(SM_CXSIZEFRAME) + padded;
-        let border_y = GetSystemMetrics(SM_CYSIZEFRAME) + padded;
-        (border_x, border_y)
-    }
 }
 
 /// WM_CREATE: Enable rounded corners and trigger frame recalculation.
@@ -116,18 +107,27 @@ pub fn on_getminmaxinfo(lparam: LPARAM) -> LRESULT {
 }
 
 /// WM_NCCALCSIZE: Remove non-client area to create borderless window.
-pub fn on_nccalcsize(wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+pub fn on_nccalcsize(hwnd: HWND, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     // wparam == 0: simple request, just return 0 to remove non-client area
     if wparam.0 == 0 {
         return LRESULT(0);
     }
 
     // wparam != 0: detailed request during resize
-    // Nullify source/dest rectangles to prevent BitBlt artifacts when resizing
     let params = lparam.0 as *mut NCCALCSIZE_PARAMS;
     if !params.is_null() {
         unsafe {
-            // rgrc[0] = new client area (keep as-is = full window)
+            // When maximized, Windows extends window beyond screen edges.
+            // Compensate by adjusting client area inward by the frame size.
+            if IsZoomed(hwnd).as_bool() {
+                let frame = GetSystemMetrics(SM_CXSIZEFRAME)
+                    + GetSystemMetrics(SM_CXPADDEDBORDER);
+                (*params).rgrc[0].left += frame;
+                (*params).rgrc[0].top += frame;
+                (*params).rgrc[0].right -= frame;
+                (*params).rgrc[0].bottom -= frame;
+            }
+
             // rgrc[1], rgrc[2] = old client/window areas, set to 1px to disable BitBlt
             (*params).rgrc[1] = RECT {
                 left: 0,
@@ -209,35 +209,22 @@ pub fn on_command(hwnd: HWND, wparam: WPARAM) -> LRESULT {
     LRESULT(0)
 }
 
-/// WM_SIZE: Resize WebView to match window, accounting for borders.
-pub fn on_size(wparam: WPARAM, lparam: LPARAM) -> LRESULT {
-    let size_type = wparam.0 as u32;
+/// WM_SIZE: Resize WebView to fill entire client area.
+pub fn on_size(_wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     let width = (lparam.0 & 0xFFFF) as i32;
     let height = ((lparam.0 >> 16) & 0xFFFF) as i32;
 
-    // SIZE_MAXIMIZED = 2: window is maximized or snapped (no visible borders)
-    let is_maximized = size_type == 2;
-
+    // WebView fills entire client area; resize borders overlap content edges
+    // (hit-testing still handles resize via WM_NCHITTEST)
     if let Some(wv) = WEBVIEW.get() {
-        let (x, y, w, h) = if is_maximized {
-            (0, 0, width, height)
-        } else {
-            let (border_x, border_y) = get_resize_border();
-            (
-                border_x,
-                border_y,
-                width - 2 * border_x,
-                height - 2 * border_y,
-            )
-        };
-        wv.set_bounds(x, y, w, h);
+        wv.set_bounds(0, 0, width, height);
         wv.commit_composition();
     }
 
     LRESULT(0)
 }
 
-/// WM_PAINT: Paint border regions around WebView.
+/// WM_PAINT: Paint background under WebView (covers DWM extended frame).
 pub fn on_paint(hwnd: HWND) -> LRESULT {
     unsafe {
         let mut ps = PAINTSTRUCT::default();
@@ -249,17 +236,9 @@ pub fn on_paint(hwnd: HWND) -> LRESULT {
         };
         let brush = CreateSolidBrush(bg_color);
 
-        let mut client_rect = RECT::default();
-        let _ = GetClientRect(hwnd, &mut client_rect);
-
-        // Paint entire client area; WebView renders on top
-        let left = RECT {
-            left: 0,
-            top: 0,
-            right: client_rect.right,
-            bottom: client_rect.bottom,
-        };
-        FillRect(hdc, &left, brush);
+        let mut rect = RECT::default();
+        let _ = GetClientRect(hwnd, &mut rect);
+        FillRect(hdc, &rect, brush);
 
         let _ = DeleteObject(brush.into());
         let _ = EndPaint(hwnd, &ps);

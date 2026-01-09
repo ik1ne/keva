@@ -4,7 +4,7 @@ use crate::keva_worker;
 use crate::platform::{
     drop_target::register_drop_target,
     handlers::{
-        get_resize_border, on_activate, on_command, on_create, on_destroy, on_getminmaxinfo,
+        on_activate, on_command, on_create, on_destroy, on_getminmaxinfo,
         on_nccalcsize, on_open_file_picker, on_paint, on_setfocus, on_settingchange, on_size,
         on_trayicon, on_webview_message, scale_for_dpi, set_current_theme,
     },
@@ -17,6 +17,8 @@ use crate::webview::{OutgoingMessage, WEBVIEW, bridge::post_message, init_webvie
 use windows::{
     Win32::{
         Foundation::{HWND, LPARAM, LRESULT, TRUE, WPARAM},
+        Graphics::Dwm::DwmExtendFrameIntoClientArea,
+        UI::Controls::MARGINS,
         System::LibraryLoader::GetModuleHandleW,
         System::Ole::OleInitialize,
         UI::{
@@ -96,20 +98,21 @@ pub fn run() -> Result<()> {
             None,
         )?;
 
+        // Extend frame into entire client area to suppress DWM border rendering.
+        // The WM_PAINT handler paints over this with an opaque background.
+        let margins = MARGINS {
+            cxLeftWidth: -1,
+            cxRightWidth: -1,
+            cyTopHeight: -1,
+            cyBottomHeight: -1,
+        };
+        let _ = DwmExtendFrameIntoClientArea(hwnd, &margins);
+
         // Start worker thread (owns KevaCore + SearchEngine, posts directly to UI thread)
         let request_tx = keva_worker::start(hwnd);
 
-        // Create WebView
-        let (border_x, border_y) = get_resize_border();
-        init_webview(
-            hwnd,
-            border_x,
-            border_y,
-            window_width - 2 * border_x,
-            window_height - 2 * border_y,
-            initial_theme,
-            request_tx,
-        );
+        // Create WebView filling entire client area
+        init_webview(hwnd, 0, 0, window_width, window_height, initial_theme, request_tx);
 
         add_tray_icon(hwnd)?;
 
@@ -134,7 +137,7 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
     match msg {
         WM_CREATE => on_create(hwnd),
         WM_GETMINMAXINFO => on_getminmaxinfo(lparam),
-        WM_NCCALCSIZE => on_nccalcsize(wparam, lparam),
+        WM_NCCALCSIZE => on_nccalcsize(hwnd, wparam, lparam),
         // WM_NCACTIVATE: return TRUE to prevent default non-client painting
         WM_NCACTIVATE => LRESULT(TRUE.0 as isize),
         // WM_WINDOWPOSCHANGING: disable BitBlt to prevent visual artifacts during resize

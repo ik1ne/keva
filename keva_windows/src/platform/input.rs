@@ -7,7 +7,6 @@
 //! The COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS values match MK_* flags directly.
 //! The COREWEBVIEW2_POINTER_EVENT_KIND values match WM_POINTER* message IDs directly.
 
-use crate::platform::handlers::get_resize_border;
 use crate::webview::WEBVIEW;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_MOUSE_EVENT_KIND, COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS,
@@ -32,11 +31,6 @@ pub fn forward_mouse_message(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARA
     if msg == WM_MOUSEWHEEL {
         let _ = unsafe { ScreenToClient(hwnd, &mut point) };
     }
-
-    // Adjust for resize border offset (Keva uses borderless window with resize borders)
-    let (border_x, border_y) = get_resize_border();
-    point.x -= border_x;
-    point.y -= border_y;
 
     let event_kind = COREWEBVIEW2_MOUSE_EVENT_KIND(msg as i32);
     let virtual_keys = COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS((wparam.0 & 0xFFFF) as i32);
@@ -63,12 +57,9 @@ pub fn forward_pointer_message(hwnd: HWND, msg: u32, wparam: WPARAM) -> Option<(
     let env3 = wv.env.cast::<ICoreWebView2Environment3>().ok()?;
     let wv_pointer_info = unsafe { env3.CreateCoreWebView2PointerInfo() }.ok()?;
 
-    // Convert screen coordinates to WebView client coordinates
+    // Convert screen coordinates to client coordinates
     let mut point = pointer_info.ptPixelLocation;
     let _ = unsafe { ScreenToClient(hwnd, &mut point) };
-    let (border_x, border_y) = get_resize_border();
-    point.x -= border_x;
-    point.y -= border_y;
 
     unsafe {
         let _ = wv_pointer_info.SetPointerKind(pointer_info.pointerType.0 as u32);

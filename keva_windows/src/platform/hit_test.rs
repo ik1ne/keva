@@ -63,12 +63,10 @@ pub fn hit_test(hwnd: HWND, screen_x: i32, screen_y: i32) -> LRESULT {
             .composition_controller
             .cast::<ICoreWebView2CompositionController4>()
     {
-        // Convert screen coordinates to WebView client coordinates
-        let client_x = screen_x - left - border_x;
-        let client_y = screen_y - top - border_y;
+        // Convert screen to client coordinates
         let point = POINT {
-            x: client_x,
-            y: client_y,
+            x: screen_x - left,
+            y: screen_y - top,
         };
 
         let mut region_kind = Default::default();

@@ -5,7 +5,6 @@
 //! before forwarding the drop event to WebView2.
 
 use crate::platform::clipboard::set_pending_file_paths;
-use crate::platform::handlers::get_resize_border;
 use crate::webview::WEBVIEW;
 use std::cell::Cell;
 use std::ffi::OsString;
@@ -38,15 +37,10 @@ pub struct DropTarget {
 }
 
 impl DropTarget {
-    /// Converts screen coordinates to WebView client coordinates.
-    fn to_webview_point(&self, pt: &POINTL) -> POINT {
+    /// Converts screen coordinates to client coordinates.
+    fn to_client_point(&self, pt: &POINTL) -> POINT {
         let mut point = POINT { x: pt.x, y: pt.y };
         let _ = unsafe { ScreenToClient(self.hwnd, &mut point) };
-
-        // Adjust for resize border offset
-        let (border_x, border_y) = get_resize_border();
-        point.x -= border_x;
-        point.y -= border_y;
         point
     }
 }
@@ -64,7 +58,7 @@ impl IDropTarget_Impl for DropTarget_Impl {
             && let Ok(cc3) =
                 wv.composition_controller.cast::<ICoreWebView2CompositionController3>()
         {
-            let point = self.to_webview_point(pt);
+            let point = self.to_client_point(pt);
             let data_obj_opt = pdataobj.ok().ok();
             let _ = unsafe {
                 cc3.DragEnter(data_obj_opt, grfkeystate.0, point, pdweffect as *mut u32)
@@ -102,7 +96,7 @@ impl IDropTarget_Impl for DropTarget_Impl {
                 && let Ok(cc3) =
                     wv.composition_controller.cast::<ICoreWebView2CompositionController3>()
             {
-                let point = self.to_webview_point(pt);
+                let point = self.to_client_point(pt);
                 let _ = unsafe { cc3.DragOver(grfkeystate.0, point, pdweffect as *mut u32) };
             }
 
@@ -153,7 +147,7 @@ impl IDropTarget_Impl for DropTarget_Impl {
             && let Ok(cc3) =
                 wv.composition_controller.cast::<ICoreWebView2CompositionController3>()
         {
-            let point = self.to_webview_point(pt);
+            let point = self.to_client_point(pt);
             let data_obj_opt = pdataobj.ok().ok();
             let _ =
                 unsafe { cc3.Drop(data_obj_opt, grfkeystate.0, point, pdweffect as *mut u32) };
