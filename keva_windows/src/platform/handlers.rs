@@ -29,10 +29,9 @@ use windows::Win32::{
         WindowsAndMessaging::{
             GetClientRect, GetSystemMetrics, GetWindowRect, IsWindowVisible, IsZoomed,
             MINMAXINFO, NCCALCSIZE_PARAMS, PostMessageW, PostQuitMessage, SM_CXPADDEDBORDER,
-            SM_CXSIZEFRAME, SW_HIDE, SW_SHOW, SWP_FRAMECHANGED, SWP_NOMOVE,
-            SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, SetForegroundWindow, SetWindowPos,
-            ShowWindow, USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_LBUTTONUP, WM_RBUTTONUP,
-            WVR_VALIDRECTS,
+            SM_CXSIZEFRAME, SW_HIDE, SW_SHOW, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOOWNERZORDER,
+            SWP_NOSIZE, SWP_NOZORDER, SetForegroundWindow, SetWindowPos, ShowWindow,
+            USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_LBUTTONUP, WM_RBUTTONUP, WVR_VALIDRECTS,
         },
     },
 };
@@ -363,8 +362,7 @@ pub fn on_webview_message(lparam: LPARAM) -> LRESULT {
         }
     } else {
         let json = serde_json::to_string(&*msg).expect("Failed to serialize message");
-        let wide: Vec<u16> = json.encode_utf16().chain(std::iter::once(0)).collect();
-        let msg_pwstr = windows::core::PWSTR(wide.as_ptr() as *mut u16);
+        let msg_pwstr = pwstr_from_str(&json);
         let _ = unsafe { wv.webview.PostWebMessageAsJson(msg_pwstr) };
     }
 

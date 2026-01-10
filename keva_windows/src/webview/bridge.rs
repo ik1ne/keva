@@ -9,11 +9,15 @@ use crate::render::theme::Theme;
 use std::sync::mpsc::Sender;
 use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2;
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+use crate::platform::handlers::PREV_FOREGROUND;
+use std::sync::atomic::Ordering;
 use windows::Win32::UI::WindowsAndMessaging::{
-    IDYES, MB_ICONWARNING, MB_YESNO, MessageBoxW, PostMessageW, PostQuitMessage, SW_HIDE, ShowWindow,
+    IDYES, MB_ICONWARNING, MB_YESNO, MessageBoxW, PostMessageW, PostQuitMessage, SW_HIDE,
+    SetForegroundWindow, ShowWindow,
 };
-use windows_strings::w;
+use webview2_com::pwstr_from_str;
 use windows::core::PWSTR;
+use windows_strings::w;
 
 pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<Request>) {
     let Ok(message) = serde_json::from_str::<IncomingMessage>(msg) else {
@@ -73,6 +77,12 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
         }
         IncomingMessage::Hide => {
             let _ = unsafe { ShowWindow(parent_hwnd, SW_HIDE) };
+            // Restore focus to the previously focused window
+            let prev = PREV_FOREGROUND.load(Ordering::Relaxed);
+            if prev != 0 {
+                let prev_hwnd = HWND(prev as *mut _);
+                let _ = unsafe { SetForegroundWindow(prev_hwnd) };
+            }
             // Run maintenance on window hide
             let _ = request_tx.send(Request::Maintenance { force: true });
         }
@@ -98,13 +108,18 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
                 key,
                 request_tx: request_tx.clone(),
             });
+            let ptr = Box::into_raw(request);
             unsafe {
-                let _ = PostMessageW(
+                if PostMessageW(
                     Some(parent_hwnd),
                     wm::OPEN_FILE_PICKER,
                     WPARAM(0),
-                    LPARAM(Box::into_raw(request) as isize),
-                );
+                    LPARAM(ptr as isize),
+                )
+                .is_err()
+                {
+                    drop(Box::from_raw(ptr));
+                }
             }
         }
         IncomingMessage::AddAttachments { key, files } => {
@@ -172,9 +187,7 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
 
 pub fn post_message(wv: &ICoreWebView2, msg: &OutgoingMessage) {
     let json = serde_json::to_string(msg).expect("Failed to serialize message");
-    // Keep Vec alive until PostWebMessageAsJson returns
-    let wide: Vec<u16> = json.encode_utf16().chain(std::iter::once(0)).collect();
-    let msg_pwstr = PWSTR(wide.as_ptr() as *mut u16);
+    let msg_pwstr = pwstr_from_str(&json);
     let _ = unsafe { wv.PostWebMessageAsJson(msg_pwstr) };
 }
 

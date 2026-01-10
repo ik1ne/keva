@@ -9,6 +9,7 @@ use windows::Win32::System::DataExchange::{
     CloseClipboard, EmptyClipboard, GetClipboardData, OpenClipboard, SetClipboardData,
 };
 use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock, GMEM_MOVEABLE};
+use windows_core::Free;
 use windows::Win32::System::Ole::CF_HDROP;
 use windows::Win32::UI::Shell::{DragQueryFileW, HDROP};
 
@@ -130,13 +131,14 @@ pub fn write_files(hwnd: HWND, paths: &[PathBuf]) -> bool {
         // Final double null terminator
         data.extend_from_slice(&[0u8, 0u8]);
 
-        let Ok(hglobal) = GlobalAlloc(GMEM_MOVEABLE, data.len()) else {
+        let Ok(mut hglobal) = GlobalAlloc(GMEM_MOVEABLE, data.len()) else {
             let _ = CloseClipboard();
             return false;
         };
 
         let ptr = GlobalLock(hglobal);
         if ptr.is_null() {
+            hglobal.free();
             let _ = CloseClipboard();
             return false;
         }

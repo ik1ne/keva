@@ -46,6 +46,9 @@ static CHROMIUM_CUSTOM_CF: LazyLock<u16> = LazyLock::new(|| {
     cf as u16
 });
 
+/// MIME type for internal attachment drag data.
+const KEVA_ATTACHMENTS_MIME: &str = "application/x-keva-attachments";
+
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 struct DragData {
     key: String,
@@ -141,7 +144,7 @@ pub fn handle_drag_starting(
 
     // Serialize drag data for internal drop detection via Chromium custom MIME format
     let json = serde_json::to_string(&drag_data).unwrap_or_default();
-    let custom_data = create_chromium_custom_data("application/x-keva-attachments", &json);
+    let custom_data = create_chromium_custom_data(KEVA_ATTACHMENTS_MIME, &json);
 
     // Wrap shell object with custom MIME data
     let data_obj = CompositeDataObject::wrap(shell_obj, *CHROMIUM_CUSTOM_CF, custom_data);
@@ -191,7 +194,6 @@ fn extract_attachment_drag_data(data_obj: &IDataObject) -> Option<DragData> {
 ///
 /// See `create_chromium_custom_data` for the binary format specification.
 fn parse_chromium_custom_data(ptr: *mut std::ffi::c_void, size: usize) -> Option<DragData> {
-    const TARGET_MIME: &str = "application/x-keva-attachments";
 
     // Minimum size: data_len (4) + pair_count (4) = 8 bytes
     if size < 8 {
@@ -235,7 +237,7 @@ fn parse_chromium_custom_data(ptr: *mut std::ffi::c_void, size: usize) -> Option
             let key = read_string()?;
             let value = read_string()?;
 
-            if key == TARGET_MIME {
+            if key == KEVA_ATTACHMENTS_MIME {
                 return serde_json::from_str(&value).ok();
             }
         }

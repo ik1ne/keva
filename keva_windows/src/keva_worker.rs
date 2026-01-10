@@ -10,7 +10,8 @@ use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
-use windows::Win32::UI::WindowsAndMessaging::{IsWindowVisible, PostMessageW};
+use windows::Win32::UI::WindowsAndMessaging::{IsWindowVisible, MB_ICONERROR, MB_OK, MessageBoxW, PostMessageW};
+use windows_strings::w;
 
 pub enum Request {
     /// WebView is ready - respond with CoreReady after init is done.
@@ -98,7 +99,14 @@ pub fn start(hwnd: HWND) -> mpsc::Sender<Request> {
     thread::spawn(move || {
         let hwnd = HWND(hwnd_raw as *mut _);
 
-        let keva = open_keva();
+        let keva = match open_keva() {
+            Ok(keva) => keva,
+            Err(e) => {
+                show_database_error(&e, &get_data_path());
+                panic!("Failed to open database: {e}");
+            }
+        };
+
         let active_keys = keva.active_keys().unwrap_or_default();
         let trashed_keys = keva.trashed_keys().unwrap_or_default();
 
@@ -117,12 +125,16 @@ pub fn start(hwnd: HWND) -> mpsc::Sender<Request> {
 fn post_response(hwnd: HWND, msg: OutgoingMessage) {
     let ptr = Box::into_raw(Box::new(msg));
     unsafe {
-        let _ = PostMessageW(
+        if PostMessageW(
             Some(hwnd),
             wm::WEBVIEW_MESSAGE,
             WPARAM(0),
             LPARAM(ptr as isize),
-        );
+        )
+        .is_err()
+        {
+            drop(Box::from_raw(ptr));
+        }
     }
 }
 
@@ -594,7 +606,7 @@ fn send_search_results(search: &SearchEngine, current_query: &str, hwnd: HWND) {
     );
 }
 
-fn open_keva() -> KevaCore {
+fn open_keva() -> Result<KevaCore, keva_core::core::error::KevaError> {
     let config = Config {
         base_path: get_data_path(),
         saved: SavedConfig {
@@ -602,7 +614,25 @@ fn open_keva() -> KevaCore {
             purge_ttl: Duration::from_secs(7 * 24 * 60 * 60),
         },
     };
-    KevaCore::open(config).expect("Failed to open database")
+    KevaCore::open(config)
+}
+
+fn show_database_error(error: &keva_core::core::error::KevaError, data_path: &std::path::Path) {
+    let msg = format!(
+        "Failed to open database.\n\n\
+         Error: {error}\n\n\
+         Data directory: {}",
+        data_path.display()
+    );
+    let msg_wide: Vec<u16> = msg.encode_utf16().chain(std::iter::once(0)).collect();
+    unsafe {
+        MessageBoxW(
+            None,
+            windows::core::PCWSTR(msg_wide.as_ptr()),
+            w!("Keva - Database Error"),
+            MB_ICONERROR | MB_OK,
+        );
+    }
 }
 
 pub fn get_data_path() -> PathBuf {

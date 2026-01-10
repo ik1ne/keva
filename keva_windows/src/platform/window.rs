@@ -4,9 +4,9 @@ use crate::keva_worker;
 use crate::platform::{
     drop_target::register_drop_target,
     handlers::{
-        on_activate, on_command, on_create, on_destroy, on_getminmaxinfo,
-        on_nccalcsize, on_open_file_picker, on_paint, on_setfocus, on_settingchange, on_size,
-        on_trayicon, on_webview_message, scale_for_dpi, set_current_theme,
+        on_activate, on_command, on_create, on_destroy, on_getminmaxinfo, on_nccalcsize,
+        on_open_file_picker, on_paint, on_setfocus, on_settingchange, on_size, on_trayicon,
+        on_webview_message, scale_for_dpi, set_current_theme,
     },
     hit_test::hit_test,
     input::{forward_mouse_message, forward_pointer_message},
@@ -20,7 +20,7 @@ use windows::{
         Graphics::Dwm::DwmExtendFrameIntoClientArea,
         UI::Controls::MARGINS,
         System::LibraryLoader::GetModuleHandleW,
-        System::Ole::OleInitialize,
+        System::Ole::{OleInitialize, OleUninitialize},
         UI::{
             HiDpi::GetDpiForSystem,
             WindowsAndMessaging::{
@@ -127,6 +127,8 @@ pub fn run() -> Result<()> {
             let _ = TranslateMessage(&msg);
             DispatchMessageW(&msg);
         }
+
+        OleUninitialize();
 
         Ok(())
     }

@@ -130,6 +130,13 @@ pub struct WebView {
     composition_host: CompositionHost,
 }
 
+/// SAFETY: WebView COM interfaces are apartment-threaded and must only be accessed
+/// from the UI thread. This is safe because:
+/// - The worker thread never calls methods on WebView directly; it only posts
+///   messages to the UI thread via PostMessageW with raw pointers
+/// - All actual WebView method calls occur in UI thread message handlers
+///   (wndproc, WebMessageReceived, AcceleratorKeyPressed, etc.)
+/// - The OnceLock ensures initialization happens exactly once on the UI thread
 unsafe impl Send for WebView {}
 unsafe impl Sync for WebView {}
 
