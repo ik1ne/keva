@@ -114,11 +114,7 @@ Attachments are referenced in Markdown using filename-based links:
 
 **Window Positioning:**
 
-- First launch: Center of primary monitor
-- Subsequent launches: Remember last position and size per monitor
-    - Position stored keyed by monitor identifier
-    - If monitor configuration changes, center on current monitor
-- Multi-monitor: If remembered position is off-screen, center on monitor containing cursor
+- Window appears centered on primary monitor
 
 **Window Show State:**
 

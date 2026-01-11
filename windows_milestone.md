@@ -26,11 +26,10 @@ and includes test cases for verification.
 | M15  | Settings               | WebView panel, config persistence, theme      | ✅      |
 | M16  | Global Hotkey          | RegisterHotKey, conflict detection            | ✅      |
 | M17  | Single Instance        | Named mutex, activate existing window         | ✅      |
-| M18  | Window Position Memory | Per-monitor position, off-screen check        | ❌      |
-| M19  | First-Run Dialog       | Welcome message, launch at login checkbox     | ❌      |
-| M20  | Monaco Bundling        | Embed resources, single exe                   | ❌      |
-| M21  | Installer              | WiX/MSIX, uninstaller, WebView2 version check | ❌      |
-| M22  | Layout Polish          | Resizable panes, layout persistence           | ❌      |
+| M18  | First-Run Dialog       | Welcome message, launch at login checkbox     | ❌      |
+| M19  | Monaco Bundling        | Embed resources, single exe                   | ❌      |
+| M20  | Installer              | WiX/MSIX, uninstaller, WebView2 version check | ❌      |
+| M21  | Layout Polish          | Resizable panes, layout persistence           | ❌      |
 
 ---
 
@@ -899,31 +898,7 @@ launching new.
 
 ---
 
-## M18: Window Position Memory
-
-**Goal:** Remember window position per monitor.
-
-**Description:** Store window position and size in config.toml keyed by monitor identifier. Restore position on
-subsequent launches. Handle monitor configuration changes gracefully.
-
-**Implementation Notes:**
-
-- Monitor ID via `MONITORINFOEXW::szDevice` (e.g., `\\.\DISPLAY1`)
-- Position stored in `[window.monitors."DISPLAY1"]` section
-- Off-screen check: if position outside current monitors, center on cursor's monitor
-- First launch: center on primary monitor
-
-**Test Cases:**
-
-| TC        | Description                             | Status |
-|-----------|-----------------------------------------|--------|
-| TC-M18-01 | Position restored on next launch        | ❌      |
-| TC-M18-02 | Size restored on next launch            | ❌      |
-| TC-M18-03 | First launch centers on primary monitor | ❌      |
-
----
-
-## M19: First-Run Dialog
+## M18: First-Run Dialog
 
 **Goal:** Welcome experience on first launch.
 
@@ -951,14 +926,14 @@ Setup: Delete config.toml before testing.
 
 | TC        | Description                                 | Status |
 |-----------|---------------------------------------------|--------|
-| TC-M19-01 | First launch (no config) shows welcome      | ❌      |
-| TC-M19-02 | Get Started button closes dialog            | ❌      |
-| TC-M19-03 | Subsequent launches skip welcome dialog     | ❌      |
-| TC-M19-04 | Launch at login checkbox persists to config | ❌      |
+| TC-M18-01 | First launch (no config) shows welcome      | ❌      |
+| TC-M18-02 | Get Started button closes dialog            | ❌      |
+| TC-M18-03 | Subsequent launches skip welcome dialog     | ❌      |
+| TC-M18-04 | Launch at login checkbox persists to config | ❌      |
 
 ---
 
-## M20: Monaco Bundling
+## M19: Monaco Bundling
 
 **Goal:** Embed Monaco and resources in single executable.
 
@@ -978,13 +953,13 @@ Setup: Disconnect network or use airplane mode.
 
 | TC        | Description                             | Status |
 |-----------|-----------------------------------------|--------|
-| TC-M20-01 | App launches without network connection | ❌      |
-| TC-M20-02 | Monaco editor functions without network | ❌      |
-| TC-M20-03 | All UI assets load (no broken images)   | ❌      |
+| TC-M19-01 | App launches without network connection | ❌      |
+| TC-M19-02 | Monaco editor functions without network | ❌      |
+| TC-M19-03 | All UI assets load (no broken images)   | ❌      |
 
 ---
 
-## M21: Installer
+## M20: Installer
 
 **Goal:** Professional installer with clean uninstall and WebView2 version check.
 
@@ -1020,21 +995,21 @@ Keva requires WebView2 Runtime with `ICoreWebView2CompositionController5` suppor
 
 | TC        | Description                            | Status |
 |-----------|----------------------------------------|--------|
-| TC-M21-01 | Installer completes without error      | ❌      |
-| TC-M21-02 | App appears in Start Menu              | ❌      |
-| TC-M21-03 | App appears in Add/Remove Programs     | ❌      |
-| TC-M21-04 | Uninstaller removes application files  | ❌      |
-| TC-M21-05 | Uninstaller prompts for data deletion  | ❌      |
-| TC-M21-06 | "Yes" deletes data directory           | ❌      |
-| TC-M21-07 | "No" preserves data directory          | ❌      |
-| TC-M21-08 | Upgrade install preserves user data    | ❌      |
-| TC-M21-09 | Installer detects missing WebView2     | ❌      |
-| TC-M21-10 | Installer detects outdated WebView2    | ❌      |
-| TC-M21-11 | Installer proceeds with valid WebView2 | ❌      |
+| TC-M20-01 | Installer completes without error      | ❌      |
+| TC-M20-02 | App appears in Start Menu              | ❌      |
+| TC-M20-03 | App appears in Add/Remove Programs     | ❌      |
+| TC-M20-04 | Uninstaller removes application files  | ❌      |
+| TC-M20-05 | Uninstaller prompts for data deletion  | ❌      |
+| TC-M20-06 | "Yes" deletes data directory           | ❌      |
+| TC-M20-07 | "No" preserves data directory          | ❌      |
+| TC-M20-08 | Upgrade install preserves user data    | ❌      |
+| TC-M20-09 | Installer detects missing WebView2     | ❌      |
+| TC-M20-10 | Installer detects outdated WebView2    | ❌      |
+| TC-M20-11 | Installer proceeds with valid WebView2 | ❌      |
 
 ---
 
-## M22: Layout Polish
+## M21: Layout Polish
 
 **Goal:** Resizable panes with persistent layout preferences.
 
@@ -1056,15 +1031,15 @@ pane sizes to valid ranges.
 
 | TC        | Description                                     | Status |
 |-----------|-------------------------------------------------|--------|
-| TC-M22-01 | Drag divider resizes left pane                  | ❌      |
-| TC-M22-02 | Left pane respects minimum width (150px)        | ❌      |
-| TC-M22-03 | Left pane respects maximum width (50% window)   | ❌      |
-| TC-M22-04 | Pane sizes persist after restart                | ❌      |
-| TC-M22-05 | Window resize clamps pane sizes if needed       | ❌      |
-| TC-M22-06 | Cursor shows col-resize on left/right divider   | ❌      |
-| TC-M22-07 | Drag divider resizes attachments pane height    | ❌      |
-| TC-M22-08 | Attachments pane respects minimum height (60px) | ❌      |
-| TC-M22-09 | Attachments pane respects maximum height (50%)  | ❌      |
-| TC-M22-10 | Cursor shows row-resize on editor/att divider   | ❌      |
+| TC-M21-01 | Drag divider resizes left pane                  | ❌      |
+| TC-M21-02 | Left pane respects minimum width (150px)        | ❌      |
+| TC-M21-03 | Left pane respects maximum width (50% window)   | ❌      |
+| TC-M21-04 | Pane sizes persist after restart                | ❌      |
+| TC-M21-05 | Window resize clamps pane sizes if needed       | ❌      |
+| TC-M21-06 | Cursor shows col-resize on left/right divider   | ❌      |
+| TC-M21-07 | Drag divider resizes attachments pane height    | ❌      |
+| TC-M21-08 | Attachments pane respects minimum height (60px) | ❌      |
+| TC-M21-09 | Attachments pane respects maximum height (50%)  | ❌      |
+| TC-M21-10 | Cursor shows row-resize on editor/att divider   | ❌      |
 
 ---
