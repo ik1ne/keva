@@ -3,6 +3,7 @@
 use crate::keva_worker::Request;
 use crate::platform::drop_target::revoke_drop_target;
 use crate::platform::file_picker::open_file_picker;
+use crate::platform::hotkey::{unregister_global_hotkey, update_global_hotkey};
 use crate::platform::startup;
 use crate::platform::tray::{
     IDM_LAUNCH_AT_LOGIN, IDM_QUIT, IDM_SETTINGS, IDM_SHOW, remove_tray_icon, set_tray_visibility,
@@ -184,7 +185,7 @@ pub fn on_setfocus() {
 }
 
 /// Shows window, brings to foreground, and signals WebView to restore focus.
-fn show_and_focus_window(hwnd: HWND) {
+pub fn show_and_focus_window(hwnd: HWND) {
     unsafe {
         let _ = ShowWindow(hwnd, SW_SHOW);
         let _ = SetForegroundWindow(hwnd);
@@ -300,6 +301,22 @@ pub fn apply_settings(
     } else {
         startup::disable_launch_at_login();
     }
+
+    // Update global hotkey if changed
+    if !update_global_hotkey(hwnd, &config.shortcuts.global_shortcut) {
+        // Notify user that shortcut registration failed
+        if let Some(wv) = WEBVIEW.get() {
+            post_message(
+                &wv.webview,
+                &OutgoingMessage::Toast {
+                    message: format!(
+                        "Shortcut '{}' is in use by another application",
+                        config.shortcuts.global_shortcut
+                    ),
+                },
+            );
+        }
+    }
 }
 
 /// WM_SIZE: Resize WebView to fill entire client area.
@@ -342,6 +359,7 @@ pub fn on_paint(hwnd: HWND) -> LRESULT {
 /// WM_DESTROY: Clean up and exit application.
 pub fn on_destroy(hwnd: HWND) -> LRESULT {
     revoke_drop_target(hwnd);
+    unregister_global_hotkey(hwnd);
     unsafe {
         remove_tray_icon(hwnd);
         PostQuitMessage(0);

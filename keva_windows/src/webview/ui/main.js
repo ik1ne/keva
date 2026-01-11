@@ -678,6 +678,10 @@ const Main = {
 
             openSettings: function (msg) {
                 Settings.open(msg.config, msg.launchAtLogin);
+            },
+
+            toast: function (msg) {
+                Drop.showToast(msg.message);
             }
         };
     },

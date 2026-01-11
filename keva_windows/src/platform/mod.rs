@@ -7,6 +7,7 @@ pub mod drop_target;
 pub mod file_picker;
 pub mod handlers;
 pub mod hit_test;
+pub mod hotkey;
 pub mod input;
 pub mod startup;
 pub mod tray;

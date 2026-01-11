@@ -6,9 +6,10 @@ use crate::platform::{
     handlers::{
         on_activate, on_command, on_create, on_destroy, on_getminmaxinfo, on_nccalcsize,
         on_open_file_picker, on_paint, on_setfocus, on_settingchange, on_size, on_trayicon,
-        on_webview_message, scale_for_dpi, set_app_config, set_current_theme,
+        on_webview_message, scale_for_dpi, set_app_config, set_current_theme, show_and_focus_window,
     },
     hit_test::hit_test,
+    hotkey::register_global_hotkey,
     input::{forward_mouse_message, forward_pointer_message},
     tray::{WM_TRAYICON, add_tray_icon},
 };
@@ -28,7 +29,7 @@ use windows::{
                 HCURSOR, HTCLIENT, IDC_ARROW, LoadCursorW, MSG, PostQuitMessage, RegisterClassW,
                 SM_CXSCREEN, SM_CYSCREEN, SW_SHOW, SWP_NOCOPYBITS, SetCursor, SetForegroundWindow,
                 ShowWindow, TranslateMessage, WINDOWPOS, WM_ACTIVATE, WM_CLOSE, WM_COMMAND,
-                WM_CREATE, WM_DESTROY, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_LBUTTONDBLCLK,
+                WM_CREATE, WM_DESTROY, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_HOTKEY, WM_LBUTTONDBLCLK,
                 WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MBUTTONUP,
                 WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT,
                 WM_POINTERDOWN, WM_POINTERENTER, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE,
@@ -114,6 +115,14 @@ pub fn run() -> Result<()> {
             cyBottomHeight: -1,
         };
         let _ = DwmExtendFrameIntoClientArea(hwnd, &margins);
+
+        // Register global hotkey from config
+        if !register_global_hotkey(hwnd, &config.shortcuts.global_shortcut) {
+            eprintln!(
+                "[Hotkey] Failed to register '{}' - may be in use by another application",
+                config.shortcuts.global_shortcut
+            );
+        }
 
         // Start worker thread (owns KevaCore + SearchEngine, posts directly to UI thread)
         let request_tx = keva_worker::start(hwnd);
@@ -226,6 +235,10 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
         WM_SETTINGCHANGE => on_settingchange(hwnd, lparam),
         WM_PAINT => on_paint(hwnd),
         WM_DESTROY => on_destroy(hwnd),
+        WM_HOTKEY => {
+            show_and_focus_window(hwnd);
+            LRESULT(0)
+        }
         _ => unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) },
     }
 }

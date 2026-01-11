@@ -95,6 +95,10 @@ pub enum OutgoingMessage {
         /// Read from registry, not config file.
         launch_at_login: bool,
     },
+    /// Show a toast notification to the user.
+    Toast {
+        message: String,
+    },
 }
 
 /// Copy action type for DoCopy message.

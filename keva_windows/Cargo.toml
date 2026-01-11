@@ -15,6 +15,7 @@ keva_search = { path = "../search" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 percent-encoding = "2"
+keycode = "1"
 
 [dependencies.windows]
 version = "0.62"

@@ -125,7 +125,7 @@ impl Default for ShortcutsConfig {
 }
 
 fn default_global_shortcut() -> String {
-    "Ctrl+Alt+K".to_string()
+    "Ctrl+Alt+KeyK".to_string()
 }
 
 /// Lifecycle/TTL settings.

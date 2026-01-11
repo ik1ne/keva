@@ -57,6 +57,7 @@ const Settings = {
 
         hotkeyClear.addEventListener('click', function () {
             hotkeyInput.value = '';
+            hotkeyInput.dataset.shortcut = '';
             hotkeyClear.disabled = true;
         });
 
@@ -66,43 +67,27 @@ const Settings = {
             e.preventDefault();
             e.stopPropagation();
 
-            const code = e.code;
-
             // Ignore modifier-only presses
-            if (['ControlLeft', 'ControlRight', 'AltLeft', 'AltRight',
-                 'ShiftLeft', 'ShiftRight', 'MetaLeft', 'MetaRight'].includes(code)) {
+            if (KeyboardShortcut.isModifierKey(e.code)) {
                 return;
             }
 
             // Require Ctrl or Alt
-            if (!e.ctrlKey && !e.altKey) {
+            if (!KeyboardShortcut.hasRequiredModifier(e)) {
                 Drop.showToast('Shortcut must include Ctrl or Alt');
                 return;
             }
 
-            // Warn about reserved keys (native will validate and may reject)
-            const reserved = ['Escape', 'Tab', 'Enter', 'Backspace',
-                              'PrintScreen', 'Pause', 'NumLock', 'ScrollLock'];
-            if (reserved.includes(code)) {
-                Drop.showToast(code + ' may not work as a shortcut');
+            // Build storage format (e.code based)
+            const shortcut = KeyboardShortcut.fromEvent(e);
+            if (!shortcut) {
+                Drop.showToast('Unsupported key');
+                return;
             }
 
-            // Build shortcut string
-            const parts = [];
-            if (e.ctrlKey) parts.push('Ctrl');
-            if (e.altKey) parts.push('Alt');
-            if (e.shiftKey) parts.push('Shift');
-
-            // Convert e.code to display name
-            let keyName = code
-                .replace('Key', '')
-                .replace('Digit', '')
-                .replace('Numpad', 'Num');
-            if (code === 'Space') keyName = 'Space';
-            else if (code.startsWith('Arrow')) keyName = code.substring(5);
-
-            parts.push(keyName);
-            hotkeyInput.value = parts.join('+');
+            // Store e.code format in data attribute, display human-readable in value
+            hotkeyInput.dataset.shortcut = shortcut;
+            hotkeyInput.value = KeyboardShortcut.toDisplay(shortcut);
             hotkeyClear.disabled = false;
             hotkeyInput.blur();
         });
@@ -228,9 +213,11 @@ const Settings = {
         document.getElementById('setting-launch-at-login').checked = launchAtLogin;
         document.getElementById('setting-show-tray-icon').checked = config.general.show_tray_icon;
 
-        // Shortcuts
+        // Shortcuts - store e.code format, display human-readable
+        const hotkeyInput = document.getElementById('setting-global-shortcut');
         const shortcutValue = config.shortcuts.global_shortcut;
-        document.getElementById('setting-global-shortcut').value = shortcutValue;
+        hotkeyInput.dataset.shortcut = shortcutValue;
+        hotkeyInput.value = KeyboardShortcut.toDisplay(shortcutValue);
         document.getElementById('setting-global-shortcut-clear').disabled = !shortcutValue;
 
         // Lifecycle
@@ -239,6 +226,9 @@ const Settings = {
     },
 
     getFormValues: function () {
+        // Get shortcut from data attribute (e.code format)
+        const shortcut = document.getElementById('setting-global-shortcut').dataset.shortcut || '';
+
         return {
             config: {
                 general: {
@@ -246,7 +236,7 @@ const Settings = {
                     show_tray_icon: document.getElementById('setting-show-tray-icon').checked,
                 },
                 shortcuts: {
-                    global_shortcut: document.getElementById('setting-global-shortcut').value,
+                    global_shortcut: shortcut,
                 },
                 lifecycle: {
                     trash_ttl_days: parseInt(document.getElementById('setting-trash-ttl').value, 10) || 30,
