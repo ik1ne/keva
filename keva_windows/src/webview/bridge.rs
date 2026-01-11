@@ -2,10 +2,10 @@
 
 use super::messages::IncomingMessage;
 use super::{FilePickerRequest, OutgoingMessage, WEBVIEW};
-use crate::platform::wm;
 use crate::keva_worker::{Request, get_data_path};
 use crate::platform::clipboard::{take_pending_file_paths, write_files};
 use crate::platform::handlers::PREV_FOREGROUND;
+use crate::platform::wm;
 use crate::render::theme::Theme;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::Sender;

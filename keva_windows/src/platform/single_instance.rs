@@ -1,6 +1,5 @@
 //! Single instance enforcement using a named mutex.
 
-use crate::platform::handlers::show_and_focus_window;
 use crate::platform::wm;
 use windows::Win32::{
     Foundation::{CloseHandle, ERROR_ALREADY_EXISTS, GetLastError, HANDLE, HWND},
