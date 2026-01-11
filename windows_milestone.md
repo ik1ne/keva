@@ -25,7 +25,7 @@ and includes test cases for verification.
 | M14  | Trash                  | Trash section, restore, GC triggers           | ✅      |
 | M15  | Settings               | WebView panel, config persistence, theme      | ✅      |
 | M16  | Global Hotkey          | RegisterHotKey, conflict detection            | ✅      |
-| M17  | Single Instance        | Named mutex, activate existing window         | ❌      |
+| M17  | Single Instance        | Named mutex, activate existing window         | ✅      |
 | M18  | Window Position Memory | Per-monitor position, off-screen check        | ❌      |
 | M19  | First-Run Dialog       | Welcome message, launch at login checkbox     | ❌      |
 | M20  | Monaco Bundling        | Embed resources, single exe                   | ❌      |
@@ -893,9 +893,9 @@ launching new.
 
 | TC        | Description                             | Status |
 |-----------|-----------------------------------------|--------|
-| TC-M17-01 | Second launch activates existing window | ❌      |
-| TC-M17-02 | Second launch exits after activation    | ❌      |
-| TC-M17-03 | Works when existing window is hidden    | ❌      |
+| TC-M17-01 | Second launch activates existing window | ✅      |
+| TC-M17-02 | Second launch exits after activation    | ✅      |
+| TC-M17-03 | Works when existing window is hidden    | ✅      |
 
 ---
 
