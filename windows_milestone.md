@@ -24,7 +24,7 @@ and includes test cases for verification.
 | M13  | Clipboard              | Native read, paste intercept, copy shortcuts  | ✅      |
 | M14  | Trash                  | Trash section, restore, GC triggers           | ✅      |
 | M15  | Settings               | WebView panel, config persistence, theme      | ✅      |
-| M16  | Global Hotkey          | RegisterHotKey, conflict detection            | ❌      |
+| M16  | Global Hotkey          | RegisterHotKey, conflict detection            | ✅      |
 | M17  | Single Instance        | Named mutex, activate existing window         | ❌      |
 | M18  | Window Position Memory | Per-monitor position, off-screen check        | ❌      |
 | M19  | First-Run Dialog       | Welcome message, launch at login checkbox     | ❌      |
@@ -863,14 +863,14 @@ the native RegisterHotKey/UnregisterHotKey implementation.
 
 | TC        | Description                                   | Status |
 |-----------|-----------------------------------------------|--------|
-| TC-M16-01 | Ctrl+Alt+K shows window from any app          | ❌      |
-| TC-M16-02 | Hotkey works when window already visible      | ❌      |
-| TC-M16-03 | Hotkey works when window is hidden            | ❌      |
-| TC-M16-04 | Custom hotkey from settings is registered     | ❌      |
-| TC-M16-05 | Changing hotkey in settings re-registers      | ❌      |
-| TC-M16-06 | Conflict shows "Shortcut in use" notification | ❌      |
-| TC-M16-07 | Empty shortcut disables global hotkey         | ❌      |
-| TC-M16-08 | Hotkey unregistered on app exit               | ❌      |
+| TC-M16-01 | Ctrl+Alt+K shows window from any app          | ✅      |
+| TC-M16-02 | Hotkey works when window already visible      | ✅      |
+| TC-M16-03 | Hotkey works when window is hidden            | ✅      |
+| TC-M16-04 | Custom hotkey from settings is registered     | ✅      |
+| TC-M16-05 | Changing hotkey in settings re-registers      | ✅      |
+| TC-M16-06 | Conflict shows "Shortcut in use" notification | ✅      |
+| TC-M16-07 | Empty shortcut disables global hotkey         | ✅      |
+| TC-M16-08 | Hotkey unregistered on app exit               | ✅      |
 
 ---
 
