@@ -1,6 +1,5 @@
 use super::*;
 use crate::core::file_storage::FileStorage;
-use crate::types::config::SavedConfig;
 use crate::types::value::LifecycleState;
 use common::*;
 use std::io::Write;
@@ -14,15 +13,18 @@ mod common {
         let temp_dir = TempDir::new().unwrap();
         let config = Config {
             base_path: temp_dir.path().to_path_buf(),
-            saved: SavedConfig {
-                trash_ttl: Duration::from_secs(30 * 24 * 60 * 60), // 30 days
-                purge_ttl: Duration::from_secs(7 * 24 * 60 * 60),  // 7 days
-            },
         };
 
         let storage = KevaCore::open(config).unwrap();
 
         (storage, temp_dir)
+    }
+
+    pub(super) fn make_gc_config(trash_ttl_secs: u64, purge_ttl_secs: u64) -> GcConfig {
+        GcConfig {
+            trash_ttl: Duration::from_secs(trash_ttl_secs),
+            purge_ttl: Duration::from_secs(purge_ttl_secs),
+        }
     }
 
     pub(super) fn make_key(s: &str) -> Key {
@@ -778,22 +780,10 @@ mod purge {
 mod maintenance {
     use super::*;
 
-    fn create_storage_with_short_ttl() -> (KevaCore, TempDir) {
-        let temp_dir = TempDir::new().unwrap();
-        let config = Config {
-            base_path: temp_dir.path().to_path_buf(),
-            saved: SavedConfig {
-                trash_ttl: Duration::from_secs(10),
-                purge_ttl: Duration::from_secs(5),
-            },
-        };
-        let storage = KevaCore::open(config).unwrap();
-        (storage, temp_dir)
-    }
-
     #[test]
     fn test_maintenance_purges_expired_trash_keys() {
-        let (mut storage, _temp) = create_storage_with_short_ttl();
+        let (mut storage, _temp) = create_test_storage();
+        let gc_config = make_gc_config(10, 5);
         let key = make_key("key");
         let now = SystemTime::now();
 
@@ -801,7 +791,7 @@ mod maintenance {
         storage.trash(&key, now).unwrap();
 
         let after_ttl = now + Duration::from_secs(6);
-        let result = storage.maintenance(after_ttl).unwrap();
+        let result = storage.maintenance(after_ttl, gc_config).unwrap();
 
         assert!(result.keys_purged.contains(&key));
         assert!(result.keys_trashed.is_empty());
@@ -809,14 +799,15 @@ mod maintenance {
 
     #[test]
     fn test_maintenance_trashes_expired_active_keys() {
-        let (mut storage, _temp) = create_storage_with_short_ttl();
+        let (mut storage, _temp) = create_test_storage();
+        let gc_config = make_gc_config(10, 5);
         let key = make_key("key");
         let now = SystemTime::now();
 
         storage.create(&key, now).unwrap();
 
         let after_ttl = now + Duration::from_secs(11);
-        let result = storage.maintenance(after_ttl).unwrap();
+        let result = storage.maintenance(after_ttl, gc_config).unwrap();
 
         assert!(result.keys_trashed.contains(&key));
         assert!(result.keys_purged.is_empty());
@@ -827,7 +818,8 @@ mod maintenance {
 
     #[test]
     fn test_maintenance_cleans_up_files() {
-        let (mut storage, temp) = create_storage_with_short_ttl();
+        let (mut storage, temp) = create_test_storage();
+        let gc_config = make_gc_config(10, 5);
         let key = make_key("key");
         let file_path = create_test_file(&temp, "test.txt", b"content");
         let now = SystemTime::now();
@@ -844,7 +836,7 @@ mod maintenance {
 
         storage.trash(&key, now).unwrap();
         let after_ttl = now + Duration::from_secs(6);
-        storage.maintenance(after_ttl).unwrap();
+        storage.maintenance(after_ttl, gc_config).unwrap();
 
         assert!(!content_path.exists());
         assert!(!attachment_path.exists());
@@ -852,13 +844,14 @@ mod maintenance {
 
     #[test]
     fn test_maintenance_with_no_expired_keys() {
-        let (mut storage, _temp) = create_storage_with_short_ttl();
+        let (mut storage, _temp) = create_test_storage();
+        let gc_config = make_gc_config(10, 5);
         let key = make_key("key");
         let now = SystemTime::now();
 
         storage.create(&key, now).unwrap();
 
-        let result = storage.maintenance(now).unwrap();
+        let result = storage.maintenance(now, gc_config).unwrap();
 
         assert!(result.keys_trashed.is_empty());
         assert!(result.keys_purged.is_empty());
@@ -872,7 +865,8 @@ mod maintenance {
 
     #[test]
     fn test_maintenance_cleans_orphan_blobs() {
-        let (mut storage, temp) = create_storage_with_short_ttl();
+        let (mut storage, temp) = create_test_storage();
+        let gc_config = make_gc_config(10, 5);
         let key = make_key("key");
         let file_path = create_test_file(&temp, "test.txt", b"content");
         let now = SystemTime::now();
@@ -893,14 +887,15 @@ mod maintenance {
         assert!(blob_dir.exists());
 
         // Maintenance should clean it up
-        let result = storage.maintenance(now).unwrap();
+        let result = storage.maintenance(now, gc_config).unwrap();
         assert!(!blob_dir.exists());
         assert!(result.orphaned_files_removed > 0);
     }
 
     #[test]
     fn test_maintenance_cleans_orphan_content() {
-        let (mut storage, temp) = create_storage_with_short_ttl();
+        let (mut storage, temp) = create_test_storage();
+        let gc_config = make_gc_config(10, 5);
         let key = make_key("key");
         let now = SystemTime::now();
 
@@ -920,7 +915,7 @@ mod maintenance {
         assert!(content_file.exists());
 
         // Maintenance should clean it up
-        let result = storage.maintenance(now).unwrap();
+        let result = storage.maintenance(now, gc_config).unwrap();
         assert!(!content_file.exists());
         assert!(result.orphaned_files_removed > 0);
     }

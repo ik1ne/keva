@@ -1,7 +1,6 @@
 use super::*;
 use crate::types::TtlKey;
-use crate::types::config::SavedConfig;
-use common::{create_test_db, make_key};
+use common::{create_test_db, make_gc_config, make_key};
 use std::time::Duration;
 use tempfile::TempDir;
 
@@ -12,29 +11,16 @@ mod common {
         let temp_dir = TempDir::new().unwrap();
         let config = Config {
             base_path: temp_dir.path().to_path_buf(),
-            saved: SavedConfig {
-                trash_ttl: Duration::from_secs(30 * 24 * 60 * 60), // 30 days
-                purge_ttl: Duration::from_secs(7 * 24 * 60 * 60),  // 7 days
-            },
         };
         let db = Database::new(config).unwrap();
         (db, temp_dir)
     }
 
-    pub(super) fn create_test_db_with_ttl(
-        trash_ttl_secs: u64,
-        purge_ttl_secs: u64,
-    ) -> (Database, TempDir) {
-        let temp_dir = TempDir::new().unwrap();
-        let config = Config {
-            base_path: temp_dir.path().to_path_buf(),
-            saved: SavedConfig {
-                trash_ttl: Duration::from_secs(trash_ttl_secs),
-                purge_ttl: Duration::from_secs(purge_ttl_secs),
-            },
-        };
-        let db = Database::new(config).unwrap();
-        (db, temp_dir)
+    pub(super) fn make_gc_config(trash_ttl_secs: u64, purge_ttl_secs: u64) -> GcConfig {
+        GcConfig {
+            trash_ttl: Duration::from_secs(trash_ttl_secs),
+            purge_ttl: Duration::from_secs(purge_ttl_secs),
+        }
     }
 
     pub(super) fn make_key(s: &str) -> Key {
@@ -887,23 +873,24 @@ mod purge {
 
 mod gc {
     use super::*;
-    use common::{create_test_db, create_test_db_with_ttl, make_key};
 
     #[test]
     fn test_gc_no_expired() {
         let (mut db, _temp) = create_test_db();
         let now = SystemTime::now();
+        let gc_config = make_gc_config(30 * 24 * 60 * 60, 7 * 24 * 60 * 60);
 
         db.create(&make_key("test"), now).unwrap();
 
-        let result = db.gc(now).unwrap();
+        let result = db.gc(now, gc_config).unwrap();
         assert!(result.trashed.is_empty());
         assert!(result.purged.is_empty());
     }
 
     #[test]
     fn test_gc_trashes_expired() {
-        let (mut db, _temp) = create_test_db_with_ttl(100, 50);
+        let (mut db, _temp) = create_test_db();
+        let gc_config = make_gc_config(100, 50);
 
         let create_time = SystemTime::now();
         let key = make_key("test");
@@ -911,7 +898,7 @@ mod gc {
         db.create(&key, create_time).unwrap();
 
         let gc_time = create_time + Duration::from_secs(150);
-        let result = db.gc(gc_time).unwrap();
+        let result = db.gc(gc_time, gc_config).unwrap();
 
         assert_eq!(result.trashed, std::slice::from_ref(&key));
         assert!(result.purged.is_empty());
@@ -929,7 +916,8 @@ mod gc {
 
     #[test]
     fn test_gc_purges_expired() {
-        let (mut db, _temp) = create_test_db_with_ttl(100, 50);
+        let (mut db, _temp) = create_test_db();
+        let gc_config = make_gc_config(100, 50);
 
         let create_time = SystemTime::now();
         let key = make_key("test");
@@ -940,7 +928,7 @@ mod gc {
         db.trash(&key, trash_time).unwrap();
 
         let gc_time = trash_time + Duration::from_secs(60);
-        let result = db.gc(gc_time).unwrap();
+        let result = db.gc(gc_time, gc_config).unwrap();
 
         assert!(result.trashed.is_empty());
         assert_eq!(result.purged, std::slice::from_ref(&key));
@@ -950,7 +938,8 @@ mod gc {
 
     #[test]
     fn test_gc_full_lifecycle() {
-        let (mut db, _temp) = create_test_db_with_ttl(100, 50);
+        let (mut db, _temp) = create_test_db();
+        let gc_config = make_gc_config(100, 50);
 
         let create_time = SystemTime::now();
         let key = make_key("lifecycle-test");
@@ -959,13 +948,13 @@ mod gc {
 
         // Phase 1: Before trash TTL
         let t1 = create_time + Duration::from_secs(50);
-        let result1 = db.gc(t1).unwrap();
+        let result1 = db.gc(t1, gc_config).unwrap();
         assert!(result1.trashed.is_empty());
         assert!(result1.purged.is_empty());
 
         // Phase 2: After trash TTL
         let t2 = create_time + Duration::from_secs(150);
-        let result2 = db.gc(t2).unwrap();
+        let result2 = db.gc(t2, gc_config).unwrap();
         assert_eq!(result2.trashed, std::slice::from_ref(&key));
         assert!(result2.purged.is_empty());
 
@@ -979,7 +968,7 @@ mod gc {
 
         // Phase 3: After purge TTL
         let t3 = t2 + Duration::from_secs(60);
-        let result3 = db.gc(t3).unwrap();
+        let result3 = db.gc(t3, gc_config).unwrap();
         assert!(result3.trashed.is_empty());
         assert_eq!(result3.purged, std::slice::from_ref(&key));
 
@@ -988,7 +977,8 @@ mod gc {
 
     #[test]
     fn test_touch_resets_trash_timer() {
-        let (mut db, _temp) = create_test_db_with_ttl(100, 50);
+        let (mut db, _temp) = create_test_db();
+        let gc_config = make_gc_config(100, 50);
 
         let create_time = SystemTime::now();
         let key = make_key("touch-test");
@@ -1000,19 +990,19 @@ mod gc {
 
         // Would be expired based on create_time, but not based on touch_time
         let check_time = create_time + Duration::from_secs(150);
-        let result = db.gc(check_time).unwrap();
+        let result = db.gc(check_time, gc_config).unwrap();
         assert!(result.trashed.is_empty());
 
         // Now past touch_time + trash_ttl
         let check_time2 = touch_time + Duration::from_secs(110);
-        let result2 = db.gc(check_time2).unwrap();
+        let result2 = db.gc(check_time2, gc_config).unwrap();
         assert_eq!(result2.trashed.len(), 1);
     }
 }
 
 mod edge_cases {
     use super::*;
-    use common::{create_test_db, create_test_db_with_ttl, make_key};
+    use common::{create_test_db, make_gc_config, make_key};
 
     #[test]
     fn test_multiple_attachments() {
@@ -1076,7 +1066,8 @@ mod edge_cases {
     /// Stale active keys (TTL expired but GC hasn't run) can still be touched.
     #[test]
     fn test_stale_active_key_can_be_rescued_by_touch() {
-        let (mut db, _temp) = create_test_db_with_ttl(100, 50);
+        let (mut db, _temp) = create_test_db();
+        let gc_config = make_gc_config(100, 50);
         let key = make_key("rescue-me");
         let create_time = SystemTime::now();
 
@@ -1095,14 +1086,15 @@ mod edge_cases {
             }
         );
 
-        let result = db.gc(stale_time).unwrap();
+        let result = db.gc(stale_time, gc_config).unwrap();
         assert!(result.trashed.is_empty());
     }
 
     /// Stale trashed keys (purge TTL expired but GC hasn't run) can still be restored.
     #[test]
     fn test_stale_trashed_key_can_be_rescued_by_restore() {
-        let (mut db, _temp) = create_test_db_with_ttl(100, 50);
+        let (mut db, _temp) = create_test_db();
+        let gc_config = make_gc_config(100, 50);
         let key = make_key("rescue-me");
         let create_time = SystemTime::now();
 
@@ -1124,7 +1116,7 @@ mod edge_cases {
             }
         );
 
-        let result = db.gc(stale_time).unwrap();
+        let result = db.gc(stale_time, gc_config).unwrap();
         assert!(result.trashed.is_empty());
         assert!(result.purged.is_empty());
     }

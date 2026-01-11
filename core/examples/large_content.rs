@@ -3,19 +3,15 @@
 //! Run: cargo run -q --example large_content -p keva_core
 
 use keva_core::core::KevaCore;
-use keva_core::types::{Config, Key, SavedConfig};
+use keva_core::types::{Config, Key};
 use std::path::PathBuf;
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 const TEST_SIZES_MB: &[usize] = &[1, 10, 50, 100];
 
 fn main() {
     let config = Config {
         base_path: get_data_path(),
-        saved: SavedConfig {
-            trash_ttl: Duration::from_secs(30 * 24 * 60 * 60),
-            purge_ttl: Duration::from_secs(7 * 24 * 60 * 60),
-        },
     };
 
     let mut keva = KevaCore::open(config).expect("Failed to open database");

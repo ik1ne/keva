@@ -1,5 +1,6 @@
 //! System tray icon management.
 
+use super::startup;
 use std::mem::size_of;
 use windows::{
     Win32::{
@@ -11,7 +12,7 @@ use windows::{
             },
             WindowsAndMessaging::{
                 AppendMenuW, CreatePopupMenu, DestroyMenu, GetCursorPos, IDI_APPLICATION,
-                IsWindowVisible, LoadIconW, MF_GRAYED, MF_SEPARATOR, MF_STRING,
+                IsWindowVisible, LoadIconW, MF_CHECKED, MF_GRAYED, MF_SEPARATOR, MF_STRING,
                 SetForegroundWindow, TPM_BOTTOMALIGN, TPM_LEFTALIGN, TPM_RIGHTBUTTON,
                 TrackPopupMenu, WM_USER,
             },
@@ -74,6 +75,15 @@ pub fn remove_tray_icon(hwnd: HWND) {
     }
 }
 
+/// Sets tray icon visibility. Adds or removes the icon based on the visible flag.
+pub fn set_tray_visibility(hwnd: HWND, visible: bool) {
+    if visible {
+        let _ = add_tray_icon(hwnd);
+    } else {
+        remove_tray_icon(hwnd);
+    }
+}
+
 /// Shows the tray icon context menu.
 pub fn show_tray_menu(hwnd: HWND) {
     unsafe {
@@ -91,20 +101,20 @@ pub fn show_tray_menu(hwnd: HWND) {
         };
         let _ = AppendMenuW(hmenu, show_flags, IDM_SHOW as usize, w!("Show Keva"));
 
-        // "Settings..." - non-functional until M15-win
-        let _ = AppendMenuW(
-            hmenu,
-            MF_STRING | MF_GRAYED,
-            IDM_SETTINGS as usize,
-            w!("Settings..."),
-        );
+        // "Settings..."
+        let _ = AppendMenuW(hmenu, MF_STRING, IDM_SETTINGS as usize, w!("Settings..."));
 
         let _ = AppendMenuW(hmenu, MF_SEPARATOR, 0, None);
 
-        // "Launch at Login" - non-functional until M20-win
+        // "Launch at Login" - shows checkmark if enabled
+        let launch_flags = if startup::is_launch_at_login_enabled() {
+            MF_STRING | MF_CHECKED
+        } else {
+            MF_STRING
+        };
         let _ = AppendMenuW(
             hmenu,
-            MF_STRING | MF_GRAYED,
+            launch_flags,
             IDM_LAUNCH_AT_LOGIN as usize,
             w!("Launch at Login"),
         );

@@ -878,3 +878,254 @@ html, body {
     from { opacity: 1; }
     to { opacity: 0.4; }
 }
+
+/* Settings panel */
+.settings-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+}
+
+.settings-overlay.hidden {
+    display: none;
+}
+
+.settings-panel {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    width: 500px;
+    max-width: 90%;
+    max-height: 80%;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.settings-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 20px;
+    cursor: pointer;
+    padding: 4px 8px;
+    line-height: 1;
+}
+
+.settings-close:hover {
+    color: var(--text-primary);
+}
+
+.settings-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+.settings-nav {
+    width: 140px;
+    background: var(--bg-primary);
+    border-right: 1px solid var(--border-color);
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.settings-nav-item {
+    background: none;
+    border: none;
+    padding: 10px 12px;
+    text-align: left;
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.settings-nav-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+}
+
+.settings-nav-item.active {
+    background: var(--bg-selected);
+    color: #ffffff;
+}
+
+.settings-content {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.settings-category {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.settings-category.hidden {
+    display: none;
+}
+
+.settings-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.settings-row label {
+    color: var(--text-primary);
+    font-size: 14px;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.settings-row select,
+.settings-row input[type="number"],
+.settings-row input[type="text"] {
+    background: var(--bg-input);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 6px 10px;
+    color: var(--text-primary);
+    font-size: 13px;
+    outline: none;
+    min-width: 120px;
+}
+
+.settings-row select:focus,
+.settings-row input[type="number"]:focus,
+.settings-row input[type="text"]:focus {
+    border-color: var(--accent-color);
+}
+
+.settings-row input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--accent-color);
+}
+
+.hotkey-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.hotkey-input {
+    cursor: pointer;
+    text-align: center;
+    flex: 1;
+}
+
+.hotkey-clear {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px 8px;
+    line-height: 1;
+    border-radius: 4px;
+}
+
+.hotkey-clear:hover:not(:disabled) {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.hotkey-clear:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+/* Segmented control */
+.segmented-control {
+    display: flex;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.segmented-control .segment {
+    background: var(--bg-input);
+    border: none;
+    border-right: 1px solid var(--border-color);
+    padding: 6px 14px;
+    color: var(--text-primary);
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.segmented-control .segment:last-child {
+    border-right: none;
+}
+
+.segmented-control .segment:hover {
+    background: var(--bg-hover);
+}
+
+.segmented-control .segment.active {
+    background: var(--accent-color);
+    color: white;
+}
+
+.hotkey-input.capturing {
+    border-color: var(--accent-color);
+    background: var(--bg-tertiary);
+}
+
+.settings-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-color);
+}
+
+.settings-btn {
+    padding: 8px 20px;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.settings-btn-cancel {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.settings-btn-cancel:hover {
+    background: var(--bg-hover);
+}
+
+.settings-btn-save {
+    background: var(--accent-color);
+    color: white;
+}
+
+.settings-btn-save:hover {
+    opacity: 0.9;
+}

@@ -27,9 +27,15 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
 
     match message {
         IncomingMessage::Ready => {
-            // Send theme directly (synchronous, UI thread)
+            // Send theme from config (or detect system if set to System)
             if let Some(wv) = WEBVIEW.get() {
-                let theme = Theme::detect_system();
+                let config_path = get_data_path().join("config.toml");
+                let config = keva_core::types::AppConfig::load(&config_path).unwrap_or_default();
+                let theme = match config.general.theme {
+                    keva_core::types::Theme::Dark => Theme::Dark,
+                    keva_core::types::Theme::Light => Theme::Light,
+                    keva_core::types::Theme::System => Theme::detect_system(),
+                };
                 post_message(
                     &wv.webview,
                     &OutgoingMessage::Theme {
@@ -181,6 +187,17 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
             if let Some(wv) = WEBVIEW.get() {
                 post_message(&wv.webview, &OutgoingMessage::CopyResult { success });
             }
+        }
+        IncomingMessage::SaveSettings {
+            config,
+            launch_at_login,
+        } => {
+            // Save config to file
+            let config_path = get_data_path().join("config.toml");
+            let _ = config.save(&config_path);
+
+            // Apply settings (launch_at_login is written to registry in apply_settings)
+            crate::platform::handlers::apply_settings(parent_hwnd, &config, launch_at_login, request_tx);
         }
     }
 }

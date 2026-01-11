@@ -85,6 +85,12 @@ pub enum OutgoingMessage {
     CopyResult {
         success: bool,
     },
+    /// Open settings panel with current config.
+    OpenSettings {
+        config: keva_core::types::AppConfig,
+        /// Read from registry, not config file.
+        launch_at_login: bool,
+    },
 }
 
 /// Copy action type for DoCopy message.

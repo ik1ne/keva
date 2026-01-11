@@ -2,15 +2,17 @@
 
 use crate::webview::{AttachmentInfo, ExactMatch, OutgoingMessage, RenameResultType, wm};
 use keva_core::core::KevaCore;
-use keva_core::types::{Config, Key, LifecycleState, SavedConfig};
+use keva_core::types::{AppConfig, Config, GcConfig, Key, LifecycleState};
 use keva_search::{SearchConfig, SearchEngine, SearchQuery};
 use std::path::PathBuf;
+use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::sync::Arc;
-use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
-use windows::Win32::UI::WindowsAndMessaging::{IsWindowVisible, MB_ICONERROR, MB_OK, MessageBoxW, PostMessageW};
+use windows::Win32::UI::WindowsAndMessaging::{
+    IDYES, IsWindowVisible, MB_ICONERROR, MB_OK, MB_YESNO, MessageBoxW, PostMessageW,
+};
 use windows_strings::w;
 
 pub enum Request {
@@ -83,6 +85,8 @@ pub enum Request {
     Maintenance {
         force: bool,
     },
+    /// Update GC configuration (TTL settings changed in settings dialog).
+    UpdateGcConfig { lifecycle: keva_core::types::LifecycleConfig },
     Shutdown,
 }
 
@@ -90,14 +94,16 @@ pub enum Request {
 ///
 /// The worker owns KevaCore and SearchEngine. It handles all requests and posts
 /// responses directly to the UI thread via PostMessageW.
-pub fn start(hwnd: HWND) -> mpsc::Sender<Request> {
+pub fn start(hwnd: HWND) -> Sender<Request> {
     let (request_tx, request_rx) = mpsc::channel::<Request>();
-
     let notify_tx = request_tx.clone();
     let hwnd_raw = hwnd.0 as isize;
 
     thread::spawn(move || {
         let hwnd = HWND(hwnd_raw as *mut _);
+
+        let app_config = load_app_config();
+        let gc_config = gc_config_from_app(&app_config);
 
         let keva = match open_keva() {
             Ok(keva) => keva,
@@ -115,7 +121,7 @@ pub fn start(hwnd: HWND) -> mpsc::Sender<Request> {
         });
         let search = SearchEngine::new(active_keys, trashed_keys, SearchConfig::default(), notify);
 
-        worker_loop(keva, search, request_rx, hwnd);
+        worker_loop(keva, search, request_rx, gc_config, hwnd);
     });
 
     request_tx
@@ -142,6 +148,7 @@ fn worker_loop(
     mut keva: KevaCore,
     mut search: SearchEngine,
     requests: mpsc::Receiver<Request>,
+    mut gc_config: GcConfig,
     hwnd: HWND,
 ) {
     let mut current_query = String::new();
@@ -150,7 +157,7 @@ fn worker_loop(
     search.set_query(SearchQuery::Fuzzy(String::new()));
 
     // Run maintenance on launch if needed (>24h since last run)
-    handle_maintenance(&mut keva, &mut search, &current_query, false, hwnd);
+    handle_maintenance(&mut keva, &mut search, &current_query, false, gc_config, hwnd);
     let mut next_maintenance = Instant::now() + MAINTENANCE_INTERVAL;
 
     loop {
@@ -161,7 +168,7 @@ fn worker_loop(
                 // Timer fired - only run if window is hidden to avoid UI state issues
                 let is_visible = unsafe { IsWindowVisible(hwnd).as_bool() };
                 if !is_visible {
-                    handle_maintenance(&mut keva, &mut search, &current_query, false, hwnd);
+                    handle_maintenance(&mut keva, &mut search, &current_query, false, gc_config, hwnd);
                 }
                 next_maintenance = Instant::now() + MAINTENANCE_INTERVAL;
                 continue;
@@ -244,9 +251,12 @@ fn worker_loop(
                 handle_add_files(&mut keva, &key, files, hwnd);
             }
             Request::Maintenance { force } => {
-                handle_maintenance(&mut keva, &mut search, &current_query, force, hwnd);
+                handle_maintenance(&mut keva, &mut search, &current_query, force, gc_config, hwnd);
                 // Reset timer after any maintenance (manual or scheduled)
                 next_maintenance = Instant::now() + MAINTENANCE_INTERVAL;
+            }
+            Request::UpdateGcConfig { lifecycle } => {
+                gc_config = GcConfig::from(&lifecycle);
             }
             Request::Shutdown => {
                 unsafe {
@@ -540,6 +550,7 @@ fn handle_maintenance(
     search: &mut SearchEngine,
     current_query: &str,
     force: bool,
+    gc_config: GcConfig,
     hwnd: HWND,
 ) {
     let now = SystemTime::now();
@@ -548,7 +559,7 @@ fn handle_maintenance(
         return;
     }
 
-    let Ok(outcome) = keva.maintenance(now) else {
+    let Ok(outcome) = keva.maintenance(now, gc_config) else {
         return;
     };
 
@@ -609,12 +620,48 @@ fn send_search_results(search: &SearchEngine, current_query: &str, hwnd: HWND) {
 fn open_keva() -> Result<KevaCore, keva_core::core::error::KevaError> {
     let config = Config {
         base_path: get_data_path(),
-        saved: SavedConfig {
-            trash_ttl: Duration::from_secs(30 * 24 * 60 * 60),
-            purge_ttl: Duration::from_secs(7 * 24 * 60 * 60),
-        },
     };
     KevaCore::open(config)
+}
+
+fn load_app_config() -> AppConfig {
+    let config_path = get_data_path().join("config.toml");
+    let config = AppConfig::load(&config_path).unwrap_or_default();
+
+    let errors = config.validate();
+    if errors.is_empty() {
+        return config;
+    }
+
+    // Show validation error dialog
+    let error_list = errors.join("\n");
+    let msg = format!(
+        "Configuration file contains invalid values:\n\n{}\n\n\
+         Click Yes to launch with defaults, or No to quit.",
+        error_list
+    );
+    let msg_wide: Vec<u16> = msg.encode_utf16().chain(std::iter::once(0)).collect();
+
+    let result = unsafe {
+        MessageBoxW(
+            None,
+            windows::core::PCWSTR(msg_wide.as_ptr()),
+            w!("Keva - Invalid Configuration"),
+            MB_ICONERROR | MB_YESNO,
+        )
+    };
+
+    if result == IDYES {
+        let valid_config = config.with_defaults_for_invalid();
+        let _ = valid_config.save(&config_path);
+        valid_config
+    } else {
+        std::process::exit(1);
+    }
+}
+
+fn gc_config_from_app(app_config: &AppConfig) -> GcConfig {
+    GcConfig::from(&app_config.lifecycle)
 }
 
 fn show_database_error(error: &keva_core::core::error::KevaError, data_path: &std::path::Path) {

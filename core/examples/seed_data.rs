@@ -3,10 +3,10 @@
 //! Run with: `cargo run -q --example seed_data -p keva_core`
 
 use keva_core::core::KevaCore;
-use keva_core::types::{Config, Key, SavedConfig};
+use keva_core::types::{Config, Key};
 use std::io::Write;
 use std::path::PathBuf;
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 fn main() {
     let base_path = get_default_data_path();
@@ -14,10 +14,6 @@ fn main() {
 
     let config = Config {
         base_path: base_path.clone(),
-        saved: SavedConfig {
-            trash_ttl: Duration::from_secs(30 * 24 * 60 * 60), // 30 days
-            purge_ttl: Duration::from_secs(7 * 24 * 60 * 60),  // 7 days
-        },
     };
 
     let mut keva = KevaCore::open(config).expect("Failed to open keva database");

@@ -23,8 +23,8 @@ and includes test cases for verification.
 | M12  | Edit/Preview Toggle    | Markdown renderer, att: link transform        | ✅      |
 | M13  | Clipboard              | Native read, paste intercept, copy shortcuts  | ✅      |
 | M14  | Trash                  | Trash section, restore, GC triggers           | ✅      |
-| M15  | Settings               | Dialog, config persistence, theme             | ❌      |
-| M16  | Global Hotkey          | Ctrl+Alt+K registration, conflict detection   | ❌      |
+| M15  | Settings               | WebView panel, config persistence, theme      | ✅      |
+| M16  | Global Hotkey          | RegisterHotKey, conflict detection            | ❌      |
 | M17  | Single Instance        | Named mutex, activate existing window         | ❌      |
 | M18  | Window Position Memory | Per-monitor position, off-screen check        | ❌      |
 | M19  | First-Run Dialog       | Welcome message, launch at login checkbox     | ❌      |
@@ -766,65 +766,111 @@ Timer resets after any maintenance run. NOT triggered on app quit (fast exit).
 
 ## M15: Settings
 
-**Goal:** Settings dialog with persistent configuration.
+**Goal:** Settings panel with persistent configuration.
 
-**Description:** Modal settings dialog opened via Ctrl+, or tray menu. Changes saved to config.toml on dialog close.
-Applied immediately to running app.
+**Description:** WebView-based settings panel (not native dialog) opened via Ctrl+, or tray menu. Settings organized
+into categories with left navigation. Theme uses segmented control (Light|Dark|System). Global shortcut uses hotkey
+capture input. Changes saved to config.toml on Save; applied immediately. Config cached in memory to avoid disk reads
+on system theme changes.
 
 **Settings:**
 
-| Category  | Setting         | Type                  | Default    |
-|-----------|-----------------|-----------------------|------------|
-| General   | Theme           | Dark / Light / System | System     |
-| General   | Launch at Login | Toggle                | false      |
-| General   | Show Tray Icon  | Toggle                | true       |
-| Shortcuts | Global Shortcut | Key capture           | Ctrl+Alt+K |
-| Lifecycle | Trash TTL       | Days (1-365)          | 30 days    |
-| Lifecycle | Purge TTL       | Days (1-365)          | 7 days     |
+| Category  | Setting         | Type                  | Default    | Storage     |
+|-----------|-----------------|-----------------------|------------|-------------|
+| General   | Theme           | Dark / Light / System | System     | config.toml |
+| General   | Launch at Login | Toggle                | false      | Registry    |
+| General   | Show Tray Icon  | Toggle                | true       | config.toml |
+| Shortcuts | Global Shortcut | Key capture           | Ctrl+Alt+K | config.toml |
+| Lifecycle | Trash TTL       | Days (1-365000)       | 30 days    | config.toml |
+| Lifecycle | Purge TTL       | Days (1-365000)       | 7 days     | config.toml |
+
+**Implementation Notes:**
+
+- WebView panel with backdrop blur overlay
+- Segmented control for theme (avoids dropdown misalignment issues)
+- Hotkey capture: requires Ctrl or Alt modifier, warns on reserved keys (Escape, Tab, etc.)
+- Clear button (×) for shortcut field, disabled when empty to prevent layout shift
+- TTL validation: 1-365000 days (joke toast at max value)
+- Launch at login stored in registry (`HKCU\...\Run`), not config.toml
+- Registry entry name: "Keva" for release, "Keva (Debug)" for debug builds
+- Config cached in `RwLock<Option<AppConfig>>` to avoid disk reads on `WM_SETTINGCHANGE`
+- `GcConfig::from(&LifecycleConfig)` for clean TTL conversion
+
+**Keyboard Shortcuts:**
+
+| Key    | Action                          |
+|--------|---------------------------------|
+| Escape | Close settings (without saving) |
+| Enter  | Save and close                  |
 
 **Test Cases:**
 
-| TC        | Description                                  | Status |
-|-----------|----------------------------------------------|--------|
-| TC-M15-01 | Ctrl+, opens settings dialog                 | ❌      |
-| TC-M15-02 | Tray menu opens settings                     | ❌      |
-| TC-M15-03 | Theme change applies immediately             | ❌      |
-| TC-M15-04 | Settings saved to config.toml                | ❌      |
-| TC-M15-05 | Esc closes settings dialog                   | ❌      |
-| TC-M15-06 | Launch at login toggle creates/removes entry | ❌      |
-| TC-M15-07 | TTL settings are editable                    | ❌      |
+| TC        | Description                                               | Status |
+|-----------|-----------------------------------------------------------|--------|
+| TC-M15-01 | Ctrl+, opens settings panel                               | ✅      |
+| TC-M15-02 | Tray menu "Settings" opens settings panel                 | ✅      |
+| TC-M15-03 | Theme segmented control (Light/Dark/System)               | ✅      |
+| TC-M15-04 | Theme change applies immediately to WebView               | ✅      |
+| TC-M15-05 | Theme persists after app restart                          | ✅      |
+| TC-M15-06 | System theme change ignored when preference is not System | ✅      |
+| TC-M15-07 | Settings saved to config.toml on Save                     | ✅      |
+| TC-M15-08 | Escape closes settings without saving                     | ✅      |
+| TC-M15-09 | Enter saves and closes settings                           | ✅      |
+| TC-M15-10 | Click outside closes only if no changes made              | ✅      |
+| TC-M15-11 | Launch at login toggle updates registry                   | ✅      |
+| TC-M15-12 | Registry entry shows "Keva" (release) or "Keva (Debug)"   | ✅      |
+| TC-M15-13 | TTL inputs accept only positive integers                  | ✅      |
+| TC-M15-14 | TTL validation rejects 0 or >365000                       | ✅      |
+| TC-M15-15 | Hotkey capture requires Ctrl or Alt modifier              | ✅      |
+| TC-M15-16 | Hotkey capture warns on reserved keys (Tab, Escape)       | ✅      |
+| TC-M15-17 | Clear button (×) clears shortcut field                    | ✅      |
+| TC-M15-18 | Empty shortcut is valid (disables global hotkey)          | ✅      |
+| TC-M15-19 | Focus moves to Save button when panel opens               | ✅      |
+| TC-M15-20 | Category navigation (General/Shortcuts/Lifecycle)         | ✅      |
 
 ---
 
 ## M16: Global Hotkey
 
-**Goal:** System-wide Ctrl+Alt+K to show window.
+**Goal:** System-wide hotkey to show window from any application.
 
-**Description:** Register global hotkey on startup. Show window when pressed (even from background). Detect conflicts
-with other applications. Fallback: double-click exe to show window.
+**Description:** Register global hotkey using Win32 `RegisterHotKey` on startup. Parse shortcut string from config
+(e.g., "Ctrl+Alt+K") into modifiers and virtual key code. Show window when pressed, even when Keva is in background.
+Detect conflicts with other applications. Re-register when shortcut changes in settings. Empty shortcut disables global
+hotkey.
+
+Note: The settings UI for configuring the shortcut (hotkey capture input) is implemented in M15. This milestone covers
+the native RegisterHotKey/UnregisterHotKey implementation.
 
 **Implementation Notes:**
 
-- `RegisterHotKey(hwnd, id, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 0x4B)`
-- MOD_NOREPEAT prevents repeated WM_HOTKEY when held
-- Configurable via settings (key capture dialog)
-- Conflict detection: RegisterHotKey failure
-- `UnregisterHotKey` on WM_DESTROY and when changing hotkey
+- Parse shortcut string: "Ctrl+Alt+K" → `MOD_CONTROL | MOD_ALT`, `VK_K`
+- `RegisterHotKey(hwnd, id, modifiers | MOD_NOREPEAT, vk)`
+- `MOD_NOREPEAT` prevents repeated `WM_HOTKEY` when held
+- `UnregisterHotKey` on `WM_DESTROY` and before re-registering
+- On `RegisterHotKey` failure: show toast "Shortcut in use by another application"
+- Empty shortcut in config: skip registration (no global hotkey)
 
-**Conflict Handling:**
+**Shortcut String Parsing:**
 
-1. Show notification: "Shortcut in use by another application"
-2. Open settings with shortcut field focused
-3. User chooses different shortcut
+| String           | Modifiers                | VK Code  |
+|------------------|--------------------------|----------|
+| Ctrl+Alt+K       | MOD_CONTROL \| MOD_ALT   | 0x4B     |
+| Ctrl+Shift+Space | MOD_CONTROL \| MOD_SHIFT | VK_SPACE |
+| Alt+F1           | MOD_ALT                  | VK_F1    |
 
 **Test Cases:**
 
-| TC        | Description                                 | Status |
-|-----------|---------------------------------------------|--------|
-| TC-M16-01 | Ctrl+Alt+K shows window from any app        | ❌      |
-| TC-M16-02 | Hotkey works when window already visible    | ❌      |
-| TC-M16-03 | Custom hotkey can be configured in settings | ❌      |
-| TC-M16-04 | Double-click exe shows window as fallback   | ❌      |
+| TC        | Description                                   | Status |
+|-----------|-----------------------------------------------|--------|
+| TC-M16-01 | Ctrl+Alt+K shows window from any app          | ❌      |
+| TC-M16-02 | Hotkey works when window already visible      | ❌      |
+| TC-M16-03 | Hotkey works when window is hidden            | ❌      |
+| TC-M16-04 | Custom hotkey from settings is registered     | ❌      |
+| TC-M16-05 | Changing hotkey in settings re-registers      | ❌      |
+| TC-M16-06 | Conflict shows "Shortcut in use" notification | ❌      |
+| TC-M16-07 | Empty shortcut disables global hotkey         | ❌      |
+| TC-M16-08 | Hotkey unregistered on app exit               | ❌      |
 
 ---
 

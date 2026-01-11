@@ -42,9 +42,13 @@ impl TtlTable {
         ttl_duration: Duration,
     ) -> Result<Vec<Key>, DatabaseError> {
         let Some(expires_at) = now.checked_sub(ttl_duration) else {
-            // If ttl_duration is greater than now, no keys can be expired
             return Ok(vec![]);
         };
+
+        // TtlKey can't represent timestamps before UNIX_EPOCH
+        if expires_at < SystemTime::UNIX_EPOCH {
+            return Ok(vec![]);
+        }
 
         let table = txn.open_table(self.definition)?;
 

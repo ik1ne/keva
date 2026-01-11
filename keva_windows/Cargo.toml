@@ -3,6 +3,9 @@ name = "keva_windows"
 version = "0.1.0"
 edition = "2024"
 
+[build-dependencies]
+winres = "0.1"
+
 [dependencies]
 windows-strings = "0.5"
 windows-core = "0.62"
@@ -31,6 +34,7 @@ features = [
     "Win32_UI_HiDpi",
     "Win32_System_Memory",
     "Win32_System_DataExchange",
+    "Win32_System_Registry",
     "Win32_Graphics_Gdi",
     "Win32_Graphics_Dwm",
     "Win32_Graphics_DirectComposition",

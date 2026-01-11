@@ -299,6 +299,10 @@ const Drop = {
     },
 
     showToast: function (message) {
+        // Skip if same message is already showing
+        const existing = document.querySelector('.toast');
+        if (existing && existing.textContent === message) return;
+
         // Simple toast notification
         const toast = document.createElement('div');
         toast.className = 'toast';

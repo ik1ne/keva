@@ -8,6 +8,64 @@
 <div class="splash" id="splash">
     <div class="splash-text">Loading database...</div>
 </div>
+<div class="settings-overlay hidden" id="settings-overlay">
+    <div class="settings-panel">
+        <div class="settings-header">
+            <span>Settings</span>
+            <button class="settings-close" id="settings-close">&times;</button>
+        </div>
+        <div class="settings-body">
+            <div class="settings-nav">
+                <button class="settings-nav-item active" data-category="general">General</button>
+                <button class="settings-nav-item" data-category="shortcuts">Shortcuts</button>
+                <button class="settings-nav-item" data-category="lifecycle">Lifecycle</button>
+            </div>
+            <div class="settings-content">
+                <div class="settings-category" id="settings-general">
+                    <div class="settings-row">
+                        <label>Theme</label>
+                        <div class="segmented-control" id="setting-theme" data-value="system">
+                            <button class="segment" data-value="light">Light</button>
+                            <button class="segment" data-value="dark">Dark</button>
+                            <button class="segment active" data-value="system">System</button>
+                        </div>
+                    </div>
+                    <div class="settings-row">
+                        <label>Launch at login</label>
+                        <input type="checkbox" id="setting-launch-at-login">
+                    </div>
+                    <div class="settings-row">
+                        <label>Show tray icon</label>
+                        <input type="checkbox" id="setting-show-tray-icon">
+                    </div>
+                </div>
+                <div class="settings-category hidden" id="settings-shortcuts">
+                    <div class="settings-row">
+                        <label>Global shortcut</label>
+                        <div class="hotkey-wrapper">
+                            <input type="text" id="setting-global-shortcut" class="hotkey-input" readonly placeholder="Click to set shortcut">
+                            <button class="hotkey-clear" id="setting-global-shortcut-clear" title="Clear shortcut" disabled>&times;</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="settings-category hidden" id="settings-lifecycle">
+                    <div class="settings-row">
+                        <label>Trash after (days)</label>
+                        <input type="text" id="setting-trash-ttl" inputmode="numeric">
+                    </div>
+                    <div class="settings-row">
+                        <label>Purge after (days)</label>
+                        <input type="text" id="setting-purge-ttl" inputmode="numeric">
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="settings-footer">
+            <button class="settings-btn settings-btn-cancel" id="settings-cancel">Cancel</button>
+            <button class="settings-btn settings-btn-save" id="settings-save">Save</button>
+        </div>
+    </div>
+</div>
 <div class="app">
     <div class="search-bar">
         <div class="search-icon">&#128269;</div>
@@ -55,6 +113,7 @@
 <script src="attachments.js"></script>
 <script src="conflict-dialog.js"></script>
 <script src="drop.js"></script>
+<script src="settings.js"></script>
 <script src="main.js"></script>
 </body>
 </html>

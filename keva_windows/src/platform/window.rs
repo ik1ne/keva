@@ -6,7 +6,7 @@ use crate::platform::{
     handlers::{
         on_activate, on_command, on_create, on_destroy, on_getminmaxinfo, on_nccalcsize,
         on_open_file_picker, on_paint, on_setfocus, on_settingchange, on_size, on_trayicon,
-        on_webview_message, scale_for_dpi, set_current_theme,
+        on_webview_message, scale_for_dpi, set_app_config, set_current_theme,
     },
     hit_test::hit_test,
     input::{forward_mouse_message, forward_pointer_message},
@@ -51,7 +51,14 @@ pub fn run() -> Result<()> {
         let instance = GetModuleHandleW(None)?;
         let class_name = w!("KevaWindowClass");
 
-        let initial_theme = Theme::detect_system();
+        let config_path = keva_worker::get_data_path().join("config.toml");
+        let config = keva_core::types::AppConfig::load(&config_path).unwrap_or_default();
+        set_app_config(config.clone());
+        let initial_theme = match config.general.theme {
+            keva_core::types::Theme::Dark => Theme::Dark,
+            keva_core::types::Theme::Light => Theme::Light,
+            keva_core::types::Theme::System => Theme::detect_system(),
+        };
         set_current_theme(initial_theme);
 
         let wc = WNDCLASSW {

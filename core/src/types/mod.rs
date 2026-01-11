@@ -1,5 +1,8 @@
-pub(crate) mod config;
-pub use config::{Config, SavedConfig};
+pub mod config;
+pub use config::{
+    AppConfig, AppConfigError, Config, GcConfig, GeneralConfig, LifecycleConfig, ShortcutsConfig,
+    Theme,
+};
 
 pub(crate) mod key;
 pub use key::{Key, KeyError, MAX_KEY_LENGTH};

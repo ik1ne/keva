@@ -273,6 +273,10 @@ const Main = {
                 if (ConflictDialog.overlay) {
                     return;
                 }
+                // Don't hide if settings panel handled this Escape
+                if (Settings.handledEscape) {
+                    return;
+                }
                 Api.send({type: 'hide'});
             } else if (e.key === 's' && e.ctrlKey && !e.altKey && !e.shiftKey) {
                 e.preventDefault();
@@ -670,6 +674,10 @@ const Main = {
                 } else {
                     Drop.showToast('Failed to copy files');
                 }
+            },
+
+            openSettings: function (msg) {
+                Settings.open(msg.config, msg.launchAtLogin);
             }
         };
     },

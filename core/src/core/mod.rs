@@ -7,7 +7,7 @@ use crate::core::file_storage::error::FileStorageError;
 use crate::types::value::PublicValue as Value;
 use crate::types::value::versioned_value::latest_value;
 use crate::types::value::versioned_value::latest_value::Attachment;
-use crate::types::{Config, Key};
+use crate::types::{Config, GcConfig, Key};
 use error::KevaError;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -307,8 +307,12 @@ impl KevaCore {
 /// Maintenance operations.
 impl KevaCore {
     /// Performs garbage collection and orphan cleanup.
-    pub fn maintenance(&mut self, now: SystemTime) -> Result<MaintenanceOutcome, KevaError> {
-        let gc_result = self.db.gc(now)?;
+    pub fn maintenance(
+        &mut self,
+        now: SystemTime,
+        gc_config: GcConfig,
+    ) -> Result<MaintenanceOutcome, KevaError> {
+        let gc_result = self.db.gc(now, gc_config)?;
 
         // Clean up files for purged keys
         for key in &gc_result.purged {

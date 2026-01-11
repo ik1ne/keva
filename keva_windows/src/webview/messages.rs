@@ -78,4 +78,10 @@ pub enum IncomingMessage {
         key: String,
         filenames: Vec<String>,
     },
+    /// Save settings from WebView settings panel.
+    SaveSettings {
+        config: keva_core::types::AppConfig,
+        /// Written to registry, not config file.
+        launch_at_login: bool,
+    },
 }

@@ -6,6 +6,7 @@ use crate::keva_worker::{Request, get_data_path};
 use crate::platform::clipboard::{read_clipboard, set_pending_file_paths};
 use crate::platform::composition::CompositionHost;
 use crate::platform::drag_out::handle_drag_starting;
+use crate::platform::tray::IDM_SETTINGS;
 use crate::render::theme::Theme;
 use std::ffi::c_void;
 use std::sync::mpsc::Sender;
@@ -25,13 +26,15 @@ use webview2_com::{
     CreateCoreWebView2EnvironmentCompletedHandler, CursorChangedEventHandler,
     DragStartingEventHandler, NavigationStartingEventHandler, WebMessageReceivedEventHandler,
 };
-use windows::Win32::Foundation::HWND;
+use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::System::Com::CoTaskMemFree;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetKeyState, VK_CONTROL, VK_F, VK_MENU, VK_R, VK_T, VK_V,
+    GetKeyState, VK_CONTROL, VK_F, VK_MENU, VK_OEM_COMMA, VK_R, VK_T, VK_V,
 };
 use windows::Win32::UI::Shell::ShellExecuteW;
-use windows::Win32::UI::WindowsAndMessaging::{HCURSOR, SW_SHOWNORMAL, SetCursor};
+use windows::Win32::UI::WindowsAndMessaging::{
+    HCURSOR, PostMessageW, SW_SHOWNORMAL, SetCursor, WM_COMMAND,
+};
 use windows::core::{Interface, PWSTR, w};
 
 pub fn init_webview(
@@ -430,6 +433,13 @@ fn handle_accelerator_key(
                     action: CopyAction::Files,
                 },
             );
+            return;
+        }
+
+        // Ctrl+,: Open settings
+        if virtual_key == VK_OEM_COMMA.0 as u32 && ctrl_down && !alt_down {
+            let _ = args.SetHandled(true);
+            let _ = PostMessageW(Some(hwnd), WM_COMMAND, WPARAM(IDM_SETTINGS as usize), LPARAM(0));
         }
     }
 }

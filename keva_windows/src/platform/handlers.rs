@@ -1,15 +1,20 @@
 //! Window message handlers.
 
 use crate::keva_worker::Request;
+use std::sync::mpsc::Sender;
 use crate::platform::drop_target::revoke_drop_target;
 use crate::platform::file_picker::open_file_picker;
+use crate::platform::startup;
 use crate::platform::tray::{
-    IDM_LAUNCH_AT_LOGIN, IDM_QUIT, IDM_SETTINGS, IDM_SHOW, remove_tray_icon, show_tray_menu,
+    IDM_LAUNCH_AT_LOGIN, IDM_QUIT, IDM_SETTINGS, IDM_SHOW, remove_tray_icon, set_tray_visibility,
+    show_tray_menu,
 };
 use crate::render::theme::{MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, Theme};
 use crate::webview::bridge::post_message;
 use crate::webview::{FilePickerRequest, OutgoingMessage, WEBVIEW};
+use keva_core::types::AppConfig;
 use std::sync::atomic::{AtomicIsize, AtomicU8, Ordering};
+use std::sync::RwLock;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_FILE_SYSTEM_HANDLE_PERMISSION_READ_ONLY,
     COREWEBVIEW2_FILE_SYSTEM_HANDLE_PERMISSION_READ_WRITE,
@@ -44,6 +49,9 @@ pub static PREV_FOREGROUND: AtomicIsize = AtomicIsize::new(0);
 
 static CURRENT_THEME: AtomicU8 = AtomicU8::new(0);
 
+/// Cached app config, initialized in run() before message loop.
+static APP_CONFIG: RwLock<Option<AppConfig>> = RwLock::new(None);
+
 pub fn set_current_theme(theme: Theme) {
     let value = match theme {
         Theme::Dark => 0,
@@ -57,6 +65,22 @@ fn get_current_theme() -> Theme {
         0 => Theme::Dark,
         _ => Theme::Light,
     }
+}
+
+/// Sets the cached app config. Called on startup and when settings are saved.
+pub fn set_app_config(config: AppConfig) {
+    if let Ok(mut guard) = APP_CONFIG.write() {
+        *guard = Some(config);
+    }
+}
+
+/// Returns a clone of the cached app config, or default if not initialized.
+pub fn get_app_config() -> AppConfig {
+    APP_CONFIG
+        .read()
+        .ok()
+        .and_then(|guard| guard.clone())
+        .unwrap_or_default()
 }
 
 pub fn scale_for_dpi(logical: i32, dpi: u32) -> i32 {
@@ -198,14 +222,80 @@ pub fn on_command(hwnd: HWND, wparam: WPARAM) -> LRESULT {
     let cmd_id = (wparam.0 & 0xFFFF) as u32;
     match cmd_id {
         IDM_SHOW => show_and_focus_window(hwnd),
-        IDM_SETTINGS => {}
-        IDM_LAUNCH_AT_LOGIN => {}
+        IDM_SETTINGS => {
+            open_settings();
+        }
+        IDM_LAUNCH_AT_LOGIN => {
+            // Toggle launch at login
+            if startup::is_launch_at_login_enabled() {
+                startup::disable_launch_at_login();
+            } else {
+                startup::enable_launch_at_login();
+            }
+        }
         IDM_QUIT => unsafe {
             let _ = PostMessageW(Some(hwnd), WM_CLOSE, WPARAM(0), LPARAM(0));
         },
         _ => {}
     }
     LRESULT(0)
+}
+
+/// Opens settings panel in WebView with current config.
+fn open_settings() {
+    let config = get_app_config();
+    let launch_at_login = startup::is_launch_at_login_enabled();
+
+    if let Some(wv) = WEBVIEW.get() {
+        post_message(
+            &wv.webview,
+            &OutgoingMessage::OpenSettings {
+                config,
+                launch_at_login,
+            },
+        );
+    }
+}
+
+/// Applies settings changes that take effect immediately.
+pub fn apply_settings(
+    hwnd: HWND,
+    config: &AppConfig,
+    launch_at_login: bool,
+    request_tx: &Sender<Request>,
+) {
+    // Update cached config
+    set_app_config(config.clone());
+
+    // Apply theme
+    let theme = match config.general.theme {
+        keva_core::types::Theme::Dark => Theme::Dark,
+        keva_core::types::Theme::Light => Theme::Light,
+        keva_core::types::Theme::System => Theme::detect_system(),
+    };
+
+    if let Some(wv) = WEBVIEW.get() {
+        let theme_str = match theme {
+            Theme::Dark => "dark",
+            Theme::Light => "light",
+        };
+        post_message(&wv.webview, &OutgoingMessage::Theme { theme: theme_str.to_string() });
+    }
+
+    // Update GC config in worker thread
+    let _ = request_tx.send(Request::UpdateGcConfig {
+        lifecycle: config.lifecycle.clone(),
+    });
+
+    // Update tray icon visibility
+    set_tray_visibility(hwnd, config.general.show_tray_icon);
+
+    // Update launch at login (registry)
+    if launch_at_login {
+        startup::enable_launch_at_login();
+    } else {
+        startup::disable_launch_at_login();
+    }
 }
 
 /// WM_SIZE: Resize WebView to fill entire client area.
@@ -264,6 +354,11 @@ pub fn on_settingchange(hwnd: HWND, lparam: LPARAM) -> LRESULT {
 
         // "ImmersiveColorSet" is broadcast when system theme changes
         if unsafe { setting.as_wide() == w!("ImmersiveColorSet").as_wide() } {
+            // Only apply system theme if user preference is "System"
+            if get_app_config().general.theme != keva_core::types::Theme::System {
+                return LRESULT(0);
+            }
+
             let theme = Theme::detect_system();
             set_current_theme(theme);
             unsafe {
