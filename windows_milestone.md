@@ -26,7 +26,7 @@ and includes test cases for verification.
 | M15  | Settings               | WebView panel, config persistence, theme      | ✅      |
 | M16  | Global Hotkey          | RegisterHotKey, conflict detection            | ✅      |
 | M17  | Single Instance        | Named mutex, activate existing window         | ✅      |
-| M18  | First-Run Dialog       | Welcome message, launch at login checkbox     | ❌      |
+| M18  | First-Run Dialog       | Welcome message, launch at login checkbox     | ✅      |
 | M19  | Monaco Bundling        | Embed resources, single exe                   | ❌      |
 | M20  | Installer              | WiX/MSIX, uninstaller, WebView2 version check | ❌      |
 | M21  | Layout Polish          | Resizable panes, layout persistence           | ❌      |
@@ -926,10 +926,10 @@ Setup: Delete config.toml before testing.
 
 | TC        | Description                                 | Status |
 |-----------|---------------------------------------------|--------|
-| TC-M18-01 | First launch (no config) shows welcome      | ❌      |
-| TC-M18-02 | Get Started button closes dialog            | ❌      |
-| TC-M18-03 | Subsequent launches skip welcome dialog     | ❌      |
-| TC-M18-04 | Launch at login checkbox persists to config | ❌      |
+| TC-M18-01 | First launch (no config) shows welcome      | ✅      |
+| TC-M18-02 | Get Started button closes dialog            | ✅      |
+| TC-M18-03 | Subsequent launches skip welcome dialog     | ✅      |
+| TC-M18-04 | Launch at login checkbox persists to config | ✅      |
 
 ---
 
