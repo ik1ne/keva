@@ -16,8 +16,6 @@ use webview2_com::Microsoft::Web::WebView2::Win32::{
 use webview2_com::pwstr_from_str;
 use windows::Win32::Foundation::RECT;
 
-pub mod wm;
-
 /// Attachment metadata for WebView display.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

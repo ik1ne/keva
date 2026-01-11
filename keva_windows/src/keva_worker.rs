@@ -1,6 +1,7 @@
 //! Background worker thread for KevaCore and SearchEngine operations.
 
-use crate::webview::{AttachmentInfo, ExactMatch, OutgoingMessage, RenameResultType, wm};
+use crate::platform::wm;
+use crate::webview::{AttachmentInfo, ExactMatch, OutgoingMessage, RenameResultType};
 use keva_core::core::KevaCore;
 use keva_core::types::{AppConfig, Config, GcConfig, Key, LifecycleState};
 use keva_search::{SearchConfig, SearchEngine, SearchQuery};

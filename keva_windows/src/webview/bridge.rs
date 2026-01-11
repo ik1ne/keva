@@ -1,8 +1,8 @@
 //! WebView message bridge.
 
 use super::messages::IncomingMessage;
-use super::wm;
 use super::{FilePickerRequest, OutgoingMessage, WEBVIEW};
+use crate::platform::wm;
 use crate::keva_worker::{Request, get_data_path};
 use crate::platform::clipboard::{take_pending_file_paths, write_files};
 use crate::platform::handlers::PREV_FOREGROUND;

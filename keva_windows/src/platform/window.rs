@@ -1,20 +1,23 @@
 //! Window creation and message handling.
 
 use crate::keva_worker;
+use crate::platform::wm;
 use crate::platform::{
     drop_target::register_drop_target,
     handlers::{
         on_activate, on_command, on_create, on_destroy, on_getminmaxinfo, on_nccalcsize,
         on_open_file_picker, on_paint, on_setfocus, on_settingchange, on_size, on_trayicon,
-        on_webview_message, scale_for_dpi, set_app_config, set_current_theme, show_and_focus_window,
+        on_webview_message, scale_for_dpi, set_app_config, set_current_theme,
+        show_and_focus_window,
     },
     hit_test::hit_test,
     hotkey::register_global_hotkey,
     input::{forward_mouse_message, forward_pointer_message},
+    single_instance::check_single_instance,
     tray::{WM_TRAYICON, add_tray_icon},
 };
 use crate::render::theme::{Theme, WINDOW_HEIGHT, WINDOW_WIDTH};
-use crate::webview::{OutgoingMessage, WEBVIEW, bridge::post_message, init_webview, wm};
+use crate::webview::{OutgoingMessage, WEBVIEW, bridge::post_message, init_webview};
 use windows::{
     Win32::{
         Foundation::{HWND, LPARAM, LRESULT, TRUE, WPARAM},
@@ -29,14 +32,14 @@ use windows::{
                 HCURSOR, HTCLIENT, IDC_ARROW, LoadCursorW, MSG, PostQuitMessage, RegisterClassW,
                 SM_CXSCREEN, SM_CYSCREEN, SW_SHOW, SWP_NOCOPYBITS, SetCursor, SetForegroundWindow,
                 ShowWindow, TranslateMessage, WINDOWPOS, WM_ACTIVATE, WM_CLOSE, WM_COMMAND,
-                WM_CREATE, WM_DESTROY, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_HOTKEY, WM_LBUTTONDBLCLK,
-                WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDBLCLK, WM_MBUTTONDOWN, WM_MBUTTONUP,
-                WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_NCACTIVATE, WM_NCCALCSIZE, WM_NCHITTEST, WM_PAINT,
-                WM_POINTERDOWN, WM_POINTERENTER, WM_POINTERLEAVE, WM_POINTERUP, WM_POINTERUPDATE,
-                WM_RBUTTONDBLCLK, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SETCURSOR, WM_SETFOCUS,
-                WM_SETTINGCHANGE, WM_SIZE, WM_WINDOWPOSCHANGING, WNDCLASSW, WS_CLIPCHILDREN,
-                WS_EX_APPWINDOW, WS_EX_TOPMOST, WS_MAXIMIZEBOX, WS_MINIMIZEBOX, WS_POPUP,
-                WS_SIZEBOX, WS_SYSMENU,
+                WM_CREATE, WM_DESTROY, WM_ERASEBKGND, WM_GETMINMAXINFO, WM_HOTKEY,
+                WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDBLCLK, WM_MBUTTONDOWN,
+                WM_MBUTTONUP, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_NCACTIVATE, WM_NCCALCSIZE,
+                WM_NCHITTEST, WM_PAINT, WM_POINTERDOWN, WM_POINTERENTER, WM_POINTERLEAVE,
+                WM_POINTERUP, WM_POINTERUPDATE, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN, WM_RBUTTONUP,
+                WM_SETCURSOR, WM_SETFOCUS, WM_SETTINGCHANGE, WM_SIZE, WM_WINDOWPOSCHANGING,
+                WNDCLASSW, WS_CLIPCHILDREN, WS_EX_APPWINDOW, WS_EX_TOPMOST, WS_MAXIMIZEBOX,
+                WS_MINIMIZEBOX, WS_POPUP, WS_SIZEBOX, WS_SYSMENU,
             },
         },
     },
@@ -51,6 +54,15 @@ pub fn run() -> Result<()> {
 
         let instance = GetModuleHandleW(None)?;
         let class_name = w!("KevaWindowClass");
+
+        // Check for existing instance - if found, activate it and exit
+        let _instance_guard = match check_single_instance(class_name) {
+            Ok(guard) => guard,
+            Err(()) => {
+                OleUninitialize();
+                return Ok(());
+            }
+        };
 
         let config_path = keva_worker::get_data_path().join("config.toml");
         let config = keva_core::types::AppConfig::load(&config_path).unwrap_or_default();
@@ -236,6 +248,10 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
         WM_PAINT => on_paint(hwnd),
         WM_DESTROY => on_destroy(hwnd),
         WM_HOTKEY => {
+            show_and_focus_window(hwnd);
+            LRESULT(0)
+        }
+        wm::ACTIVATE_INSTANCE => {
             show_and_focus_window(hwnd);
             LRESULT(0)
         }
