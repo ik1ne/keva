@@ -14,7 +14,7 @@ use std::time::Instant;
 use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2CompositionController3;
 use windows::Win32::Foundation::{HWND, POINT, POINTL};
 use windows::Win32::Graphics::Gdi::ScreenToClient;
-use windows::Win32::System::Com::{IDataObject, DVASPECT_CONTENT, FORMATETC, TYMED_HGLOBAL};
+use windows::Win32::System::Com::{DVASPECT_CONTENT, FORMATETC, IDataObject, TYMED_HGLOBAL};
 use windows::Win32::System::Ole::{
     CF_HDROP, DROPEFFECT, DROPEFFECT_COPY, IDropTarget, IDropTarget_Impl, RegisterDragDrop,
     ReleaseStgMedium, RevokeDragDrop,
@@ -55,14 +55,14 @@ impl IDropTarget_Impl for DropTarget_Impl {
     ) -> windows::core::Result<()> {
         // Forward to WebView2 CompositionController3
         if let Some(wv) = WEBVIEW.get()
-            && let Ok(cc3) =
-                wv.composition_controller.cast::<ICoreWebView2CompositionController3>()
+            && let Ok(cc3) = wv
+                .composition_controller
+                .cast::<ICoreWebView2CompositionController3>()
         {
             let point = self.to_client_point(pt);
             let data_obj_opt = pdataobj.ok().ok();
-            let _ = unsafe {
-                cc3.DragEnter(data_obj_opt, grfkeystate.0, point, pdweffect as *mut u32)
-            };
+            let _ =
+                unsafe { cc3.DragEnter(data_obj_opt, grfkeystate.0, point, pdweffect as *mut u32) };
         }
 
         // If pdweffect is still unset, default to copy
@@ -93,8 +93,9 @@ impl IDropTarget_Impl for DropTarget_Impl {
 
             // Forward to WebView2 CompositionController3
             if let Some(wv) = WEBVIEW.get()
-                && let Ok(cc3) =
-                    wv.composition_controller.cast::<ICoreWebView2CompositionController3>()
+                && let Ok(cc3) = wv
+                    .composition_controller
+                    .cast::<ICoreWebView2CompositionController3>()
             {
                 let point = self.to_client_point(pt);
                 let _ = unsafe { cc3.DragOver(grfkeystate.0, point, pdweffect as *mut u32) };
@@ -120,8 +121,9 @@ impl IDropTarget_Impl for DropTarget_Impl {
     fn DragLeave(&self) -> windows::core::Result<()> {
         // Forward to WebView2 CompositionController3
         if let Some(wv) = WEBVIEW.get()
-            && let Ok(cc3) =
-                wv.composition_controller.cast::<ICoreWebView2CompositionController3>()
+            && let Ok(cc3) = wv
+                .composition_controller
+                .cast::<ICoreWebView2CompositionController3>()
         {
             let _ = unsafe { cc3.DragLeave() };
         }
@@ -144,13 +146,13 @@ impl IDropTarget_Impl for DropTarget_Impl {
 
         // Forward to WebView2 CompositionController3
         if let Some(wv) = WEBVIEW.get()
-            && let Ok(cc3) =
-                wv.composition_controller.cast::<ICoreWebView2CompositionController3>()
+            && let Ok(cc3) = wv
+                .composition_controller
+                .cast::<ICoreWebView2CompositionController3>()
         {
             let point = self.to_client_point(pt);
             let data_obj_opt = pdataobj.ok().ok();
-            let _ =
-                unsafe { cc3.Drop(data_obj_opt, grfkeystate.0, point, pdweffect as *mut u32) };
+            let _ = unsafe { cc3.Drop(data_obj_opt, grfkeystate.0, point, pdweffect as *mut u32) };
         }
 
         // If pdweffect is still unset, default to copy

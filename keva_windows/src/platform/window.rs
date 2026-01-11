@@ -18,9 +18,9 @@ use windows::{
     Win32::{
         Foundation::{HWND, LPARAM, LRESULT, TRUE, WPARAM},
         Graphics::Dwm::DwmExtendFrameIntoClientArea,
-        UI::Controls::MARGINS,
         System::LibraryLoader::GetModuleHandleW,
         System::Ole::{OleInitialize, OleUninitialize},
+        UI::Controls::MARGINS,
         UI::{
             HiDpi::GetDpiForSystem,
             WindowsAndMessaging::{
@@ -119,7 +119,15 @@ pub fn run() -> Result<()> {
         let request_tx = keva_worker::start(hwnd);
 
         // Create WebView filling entire client area
-        init_webview(hwnd, 0, 0, window_width, window_height, initial_theme, request_tx);
+        init_webview(
+            hwnd,
+            0,
+            0,
+            window_width,
+            window_height,
+            initial_theme,
+            request_tx,
+        );
 
         add_tray_icon(hwnd)?;
 

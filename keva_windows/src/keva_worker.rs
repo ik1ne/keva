@@ -5,8 +5,8 @@ use keva_core::core::KevaCore;
 use keva_core::types::{AppConfig, Config, GcConfig, Key, LifecycleState};
 use keva_search::{SearchConfig, SearchEngine, SearchQuery};
 use std::path::PathBuf;
-use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::sync::Arc;
+use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
@@ -86,7 +86,9 @@ pub enum Request {
         force: bool,
     },
     /// Update GC configuration (TTL settings changed in settings dialog).
-    UpdateGcConfig { lifecycle: keva_core::types::LifecycleConfig },
+    UpdateGcConfig {
+        lifecycle: keva_core::types::LifecycleConfig,
+    },
     Shutdown,
 }
 
@@ -157,7 +159,14 @@ fn worker_loop(
     search.set_query(SearchQuery::Fuzzy(String::new()));
 
     // Run maintenance on launch if needed (>24h since last run)
-    handle_maintenance(&mut keva, &mut search, &current_query, false, gc_config, hwnd);
+    handle_maintenance(
+        &mut keva,
+        &mut search,
+        &current_query,
+        false,
+        gc_config,
+        hwnd,
+    );
     let mut next_maintenance = Instant::now() + MAINTENANCE_INTERVAL;
 
     loop {
@@ -168,7 +177,14 @@ fn worker_loop(
                 // Timer fired - only run if window is hidden to avoid UI state issues
                 let is_visible = unsafe { IsWindowVisible(hwnd).as_bool() };
                 if !is_visible {
-                    handle_maintenance(&mut keva, &mut search, &current_query, false, gc_config, hwnd);
+                    handle_maintenance(
+                        &mut keva,
+                        &mut search,
+                        &current_query,
+                        false,
+                        gc_config,
+                        hwnd,
+                    );
                 }
                 next_maintenance = Instant::now() + MAINTENANCE_INTERVAL;
                 continue;
@@ -251,7 +267,14 @@ fn worker_loop(
                 handle_add_files(&mut keva, &key, files, hwnd);
             }
             Request::Maintenance { force } => {
-                handle_maintenance(&mut keva, &mut search, &current_query, force, gc_config, hwnd);
+                handle_maintenance(
+                    &mut keva,
+                    &mut search,
+                    &current_query,
+                    force,
+                    gc_config,
+                    hwnd,
+                );
                 // Reset timer after any maintenance (manual or scheduled)
                 next_maintenance = Instant::now() + MAINTENANCE_INTERVAL;
             }

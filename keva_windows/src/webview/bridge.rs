@@ -3,19 +3,19 @@
 use super::messages::IncomingMessage;
 use super::wm;
 use super::{FilePickerRequest, OutgoingMessage, WEBVIEW};
-use crate::keva_worker::{get_data_path, Request};
+use crate::keva_worker::{Request, get_data_path};
 use crate::platform::clipboard::{take_pending_file_paths, write_files};
+use crate::platform::handlers::PREV_FOREGROUND;
 use crate::render::theme::Theme;
+use std::sync::atomic::Ordering;
 use std::sync::mpsc::Sender;
 use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2;
+use webview2_com::pwstr_from_str;
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
-use crate::platform::handlers::PREV_FOREGROUND;
-use std::sync::atomic::Ordering;
 use windows::Win32::UI::WindowsAndMessaging::{
     IDYES, MB_ICONWARNING, MB_YESNO, MessageBoxW, PostMessageW, PostQuitMessage, SW_HIDE,
     SetForegroundWindow, ShowWindow,
 };
-use webview2_com::pwstr_from_str;
 use windows::core::PWSTR;
 use windows_strings::w;
 
@@ -197,7 +197,12 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
             let _ = config.save(&config_path);
 
             // Apply settings (launch_at_login is written to registry in apply_settings)
-            crate::platform::handlers::apply_settings(parent_hwnd, &config, launch_at_login, request_tx);
+            crate::platform::handlers::apply_settings(
+                parent_hwnd,
+                &config,
+                launch_at_login,
+                request_tx,
+            );
         }
     }
 }

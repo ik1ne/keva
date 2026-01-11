@@ -11,11 +11,11 @@ use std::time::Instant;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, POINTL, WPARAM};
 use windows::Win32::Graphics::Gdi::{BeginPaint, EndPaint, PAINTSTRUCT, TextOutA};
 use windows::Win32::System::Com::IDataObject;
-use windows::Win32::System::SystemServices::MODIFIERKEYS_FLAGS;
 use windows::Win32::System::Ole::{
     DROPEFFECT, DROPEFFECT_COPY, DROPEFFECT_NONE, IDropTarget, IDropTarget_Impl, OleInitialize,
     OleUninitialize, RegisterDragDrop,
 };
+use windows::Win32::System::SystemServices::MODIFIERKEYS_FLAGS;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, GetSystemMetrics, IDC_ARROW,
     LoadCursorW, MSG, PostQuitMessage, RegisterClassW, SM_CXSCREEN, SM_CYSCREEN, SW_SHOW,

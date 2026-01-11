@@ -1,7 +1,6 @@
 //! Window message handlers.
 
 use crate::keva_worker::Request;
-use std::sync::mpsc::Sender;
 use crate::platform::drop_target::revoke_drop_target;
 use crate::platform::file_picker::open_file_picker;
 use crate::platform::startup;
@@ -13,12 +12,13 @@ use crate::render::theme::{MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH, Theme};
 use crate::webview::bridge::post_message;
 use crate::webview::{FilePickerRequest, OutgoingMessage, WEBVIEW};
 use keva_core::types::AppConfig;
-use std::sync::atomic::{AtomicIsize, AtomicU8, Ordering};
 use std::sync::RwLock;
+use std::sync::atomic::{AtomicIsize, AtomicU8, Ordering};
+use std::sync::mpsc::Sender;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_FILE_SYSTEM_HANDLE_PERMISSION_READ_ONLY,
     COREWEBVIEW2_FILE_SYSTEM_HANDLE_PERMISSION_READ_WRITE,
-    COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC, ICoreWebView2Environment14, ICoreWebView2_23,
+    COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC, ICoreWebView2_23, ICoreWebView2Environment14,
     ICoreWebView2ObjectCollection,
 };
 use webview2_com::pwstr_from_str;
@@ -32,11 +32,11 @@ use windows::Win32::{
     UI::{
         HiDpi::GetDpiForSystem,
         WindowsAndMessaging::{
-            GetClientRect, GetSystemMetrics, GetWindowRect, IsWindowVisible, IsZoomed,
-            MINMAXINFO, NCCALCSIZE_PARAMS, PostMessageW, PostQuitMessage, SM_CXPADDEDBORDER,
-            SM_CXSIZEFRAME, SW_HIDE, SW_SHOW, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOOWNERZORDER,
-            SWP_NOSIZE, SWP_NOZORDER, SetForegroundWindow, SetWindowPos, ShowWindow,
-            USER_DEFAULT_SCREEN_DPI, WM_CLOSE, WM_LBUTTONUP, WM_RBUTTONUP, WVR_VALIDRECTS,
+            GetClientRect, GetSystemMetrics, GetWindowRect, IsWindowVisible, IsZoomed, MINMAXINFO,
+            NCCALCSIZE_PARAMS, PostMessageW, PostQuitMessage, SM_CXPADDEDBORDER, SM_CXSIZEFRAME,
+            SW_HIDE, SW_SHOW, SWP_FRAMECHANGED, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE,
+            SWP_NOZORDER, SetForegroundWindow, SetWindowPos, ShowWindow, USER_DEFAULT_SCREEN_DPI,
+            WM_CLOSE, WM_LBUTTONUP, WM_RBUTTONUP, WVR_VALIDRECTS,
         },
     },
 };
@@ -143,8 +143,7 @@ pub fn on_nccalcsize(hwnd: HWND, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
             // When maximized, Windows extends window beyond screen edges.
             // Compensate by adjusting client area inward by the frame size.
             if IsZoomed(hwnd).as_bool() {
-                let frame = GetSystemMetrics(SM_CXSIZEFRAME)
-                    + GetSystemMetrics(SM_CXPADDEDBORDER);
+                let frame = GetSystemMetrics(SM_CXSIZEFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER);
                 (*params).rgrc[0].left += frame;
                 (*params).rgrc[0].top += frame;
                 (*params).rgrc[0].right -= frame;
@@ -279,7 +278,12 @@ pub fn apply_settings(
             Theme::Dark => "dark",
             Theme::Light => "light",
         };
-        post_message(&wv.webview, &OutgoingMessage::Theme { theme: theme_str.to_string() });
+        post_message(
+            &wv.webview,
+            &OutgoingMessage::Theme {
+                theme: theme_str.to_string(),
+            },
+        );
     }
 
     // Update GC config in worker thread

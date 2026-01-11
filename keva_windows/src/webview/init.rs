@@ -439,7 +439,12 @@ fn handle_accelerator_key(
         // Ctrl+,: Open settings
         if virtual_key == VK_OEM_COMMA.0 as u32 && ctrl_down && !alt_down {
             let _ = args.SetHandled(true);
-            let _ = PostMessageW(Some(hwnd), WM_COMMAND, WPARAM(IDM_SETTINGS as usize), LPARAM(0));
+            let _ = PostMessageW(
+                Some(hwnd),
+                WM_COMMAND,
+                WPARAM(IDM_SETTINGS as usize),
+                LPARAM(0),
+            );
         }
     }
 }

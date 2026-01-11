@@ -152,7 +152,8 @@ impl FileStorage {
     }
 
     pub fn thumbnail_path(&self, key_hash: &Path, filename: &str) -> PathBuf {
-        self.thumbnails_path.join(Self::thumbnail_rel_path(key_hash, filename))
+        self.thumbnails_path
+            .join(Self::thumbnail_rel_path(key_hash, filename))
     }
 
     /// Returns `Err(UnsupportedFormat)` if the file is not a supported image.

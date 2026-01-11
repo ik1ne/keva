@@ -32,7 +32,11 @@ pub struct AttachmentInfo {
 /// All messages are posted via PostMessageW from worker thread to UI thread.
 /// The Value variant requires `PostWebMessageAsJsonWithAdditionalObjects` for FileSystemHandle.
 #[derive(Serialize)]
-#[serde(tag = "type", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum OutgoingMessage {
     /// Signals WebView that core is ready. Hide splash screen.
     CoreReady,

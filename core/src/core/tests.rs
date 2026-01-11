@@ -238,10 +238,7 @@ mod add_attachments {
         storage
             .add_attachments(
                 &key,
-                vec![
-                    (file1, "file1.txt".into()),
-                    (file2, "file2.txt".into()),
-                ],
+                vec![(file1, "file1.txt".into()), (file2, "file2.txt".into())],
                 now,
             )
             .unwrap();

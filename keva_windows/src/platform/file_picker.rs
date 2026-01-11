@@ -1,13 +1,13 @@
 //! File picker dialog using IFileOpenDialog.
 
 use std::path::PathBuf;
-use windows::core::{Result, w};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance};
 use windows::Win32::UI::Shell::{
-    FileOpenDialog, IFileOpenDialog, IShellItem, IShellItemArray, FOS_ALLOWMULTISELECT,
-    FOS_FILEMUSTEXIST, FOS_FORCEFILESYSTEM, SIGDN_FILESYSPATH,
+    FOS_ALLOWMULTISELECT, FOS_FILEMUSTEXIST, FOS_FORCEFILESYSTEM, FileOpenDialog, IFileOpenDialog,
+    IShellItem, IShellItemArray, SIGDN_FILESYSPATH,
 };
+use windows::core::{Result, w};
 
 /// Opens a multi-select file picker dialog.
 /// Returns the selected file paths, or an empty vector if cancelled.

@@ -194,7 +194,6 @@ fn extract_attachment_drag_data(data_obj: &IDataObject) -> Option<DragData> {
 ///
 /// See `create_chromium_custom_data` for the binary format specification.
 fn parse_chromium_custom_data(ptr: *mut std::ffi::c_void, size: usize) -> Option<DragData> {
-
     // Minimum size: data_len (4) + pair_count (4) = 8 bytes
     if size < 8 {
         return None;

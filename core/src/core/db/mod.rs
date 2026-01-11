@@ -9,10 +9,10 @@ use crate::core::db::error::DatabaseError;
 use crate::core::db::ttl_table::TtlTable;
 use crate::core::file_storage::FileStorage;
 use crate::types::metadata::MaintenanceMetadata;
+use crate::types::value::versioned_value::VersionedValue;
 use crate::types::value::versioned_value::latest_value::{
     Attachment, LifecycleState, Metadata, Value,
 };
-use crate::types::value::versioned_value::VersionedValue;
 use crate::types::{Config, GcConfig, Key, TtlKey};
 use redb::{ReadableDatabase, ReadableTable, TableDefinition};
 use std::time::{Duration, SystemTime};
@@ -511,10 +511,8 @@ impl Database {
     pub fn gc(&mut self, now: SystemTime, gc_config: GcConfig) -> Result<GcResult, DatabaseError> {
         let (to_trash, to_purge) = {
             let read_txn = self.db.begin_read()?;
-            let to_trash =
-                ACTIVE_EXPIRY.expired_keys(&read_txn, now, gc_config.trash_ttl)?;
-            let to_purge =
-                TRASH_EXPIRY.expired_keys(&read_txn, now, gc_config.purge_ttl)?;
+            let to_trash = ACTIVE_EXPIRY.expired_keys(&read_txn, now, gc_config.trash_ttl)?;
+            let to_purge = TRASH_EXPIRY.expired_keys(&read_txn, now, gc_config.purge_ttl)?;
             (to_trash, to_purge)
         };
 
@@ -674,7 +672,10 @@ impl Database {
     pub fn should_run_maintenance(&self, now: SystemTime, interval: Duration) -> bool {
         match self.last_maintenance_at() {
             None => true,
-            Some(last) => now.duration_since(last).map(|d| d >= interval).unwrap_or(true),
+            Some(last) => now
+                .duration_since(last)
+                .map(|d| d >= interval)
+                .unwrap_or(true),
         }
     }
 }
