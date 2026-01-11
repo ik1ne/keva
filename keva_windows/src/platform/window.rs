@@ -64,7 +64,7 @@ pub fn run() -> Result<()> {
             }
         };
 
-        let config_path = keva_worker::get_data_path().join("config.toml");
+        let config_path = keva_core::types::AppConfig::path(&keva_worker::get_data_path());
         let config = keva_core::types::AppConfig::load(&config_path).unwrap_or_default();
         set_app_config(config.clone());
         let initial_theme = match config.general.theme {

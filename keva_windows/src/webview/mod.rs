@@ -97,6 +97,8 @@ pub enum OutgoingMessage {
     Toast {
         message: String,
     },
+    /// Show welcome dialog on first run.
+    ShowWelcome,
 }
 
 /// Copy action type for DoCopy message.

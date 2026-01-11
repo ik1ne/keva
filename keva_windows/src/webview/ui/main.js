@@ -682,6 +682,10 @@ const Main = {
 
             toast: function (msg) {
                 Drop.showToast(msg.message);
+            },
+
+            showWelcome: function () {
+                Welcome.show();
             }
         };
     },

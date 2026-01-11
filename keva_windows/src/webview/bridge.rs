@@ -29,7 +29,7 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
         IncomingMessage::Ready => {
             // Send theme from config (or detect system if set to System)
             if let Some(wv) = WEBVIEW.get() {
-                let config_path = get_data_path().join("config.toml");
+                let config_path = keva_core::types::AppConfig::path(&get_data_path());
                 let config = keva_core::types::AppConfig::load(&config_path).unwrap_or_default();
                 let theme = match config.general.theme {
                     keva_core::types::Theme::Dark => Theme::Dark,
@@ -193,7 +193,7 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
             launch_at_login,
         } => {
             // Save config to file
-            let config_path = get_data_path().join("config.toml");
+            let config_path = keva_core::types::AppConfig::path(&get_data_path());
             let _ = config.save(&config_path);
 
             // Apply settings (launch_at_login is written to registry in apply_settings)
@@ -203,6 +203,21 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
                 launch_at_login,
                 request_tx,
             );
+        }
+        IncomingMessage::WelcomeResult { launch_at_login } => {
+            // Update cached config
+            let mut config = crate::platform::handlers::get_app_config();
+            config.general.welcome_shown = true;
+            crate::platform::handlers::set_app_config(config.clone());
+
+            // Save to file
+            let config_path = keva_core::types::AppConfig::path(&get_data_path());
+            let _ = config.save(&config_path);
+
+            // Update launch at login in registry
+            if launch_at_login {
+                crate::platform::startup::enable_launch_at_login();
+            }
         }
     }
 }

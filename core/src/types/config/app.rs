@@ -16,6 +16,11 @@ pub struct AppConfig {
 }
 
 impl AppConfig {
+    /// Returns the config file path within the given data directory.
+    pub fn path(data_dir: &Path) -> std::path::PathBuf {
+        data_dir.join("config.toml")
+    }
+
     /// Loads config from a TOML file. Returns default config if file doesn't exist.
     pub fn load(path: &Path) -> Result<Self, AppConfigError> {
         if !path.exists() {
@@ -78,6 +83,8 @@ pub struct GeneralConfig {
     pub theme: Theme,
     #[serde(default = "default_true")]
     pub show_tray_icon: bool,
+    #[serde(default)]
+    pub welcome_shown: bool,
 }
 
 impl Default for GeneralConfig {
@@ -85,6 +92,7 @@ impl Default for GeneralConfig {
         Self {
             theme: Theme::default(),
             show_tray_icon: true,
+            welcome_shown: false,
         }
     }
 }

@@ -8,6 +8,22 @@
 <div class="splash" id="splash">
     <div class="splash-text">Loading database...</div>
 </div>
+<div class="welcome-overlay hidden" id="welcome-overlay">
+    <div class="welcome-panel">
+        <div class="welcome-title">Welcome to Keva</div>
+        <div class="welcome-body">
+            <p>Keva stores your notes and files locally.</p>
+            <p>Press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>K</kbd> anytime to open this window.</p>
+        </div>
+        <div class="welcome-option">
+            <input type="checkbox" id="welcome-launch-at-login" checked>
+            <label for="welcome-launch-at-login">Launch Keva at login</label>
+        </div>
+        <div class="welcome-footer">
+            <button class="welcome-btn" id="welcome-get-started">Get Started</button>
+        </div>
+    </div>
+</div>
 <div class="settings-overlay hidden" id="settings-overlay">
     <div class="settings-panel">
         <div class="settings-header">
@@ -115,6 +131,7 @@
 <script src="drop.js"></script>
 <script src="keyboard-shortcut.js"></script>
 <script src="settings.js"></script>
+<script src="welcome.js"></script>
 <script src="main.js"></script>
 </body>
 </html>

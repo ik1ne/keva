@@ -84,4 +84,8 @@ pub enum IncomingMessage {
         /// Written to registry, not config file.
         launch_at_login: bool,
     },
+    /// User completed the welcome dialog.
+    WelcomeResult {
+        launch_at_login: bool,
+    },
 }

@@ -123,8 +123,9 @@ pub fn start(hwnd: HWND) -> Sender<Request> {
             let _ = notify_tx.send(Request::SearchTick);
         });
         let search = SearchEngine::new(active_keys, trashed_keys, SearchConfig::default(), notify);
+        let welcome_shown = app_config.general.welcome_shown;
 
-        worker_loop(keva, search, request_rx, gc_config, hwnd);
+        worker_loop(keva, search, request_rx, gc_config, welcome_shown, hwnd);
     });
 
     request_tx
@@ -152,6 +153,7 @@ fn worker_loop(
     mut search: SearchEngine,
     requests: mpsc::Receiver<Request>,
     mut gc_config: GcConfig,
+    welcome_shown: bool,
     hwnd: HWND,
 ) {
     let mut current_query = String::new();
@@ -198,6 +200,9 @@ fn worker_loop(
         match request {
             Request::WebviewReady => {
                 post_response(hwnd, OutgoingMessage::CoreReady);
+                if !welcome_shown {
+                    post_response(hwnd, OutgoingMessage::ShowWelcome);
+                }
             }
             Request::GetValue { key } => {
                 handle_get_value(&mut keva, &key, hwnd);
@@ -649,7 +654,7 @@ fn open_keva() -> Result<KevaCore, keva_core::core::error::KevaError> {
 }
 
 fn load_app_config() -> AppConfig {
-    let config_path = get_data_path().join("config.toml");
+    let config_path = AppConfig::path(&get_data_path());
     let config = AppConfig::load(&config_path).unwrap_or_default();
 
     let errors = config.validate();
