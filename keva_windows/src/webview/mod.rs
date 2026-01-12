@@ -97,6 +97,8 @@ pub enum OutgoingMessage {
     Toast {
         message: String,
     },
+    /// Focus the search bar.
+    FocusSearch,
     /// Show welcome dialog on first run.
     ShowWelcome,
 }

@@ -47,6 +47,7 @@ export const Settings = {
 
         // Hotkey input capture for all shortcut fields
         this.setupHotkeyInput('setting-global-shortcut');
+        this.setupHotkeyInput('setting-focus-search');
         this.setupHotkeyInput('setting-copy-markdown');
         this.setupHotkeyInput('setting-copy-html');
         this.setupHotkeyInput('setting-copy-files');
@@ -102,6 +103,7 @@ export const Settings = {
         return values.config.general.theme !== orig.general.theme ||
             values.config.general.show_tray_icon !== orig.general.show_tray_icon ||
             values.config.shortcuts.global_shortcut !== orig.shortcuts.global_shortcut ||
+            values.config.shortcuts.focus_search !== orig.shortcuts.focus_search ||
             values.config.shortcuts.copy_markdown !== orig.shortcuts.copy_markdown ||
             values.config.shortcuts.copy_html !== orig.shortcuts.copy_html ||
             values.config.shortcuts.copy_files !== orig.shortcuts.copy_files ||
@@ -246,6 +248,7 @@ export const Settings = {
 
         // Shortcuts - store e.code format, display human-readable
         this.populateHotkeyInput('setting-global-shortcut', config.shortcuts.global_shortcut);
+        this.populateHotkeyInput('setting-focus-search', config.shortcuts.focus_search);
         this.populateHotkeyInput('setting-copy-markdown', config.shortcuts.copy_markdown);
         this.populateHotkeyInput('setting-copy-html', config.shortcuts.copy_html);
         this.populateHotkeyInput('setting-copy-files', config.shortcuts.copy_files);
@@ -263,6 +266,7 @@ export const Settings = {
         config.general.theme = document.getElementById('setting-theme').dataset.value;
         config.general.show_tray_icon = document.getElementById('setting-show-tray-icon').checked;
         config.shortcuts.global_shortcut = document.getElementById('setting-global-shortcut').dataset.shortcut || '';
+        config.shortcuts.focus_search = document.getElementById('setting-focus-search').dataset.shortcut || '';
         config.shortcuts.copy_markdown = document.getElementById('setting-copy-markdown').dataset.shortcut || '';
         config.shortcuts.copy_html = document.getElementById('setting-copy-html').dataset.shortcut || '';
         config.shortcuts.copy_files = document.getElementById('setting-copy-files').dataset.shortcut || '';
@@ -289,6 +293,7 @@ export const Settings = {
         // Check for shortcut conflicts (only non-empty shortcuts can conflict)
         const shortcuts = [
             { name: 'Global Shortcut', value: config.shortcuts.global_shortcut },
+            { name: 'Focus Search', value: config.shortcuts.focus_search },
             { name: 'Copy Markdown', value: config.shortcuts.copy_markdown },
             { name: 'Copy HTML', value: config.shortcuts.copy_html },
             { name: 'Copy Files', value: config.shortcuts.copy_files },

@@ -122,6 +122,8 @@ impl fmt::Display for Theme {
 pub struct ShortcutsConfig {
     #[serde(default = "default_global_shortcut")]
     pub global_shortcut: String,
+    #[serde(default = "default_focus_search")]
+    pub focus_search: String,
     #[serde(default = "default_copy_markdown")]
     pub copy_markdown: String,
     #[serde(default = "default_copy_html")]
@@ -134,6 +136,7 @@ impl Default for ShortcutsConfig {
     fn default() -> Self {
         Self {
             global_shortcut: default_global_shortcut(),
+            focus_search: default_focus_search(),
             copy_markdown: default_copy_markdown(),
             copy_html: default_copy_html(),
             copy_files: default_copy_files(),
@@ -143,6 +146,10 @@ impl Default for ShortcutsConfig {
 
 fn default_global_shortcut() -> String {
     "Ctrl+Alt+KeyK".to_string()
+}
+
+fn default_focus_search() -> String {
+    "Ctrl+KeyS".to_string()
 }
 
 fn default_copy_markdown() -> String {

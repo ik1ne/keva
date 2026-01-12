@@ -502,6 +502,15 @@ fn handle_accelerator_key(
             return;
         }
 
+        // Focus Search
+        if let Some(binding) = ShortcutBinding::parse(&config.shortcuts.focus_search)
+            && binding.matches(virtual_key, ctrl_down, alt_down, shift_down)
+        {
+            let _ = args.SetHandled(true);
+            post_message(webview, &OutgoingMessage::FocusSearch);
+            return;
+        }
+
         // Ctrl+,: Open settings
         if virtual_key == VK_OEM_COMMA.0 as u32 && ctrl_down && !alt_down {
             let _ = args.SetHandled(true);

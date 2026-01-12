@@ -2,17 +2,17 @@
 
 import './styles.css';
 
-import { State, setEditorRef } from './state.js';
-import { Api } from './api.js';
-import { Editor, setMainRef as setEditorMainRef } from './editor.js';
-import { KeyList, setMainRef as setKeyListMainRef } from './keylist.js';
-import { Attachments, setMainRef as setAttachmentsMainRef } from './attachments.js';
-import { Drop, setMainRef as setDropMainRef } from './drop.js';
-import { ConflictDialog } from './conflict-dialog.js';
-import { Settings } from './settings.js';
-import { Welcome } from './welcome.js';
-import { showToast } from './toast.js';
-import { Resizer } from './resizer.js';
+import {State, setEditorRef} from './state.js';
+import {Api} from './api.js';
+import {Editor, setMainRef as setEditorMainRef} from './editor.js';
+import {KeyList, setMainRef as setKeyListMainRef} from './keylist.js';
+import {Attachments, setMainRef as setAttachmentsMainRef} from './attachments.js';
+import {Drop, setMainRef as setDropMainRef} from './drop.js';
+import {ConflictDialog} from './conflict-dialog.js';
+import {Settings} from './settings.js';
+import {Welcome} from './welcome.js';
+import {showToast} from './toast.js';
+import {Resizer} from './resizer.js';
 
 export const Main = {
     dom: null,
@@ -315,11 +315,6 @@ export const Main = {
                     return;
                 }
                 Api.send({type: 'hide'});
-            } else if (e.key === 's' && e.ctrlKey && !e.altKey && !e.shiftKey) {
-                e.preventDefault();
-                self.setActivePane('search');
-                self.dom.searchInput.focus();
-                self.dom.searchInput.select();
             }
         });
 
@@ -624,12 +619,18 @@ export const Main = {
                 }
             },
 
+            focusSearch: function () {
+                self.setActivePane('search');
+                self.dom.searchInput.focus();
+                self.dom.searchInput.select();
+            },
+
             filesSelected: function (msg) {
                 // Build file list (id = path for file picker)
                 const fileList = [];
                 for (let i = 0; i < msg.files.length; i++) {
                     const path = msg.files[i];
-                    fileList.push({ id: path, filename: path.split(/[/\\]/).pop() });
+                    fileList.push({id: path, filename: path.split(/[/\\]/).pop()});
                 }
                 const result = ConflictDialog.checkConflicts(fileList);
 
@@ -661,7 +662,7 @@ export const Main = {
                 // Build file list and check for conflicts
                 const fileList = [];
                 for (let i = 0; i < msg.files.length; i++) {
-                    fileList.push({ id: i, filename: msg.files[i] });
+                    fileList.push({id: i, filename: msg.files[i]});
                 }
                 const result = ConflictDialog.checkConflicts(fileList);
 
@@ -750,7 +751,9 @@ export const Main = {
         // Store pending link insertion info
         if (insertLinks && editorPosition) {
             State.data.pendingLinkInsert = {
-                files: files.map(function (f) { return f[1]; }), // filenames
+                files: files.map(function (f) {
+                    return f[1];
+                }), // filenames
                 selection: editorPosition // insertAttachmentLinks handles both position and selection
             };
         }
