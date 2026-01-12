@@ -27,7 +27,7 @@ and includes test cases for verification.
 | M16  | Global Hotkey          | RegisterHotKey, conflict detection            | ✅      |
 | M17  | Single Instance        | Named mutex, activate existing window         | ✅      |
 | M18  | First-Run Dialog       | Welcome message, launch at login checkbox     | ✅      |
-| M19  | Monaco Bundling        | Embed resources, single exe                   | ❌      |
+| M19  | Monaco Bundling        | Embed resources, single exe                   | ✅      |
 | M20  | Installer              | WiX/MSIX, uninstaller, WebView2 version check | ❌      |
 | M21  | Layout Polish          | Resizable panes, layout persistence           | ❌      |
 
@@ -953,9 +953,9 @@ Setup: Disconnect network or use airplane mode.
 
 | TC        | Description                             | Status |
 |-----------|-----------------------------------------|--------|
-| TC-M19-01 | App launches without network connection | ❌      |
-| TC-M19-02 | Monaco editor functions without network | ❌      |
-| TC-M19-03 | All UI assets load (no broken images)   | ❌      |
+| TC-M19-01 | App launches without network connection | ✅      |
+| TC-M19-02 | Monaco editor functions without network | ✅      |
+| TC-M19-03 | All UI assets load (no broken images)   | ✅      |
 
 ---
 
