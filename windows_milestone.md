@@ -29,7 +29,7 @@ and includes test cases for verification.
 | M18  | First-Run Dialog       | Welcome message, launch at login checkbox     | ✅      |
 | M19  | Monaco Bundling        | Embed resources, single exe                   | ✅      |
 | M20  | Layout Polish          | Resizable panes with draggable dividers       | ✅      |
-| M21  | Copy Keybindings       | Configurable copy shortcuts, conflict detect  | ❌      |
+| M21  | Copy Keybindings       | Configurable copy shortcuts, conflict detect  | ✅      |
 | M22  | Drag-Drop Modifiers    | Shift to move for import/export               | ❌      |
 | M23  | Installer              | WiX/MSIX, uninstaller, WebView2 version check | ❌      |
 
@@ -1021,14 +1021,14 @@ shortcuts and global hotkey.
 
 | TC        | Description                                   | Status |
 |-----------|-----------------------------------------------|--------|
-| TC-M21-01 | Custom Copy Markdown shortcut works           | ❌      |
-| TC-M21-02 | Custom Copy HTML shortcut works               | ❌      |
-| TC-M21-03 | Custom Copy Files shortcut works              | ❌      |
-| TC-M21-04 | Empty shortcut disables copy operation        | ❌      |
-| TC-M21-05 | Conflict with global hotkey shows warning     | ❌      |
-| TC-M21-06 | Conflict between copy shortcuts shows warning | ❌      |
-| TC-M21-07 | Shortcut without Ctrl/Alt modifier rejected   | ❌      |
-| TC-M21-08 | Settings persist after restart                | ❌      |
+| TC-M21-01 | Custom Copy Markdown shortcut works           | ✅      |
+| TC-M21-02 | Custom Copy HTML shortcut works               | ✅      |
+| TC-M21-03 | Custom Copy Files shortcut works              | ✅      |
+| TC-M21-04 | Empty shortcut disables copy operation        | ✅      |
+| TC-M21-05 | Conflict with global hotkey shows warning     | ✅      |
+| TC-M21-06 | Conflict between copy shortcuts shows warning | ✅      |
+| TC-M21-07 | Shortcut without Ctrl/Alt modifier rejected   | ✅      |
+| TC-M21-08 | Settings persist after restart                | ✅      |
 
 ---
 
