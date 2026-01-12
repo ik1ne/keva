@@ -230,23 +230,18 @@ export const Settings = {
     },
 
     getFormValues: function () {
-        // Get shortcut from data attribute (e.code format)
-        const shortcut = document.getElementById('setting-global-shortcut').dataset.shortcut || '';
+        // Start with original config to preserve non-editable fields (e.g., welcome_shown)
+        const config = JSON.parse(JSON.stringify(this.originalConfig));
+
+        // Update editable fields from form
+        config.general.theme = document.getElementById('setting-theme').dataset.value;
+        config.general.show_tray_icon = document.getElementById('setting-show-tray-icon').checked;
+        config.shortcuts.global_shortcut = document.getElementById('setting-global-shortcut').dataset.shortcut || '';
+        config.lifecycle.trash_ttl_days = parseInt(document.getElementById('setting-trash-ttl').value, 10) || 30;
+        config.lifecycle.purge_ttl_days = parseInt(document.getElementById('setting-purge-ttl').value, 10) || 7;
 
         return {
-            config: {
-                general: {
-                    theme: document.getElementById('setting-theme').dataset.value,
-                    show_tray_icon: document.getElementById('setting-show-tray-icon').checked,
-                },
-                shortcuts: {
-                    global_shortcut: shortcut,
-                },
-                lifecycle: {
-                    trash_ttl_days: parseInt(document.getElementById('setting-trash-ttl').value, 10) || 30,
-                    purge_ttl_days: parseInt(document.getElementById('setting-purge-ttl').value, 10) || 7,
-                },
-            },
+            config: config,
             launchAtLogin: document.getElementById('setting-launch-at-login').checked,
         };
     },
