@@ -268,8 +268,8 @@ export const KeyList = {
         Dialog.show({
             message: 'Permanently delete "' + keyName + '"? This cannot be undone.',
             buttons: [
-                { label: 'Cancel', action: 'cancel' },
-                { label: 'Delete', action: 'delete', primary: true }
+                { label: 'Cancel', action: 'cancel', focus: true },
+                { label: 'Delete', action: 'delete', danger: true }
             ],
             onClose: function (action) {
                 if (action === 'delete') {

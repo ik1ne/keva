@@ -88,13 +88,14 @@
         <button class="search-action-btn" id="search-action-btn" title="Create or edit">&#43;</button>
     </div>
     <div class="main-content">
-        <div class="left-pane">
+        <div class="left-pane" id="left-pane">
             <div class="key-list" id="key-list"></div>
             <div class="trash-section" id="trash-section">
                 <div class="trash-header">Trash (<span id="trash-count">0</span>)</div>
                 <div id="trash-list"></div>
             </div>
         </div>
+        <div class="divider-v" id="divider-v"></div>
         <div class="right-pane">
             <div class="editor-tabs" id="editor-tabs">
                 <button class="tab active" data-tab="edit">Edit</button>
@@ -104,6 +105,7 @@
                 <div id="editor-container"></div>
                 <div id="preview-container" class="hidden"></div>
             </div>
+            <div class="divider-h" id="divider-h"></div>
             <div class="empty-state" id="empty-state">Select a key or type to search</div>
             <div id="attachments-container" class="attachments-container">
                 <div class="attachments-header">

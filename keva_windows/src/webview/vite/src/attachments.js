@@ -531,7 +531,7 @@ export const Attachments = {
             message: 'Delete "' + filename + '"?',
             buttons: [
                 { label: 'Cancel', action: 'cancel', focus: true },
-                { label: 'Delete', action: 'delete', primary: true, danger: true }
+                { label: 'Delete', action: 'delete', danger: true }
             ],
             onClose: function (action) {
                 if (action === 'delete') {

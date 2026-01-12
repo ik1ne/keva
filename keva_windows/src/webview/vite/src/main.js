@@ -12,6 +12,7 @@ import { ConflictDialog } from './conflict-dialog.js';
 import { Settings } from './settings.js';
 import { Welcome } from './welcome.js';
 import { showToast } from './toast.js';
+import { Resizer } from './resizer.js';
 
 export const Main = {
     dom: null,
@@ -84,6 +85,9 @@ export const Main = {
             emptyState: document.getElementById('empty-state'),
             attachments: document.getElementById('attachments-container'),
             addFilesBtn: document.getElementById('add-files-btn'),
+            dividerV: document.getElementById('divider-v'),
+            dividerH: document.getElementById('divider-h'),
+            rightPane: document.querySelector('.right-pane'),
         };
 
         // Map pane names to DOM elements for focus management
@@ -124,6 +128,15 @@ export const Main = {
         Settings.init();
 
         Welcome.init();
+
+        Resizer.init({
+            leftPane: this.dom.leftPane,
+            dividerV: this.dom.dividerV,
+            dividerH: this.dom.dividerH,
+            attachments: this.dom.attachments,
+            editorViewport: this.dom.editorViewport,
+            rightPane: this.dom.rightPane,
+        });
 
         // Set up event handlers
         this.setupEventHandlers();
@@ -400,6 +413,8 @@ export const Main = {
         this.dom.editorTabs.style.display = 'flex';
         this.dom.editorViewport.style.display = 'block';
         this.dom.emptyState.style.display = 'none';
+        this.dom.dividerH.style.display = 'block';
+        this.dom.attachments.style.display = 'flex';
     },
 
     hideEditorUI: function (message) {
@@ -409,6 +424,8 @@ export const Main = {
         this.dom.editorContainer.style.display = 'none';
         this.dom.emptyState.textContent = message || 'Select a key or type to search';
         this.dom.emptyState.style.display = 'flex';
+        this.dom.dividerH.style.display = 'none';
+        this.dom.attachments.style.display = 'none';
     },
 
     resetToEditMode: function () {

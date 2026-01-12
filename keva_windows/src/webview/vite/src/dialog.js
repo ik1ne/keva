@@ -25,19 +25,17 @@ export const Dialog = {
             btn.className = 'dialog-btn';
             btn.textContent = btnConfig.label;
 
-            if (btnConfig.primary) {
+            if (btnConfig.danger) {
+                btn.classList.add('dialog-btn-danger');
+            } else if (btnConfig.primary) {
                 btn.classList.add('dialog-btn-primary');
             } else {
                 btn.classList.add('dialog-btn-secondary');
             }
 
-            if (btnConfig.danger) {
-                btn.style.background = '#f44336';
-            }
-
             if (btnConfig.focus) {
                 focusBtn = btn;
-            } else if (btnConfig.primary && !focusBtn) {
+            } else if ((btnConfig.primary || btnConfig.danger) && !focusBtn) {
                 focusBtn = btn;
             }
 
