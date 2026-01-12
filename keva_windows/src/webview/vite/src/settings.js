@@ -1,7 +1,7 @@
 'use strict';
 
 import { Api } from './api.js';
-import { Drop } from './drop.js';
+import { showToast } from './toast.js';
 import { isModifierKey, hasRequiredModifier, fromEvent, toDisplay } from './keyboard-shortcut.js';
 
 export const Settings = {
@@ -78,14 +78,14 @@ export const Settings = {
 
             // Require Ctrl or Alt
             if (!hasRequiredModifier(e)) {
-                Drop.showToast('Shortcut must include Ctrl or Alt');
+                showToast('Shortcut must include Ctrl or Alt');
                 return;
             }
 
             // Build storage format (e.code based)
             const shortcut = fromEvent(e);
             if (!shortcut) {
-                Drop.showToast('Unsupported key');
+                showToast('Unsupported key');
                 return;
             }
 
@@ -126,7 +126,7 @@ export const Settings = {
                     const num = parseInt(value, 10);
                     if (num > 365000) {
                         value = '365000';
-                        Drop.showToast("Thanks for planning to use Keva for 1000+ years, but I won't be around that long to maintain it!");
+                        showToast("Thanks for planning to use Keva for 1000+ years, but I won't be around that long to maintain it!");
                     }
                 }
                 input.value = value;

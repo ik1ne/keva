@@ -11,6 +11,7 @@ import { Drop, setMainRef as setDropMainRef } from './drop.js';
 import { ConflictDialog } from './conflict-dialog.js';
 import { Settings } from './settings.js';
 import { Welcome } from './welcome.js';
+import { showToast } from './toast.js';
 
 export const Main = {
     dom: null,
@@ -627,7 +628,7 @@ export const Main = {
                 if (State.data.activePane === 'search') return;
                 if (!State.data.selectedKey) return;
                 if (State.data.isSelectedTrashed) {
-                    Drop.showToast('Cannot add files to trashed key');
+                    showToast('Cannot add files to trashed key');
                     return;
                 }
 
@@ -666,7 +667,7 @@ export const Main = {
                         State.data.selectedKey = key;
                         Api.send({type: 'select', key: key});
                     } else {
-                        Drop.showToast('Nothing to copy');
+                        showToast('Nothing to copy');
                     }
                 } else if (action === 'files') {
                     // Check if we have attachments to copy
@@ -686,7 +687,7 @@ export const Main = {
                         State.data.selectedKey = key;
                         Api.send({type: 'select', key: key});
                     } else {
-                        Drop.showToast('No attachments to copy');
+                        showToast('No attachments to copy');
                     }
                 }
             },
@@ -695,7 +696,7 @@ export const Main = {
                 if (msg.success) {
                     Api.send({type: 'hide'});
                 } else {
-                    Drop.showToast('Failed to copy files');
+                    showToast('Failed to copy files');
                 }
             },
 
@@ -704,7 +705,7 @@ export const Main = {
             },
 
             toast: function (msg) {
-                Drop.showToast(msg.message);
+                showToast(msg.message);
             },
 
             showWelcome: function () {
@@ -738,28 +739,28 @@ export const Main = {
         if (action === 'markdown') {
             const text = Editor.instance ? Editor.instance.getValue() : '';
             if (!text) {
-                Drop.showToast('Nothing to copy');
+                showToast('Nothing to copy');
                 return;
             }
             navigator.clipboard.writeText(text).then(function () {
                 Api.send({type: 'hide'});
             }).catch(function () {
-                Drop.showToast('Failed to copy');
+                showToast('Failed to copy');
             });
         } else if (action === 'html') {
             const html = Editor.instance ? Editor.renderPreviewForExport() : '';
             if (!html) {
-                Drop.showToast('Nothing to copy');
+                showToast('Nothing to copy');
                 return;
             }
             navigator.clipboard.writeText(html).then(function () {
                 Api.send({type: 'hide'});
             }).catch(function () {
-                Drop.showToast('Failed to copy');
+                showToast('Failed to copy');
             });
         } else if (action === 'files') {
             if (State.data.attachments.length === 0) {
-                Drop.showToast('No attachments to copy');
+                showToast('No attachments to copy');
                 return;
             }
             const filenames = State.data.attachments.map(function (a) {

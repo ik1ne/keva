@@ -3,6 +3,7 @@
 import { State } from './state.js';
 import { Editor } from './editor.js';
 import { ConflictDialog } from './conflict-dialog.js';
+import { showToast } from './toast.js';
 
 // Main reference set later to avoid circular dependency
 let Main = null;
@@ -123,7 +124,7 @@ export const Drop = {
         // Reject file drops if no key selected or trashed
         if (!State.data.selectedKey) return;
         if (State.data.isSelectedTrashed) {
-            this.showToast('Cannot add files to trashed key');
+            showToast('Cannot add files to trashed key');
             return;
         }
 
@@ -137,7 +138,7 @@ export const Drop = {
         if (typeof dropTarget === 'object' && dropTarget.type === 'keyItem') {
             // For now, only handle drops on selected key
             if (dropTarget.key !== targetKey) {
-                this.showToast('Select the key first to add files');
+                showToast('Select the key first to add files');
                 return;
             }
         }
@@ -307,24 +308,5 @@ export const Drop = {
 
         // 5. Reveal the position
         Editor.instance.revealPositionInCenter(endPos);
-    },
-
-    showToast: function (message) {
-        // Skip if same message is already showing
-        const existing = document.querySelector('.toast');
-        if (existing && existing.textContent === message) return;
-
-        // Simple toast notification
-        const toast = document.createElement('div');
-        toast.className = 'toast';
-        toast.textContent = message;
-        document.body.appendChild(toast);
-
-        setTimeout(function () {
-            toast.classList.add('fade-out');
-            setTimeout(function () {
-                toast.remove();
-            }, 300);
-        }, 2000);
     }
 };
