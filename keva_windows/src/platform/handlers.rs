@@ -478,6 +478,14 @@ pub fn on_webview_message(lparam: LPARAM) -> LRESULT {
             }
         }
     } else {
+        // Focus WebView on CoreReady (first launch) so accelerator keys work
+        if matches!(*msg, OutgoingMessage::CoreReady) {
+            let _ = unsafe {
+                wv.controller
+                    .MoveFocus(COREWEBVIEW2_MOVE_FOCUS_REASON_PROGRAMMATIC)
+            };
+        }
+
         let json = serde_json::to_string(&*msg).expect("Failed to serialize message");
         let msg_pwstr = pwstr_from_str(&json);
         let _ = unsafe { wv.webview.PostWebMessageAsJson(msg_pwstr) };

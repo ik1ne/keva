@@ -453,6 +453,8 @@ export const Main = {
         this.messageHandlers = {
             coreReady: function () {
                 self.hideSplash();
+                // Focus search bar on first launch
+                self.dom.searchInput.focus();
             },
 
             theme: function (msg) {
