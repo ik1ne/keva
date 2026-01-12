@@ -16,5 +16,7 @@ use windows::core::Result;
 
 fn main() -> Result<()> {
     let _ = unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
-    platform::window::run()
+
+    let start_minimized = std::env::args().any(|arg| arg == "--minimized");
+    platform::window::run(start_minimized)
 }

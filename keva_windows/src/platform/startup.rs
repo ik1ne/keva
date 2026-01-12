@@ -51,14 +51,16 @@ pub fn is_launch_at_login_enabled() -> bool {
 }
 
 /// Enables launch at login by adding the registry entry.
+/// The command includes `--minimized` so the app starts in the system tray.
 pub fn enable_launch_at_login() -> bool {
     let exe_path = match env::current_exe() {
         Ok(path) => path,
         Err(_) => return false,
     };
 
-    let path_str = exe_path.to_string_lossy();
-    let path_wide: Vec<u16> = path_str.encode_utf16().chain(std::iter::once(0)).collect();
+    // Quote the path (may contain spaces) and add --minimized argument
+    let command = format!("\"{}\" --minimized", exe_path.to_string_lossy());
+    let path_wide: Vec<u16> = command.encode_utf16().chain(std::iter::once(0)).collect();
 
     unsafe {
         let mut hkey = HKEY::default();

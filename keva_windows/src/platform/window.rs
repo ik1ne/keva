@@ -47,7 +47,7 @@ use windows::{
     core::{Result, w},
 };
 
-pub fn run() -> Result<()> {
+pub fn run(start_minimized: bool) -> Result<()> {
     unsafe {
         // Initialize OLE for UI thread (required for WebView2, file picker, drag-drop, etc.)
         // OleInitialize internally calls CoInitializeEx with COINIT_APARTMENTTHREADED
@@ -156,8 +156,11 @@ pub fn run() -> Result<()> {
         // Register drop target for drag-drop interception
         register_drop_target(hwnd)?;
 
-        let _ = ShowWindow(hwnd, SW_SHOW);
-        let _ = SetForegroundWindow(hwnd);
+        // Show window unless started with --minimized (e.g., launch at login)
+        if !start_minimized {
+            let _ = ShowWindow(hwnd, SW_SHOW);
+            let _ = SetForegroundWindow(hwnd);
+        }
 
         let mut msg = MSG::default();
         while GetMessageW(&mut msg, None, 0, 0).into() {
