@@ -16,19 +16,21 @@ use std::sync::mpsc::Sender;
 use webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_CHANNEL_SEARCH_KIND_LEAST_STABLE;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW, COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN,
-    COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN, CreateCoreWebView2EnvironmentWithOptions,
+    COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN, COREWEBVIEW2_PERMISSION_KIND_CLIPBOARD_READ,
+    COREWEBVIEW2_PERMISSION_STATE_ALLOW, CreateCoreWebView2EnvironmentWithOptions,
     ICoreWebView2, ICoreWebView2_3, ICoreWebView2AcceleratorKeyPressedEventArgs,
     ICoreWebView2CompositionController5, ICoreWebView2Controller, ICoreWebView2Environment,
-    ICoreWebView2Environment3, ICoreWebView2EnvironmentOptions, ICoreWebView2Settings3,
-    ICoreWebView2Settings4, ICoreWebView2Settings5, ICoreWebView2Settings6, ICoreWebView2Settings8,
-    ICoreWebView2Settings9,
+    ICoreWebView2Environment3, ICoreWebView2EnvironmentOptions,
+    ICoreWebView2PermissionRequestedEventArgs, ICoreWebView2Settings3, ICoreWebView2Settings4,
+    ICoreWebView2Settings5, ICoreWebView2Settings6, ICoreWebView2Settings8, ICoreWebView2Settings9,
     ICoreWebView2WebMessageReceivedEventArgs,
 };
 use webview2_com::{
     AcceleratorKeyPressedEventHandler, CoreWebView2EnvironmentOptions,
     CreateCoreWebView2CompositionControllerCompletedHandler,
     CreateCoreWebView2EnvironmentCompletedHandler, CursorChangedEventHandler,
-    DragStartingEventHandler, NavigationStartingEventHandler, WebMessageReceivedEventHandler,
+    DragStartingEventHandler, NavigationStartingEventHandler, PermissionRequestedEventHandler,
+    WebMessageReceivedEventHandler,
 };
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::System::Com::CoTaskMemFree;
@@ -299,6 +301,24 @@ fn setup_webview(
                 let _ = settings9.SetIsNonClientRegionSupportEnabled(true);
             }
         }
+
+        // Auto-grant clipboard permission (needed for navigator.clipboard.writeText)
+        let mut perm_token = 0i64;
+        let _ = webview.add_PermissionRequested(
+            &PermissionRequestedEventHandler::create(Box::new(
+                |_webview_opt, args: Option<ICoreWebView2PermissionRequestedEventArgs>| {
+                    let Some(args) = args else { return Ok(()) };
+                    let mut kind = Default::default();
+                    if args.PermissionKind(&mut kind).is_ok()
+                        && kind == COREWEBVIEW2_PERMISSION_KIND_CLIPBOARD_READ
+                    {
+                        let _ = args.SetState(COREWEBVIEW2_PERMISSION_STATE_ALLOW);
+                    }
+                    Ok(())
+                },
+            )),
+            &mut perm_token,
+        );
 
         let mut token = 0i64;
         let _ = webview.add_WebMessageReceived(
