@@ -122,18 +122,39 @@ impl fmt::Display for Theme {
 pub struct ShortcutsConfig {
     #[serde(default = "default_global_shortcut")]
     pub global_shortcut: String,
+    #[serde(default = "default_copy_markdown")]
+    pub copy_markdown: String,
+    #[serde(default = "default_copy_html")]
+    pub copy_html: String,
+    #[serde(default = "default_copy_files")]
+    pub copy_files: String,
 }
 
 impl Default for ShortcutsConfig {
     fn default() -> Self {
         Self {
             global_shortcut: default_global_shortcut(),
+            copy_markdown: default_copy_markdown(),
+            copy_html: default_copy_html(),
+            copy_files: default_copy_files(),
         }
     }
 }
 
 fn default_global_shortcut() -> String {
     "Ctrl+Alt+KeyK".to_string()
+}
+
+fn default_copy_markdown() -> String {
+    "Ctrl+KeyT".to_string()
+}
+
+fn default_copy_html() -> String {
+    "Ctrl+KeyR".to_string()
+}
+
+fn default_copy_files() -> String {
+    "Ctrl+KeyF".to_string()
 }
 
 /// Lifecycle/TTL settings.

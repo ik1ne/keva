@@ -219,6 +219,16 @@ pub fn handle_webview_message(msg: &str, parent_hwnd: HWND, request_tx: &Sender<
                 crate::platform::startup::enable_launch_at_login();
             }
         }
+        IncomingMessage::SuspendGlobalHotkey => {
+            crate::platform::hotkey::unregister_global_hotkey(parent_hwnd);
+        }
+        IncomingMessage::ResumeGlobalHotkey => {
+            let config = crate::platform::handlers::get_app_config();
+            crate::platform::hotkey::register_global_hotkey(
+                parent_hwnd,
+                &config.shortcuts.global_shortcut,
+            );
+        }
     }
 }
 

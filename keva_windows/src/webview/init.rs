@@ -6,6 +6,8 @@ use crate::keva_worker::{Request, get_data_path};
 use crate::platform::clipboard::{read_clipboard, set_pending_file_paths};
 use crate::platform::composition::CompositionHost;
 use crate::platform::drag_out::handle_drag_starting;
+use crate::platform::handlers::get_app_config;
+use crate::platform::hotkey::ShortcutBinding;
 use crate::platform::tray::IDM_SETTINGS;
 use crate::render::theme::Theme;
 use std::ffi::c_void;
@@ -31,7 +33,7 @@ use webview2_com::{
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::System::Com::CoTaskMemFree;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetKeyState, VK_CONTROL, VK_F, VK_MENU, VK_OEM_COMMA, VK_R, VK_T, VK_V,
+    GetKeyState, VK_CONTROL, VK_MENU, VK_OEM_COMMA, VK_SHIFT, VK_V,
 };
 use windows::Win32::UI::Shell::ShellExecuteW;
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -416,9 +418,10 @@ fn handle_accelerator_key(
 
         let ctrl_down = GetKeyState(VK_CONTROL.0 as i32) < 0;
         let alt_down = GetKeyState(VK_MENU.0 as i32) < 0;
+        let shift_down = GetKeyState(VK_SHIFT.0 as i32) < 0;
 
         // Ctrl+V: check for files in clipboard
-        if virtual_key == VK_V.0 as u32 && ctrl_down && !alt_down {
+        if virtual_key == VK_V.0 as u32 && ctrl_down && !alt_down && !shift_down {
             let content = read_clipboard(hwnd);
             if !content.files.is_empty() {
                 let _ = args.SetHandled(true);
@@ -434,8 +437,13 @@ fn handle_accelerator_key(
             return;
         }
 
-        // Ctrl+Alt+T: Copy markdown
-        if virtual_key == VK_T.0 as u32 && ctrl_down && alt_down {
+        // Configurable copy shortcuts (parsed on demand from config)
+        let config = get_app_config();
+
+        // Copy Markdown
+        if let Some(binding) = ShortcutBinding::parse(&config.shortcuts.copy_markdown)
+            && binding.matches(virtual_key, ctrl_down, alt_down, shift_down)
+        {
             let _ = args.SetHandled(true);
             post_message(
                 webview,
@@ -446,8 +454,10 @@ fn handle_accelerator_key(
             return;
         }
 
-        // Ctrl+Alt+R: Copy HTML (rendered preview)
-        if virtual_key == VK_R.0 as u32 && ctrl_down && alt_down {
+        // Copy HTML (rendered preview)
+        if let Some(binding) = ShortcutBinding::parse(&config.shortcuts.copy_html)
+            && binding.matches(virtual_key, ctrl_down, alt_down, shift_down)
+        {
             let _ = args.SetHandled(true);
             post_message(
                 webview,
@@ -458,8 +468,10 @@ fn handle_accelerator_key(
             return;
         }
 
-        // Ctrl+Alt+F: Copy files
-        if virtual_key == VK_F.0 as u32 && ctrl_down && alt_down {
+        // Copy Files
+        if let Some(binding) = ShortcutBinding::parse(&config.shortcuts.copy_files)
+            && binding.matches(virtual_key, ctrl_down, alt_down, shift_down)
+        {
             let _ = args.SetHandled(true);
             post_message(
                 webview,

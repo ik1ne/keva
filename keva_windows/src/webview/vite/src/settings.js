@@ -45,56 +45,11 @@ export const Settings = {
         // Segmented control (theme selector)
         this.setupSegmentedControl('setting-theme');
 
-        // Hotkey input capture
-        const hotkeyInput = document.getElementById('setting-global-shortcut');
-        const hotkeyClear = document.getElementById('setting-global-shortcut-clear');
-
-        hotkeyInput.addEventListener('focus', function () {
-            self.isCapturingHotkey = true;
-            hotkeyInput.placeholder = 'Press key combination...';
-        });
-
-        hotkeyInput.addEventListener('blur', function () {
-            self.isCapturingHotkey = false;
-            hotkeyInput.placeholder = 'Click to set shortcut';
-        });
-
-        hotkeyClear.addEventListener('click', function () {
-            hotkeyInput.value = '';
-            hotkeyInput.dataset.shortcut = '';
-            hotkeyClear.disabled = true;
-        });
-
-        hotkeyInput.addEventListener('keydown', function (e) {
-            if (!self.isCapturingHotkey) return;
-
-            e.preventDefault();
-            e.stopPropagation();
-
-            // Ignore modifier-only presses
-            if (isModifierKey(e.code)) {
-                return;
-            }
-
-            // Require Ctrl or Alt
-            if (!hasRequiredModifier(e)) {
-                showToast('Shortcut must include Ctrl or Alt');
-                return;
-            }
-
-            // Build storage format (e.code based)
-            const shortcut = fromEvent(e);
-            if (!shortcut) {
-                showToast('Unsupported key');
-                return;
-            }
-
-            // Store e.code format in data attribute, display human-readable in value
-            hotkeyInput.dataset.shortcut = shortcut;
-            hotkeyInput.value = toDisplay(shortcut);
-            hotkeyClear.disabled = false;
-            hotkeyInput.blur();
-        });
+        // Hotkey input capture for all shortcut fields
+        this.setupHotkeyInput('setting-global-shortcut');
+        this.setupHotkeyInput('setting-copy-markdown');
+        this.setupHotkeyInput('setting-copy-html');
+        this.setupHotkeyInput('setting-copy-files');
 
         // Global keyboard handler for settings panel (Escape to close, Enter to save)
         document.addEventListener('keydown', function (e) {
@@ -147,6 +102,9 @@ export const Settings = {
         return values.config.general.theme !== orig.general.theme ||
             values.config.general.show_tray_icon !== orig.general.show_tray_icon ||
             values.config.shortcuts.global_shortcut !== orig.shortcuts.global_shortcut ||
+            values.config.shortcuts.copy_markdown !== orig.shortcuts.copy_markdown ||
+            values.config.shortcuts.copy_html !== orig.shortcuts.copy_html ||
+            values.config.shortcuts.copy_files !== orig.shortcuts.copy_files ||
             values.config.lifecycle.trash_ttl_days !== orig.lifecycle.trash_ttl_days ||
             values.config.lifecycle.purge_ttl_days !== orig.lifecycle.purge_ttl_days ||
             values.launchAtLogin !== this.launchAtLogin;
@@ -166,6 +124,75 @@ export const Settings = {
                 });
             });
         });
+    },
+
+    setupHotkeyInput: function (inputId) {
+        const self = this;
+        const hotkeyInput = document.getElementById(inputId);
+        const hotkeyClear = document.getElementById(inputId + '-clear');
+        const isGlobalShortcut = inputId === 'setting-global-shortcut';
+
+        hotkeyInput.addEventListener('focus', function () {
+            self.isCapturingHotkey = true;
+            hotkeyInput.placeholder = 'Press key combination...';
+            // Suspend global hotkey so we can capture it
+            if (isGlobalShortcut) {
+                Api.send({ type: 'suspendGlobalHotkey' });
+            }
+        });
+
+        hotkeyInput.addEventListener('blur', function () {
+            self.isCapturingHotkey = false;
+            hotkeyInput.placeholder = 'Click to set shortcut';
+            // Resume global hotkey
+            if (isGlobalShortcut) {
+                Api.send({ type: 'resumeGlobalHotkey' });
+            }
+        });
+
+        hotkeyClear.addEventListener('click', function () {
+            hotkeyInput.value = '';
+            hotkeyInput.dataset.shortcut = '';
+            hotkeyClear.disabled = true;
+        });
+
+        hotkeyInput.addEventListener('keydown', function (e) {
+            if (!self.isCapturingHotkey) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            // Ignore modifier-only presses
+            if (isModifierKey(e.code)) {
+                return;
+            }
+
+            // Require Ctrl or Alt
+            if (!hasRequiredModifier(e)) {
+                showToast('Shortcut must include Ctrl or Alt');
+                return;
+            }
+
+            // Build storage format (e.code based)
+            const shortcut = fromEvent(e);
+            if (!shortcut) {
+                showToast('Unsupported key');
+                return;
+            }
+
+            // Store e.code format in data attribute, display human-readable in value
+            hotkeyInput.dataset.shortcut = shortcut;
+            hotkeyInput.value = toDisplay(shortcut);
+            hotkeyClear.disabled = false;
+            hotkeyInput.blur();
+        });
+    },
+
+    populateHotkeyInput: function (inputId, value) {
+        const hotkeyInput = document.getElementById(inputId);
+        hotkeyInput.dataset.shortcut = value || '';
+        hotkeyInput.value = toDisplay(value || '');
+        document.getElementById(inputId + '-clear').disabled = !value;
     },
 
     switchCategory: function (category) {
@@ -218,11 +245,10 @@ export const Settings = {
         document.getElementById('setting-show-tray-icon').checked = config.general.show_tray_icon;
 
         // Shortcuts - store e.code format, display human-readable
-        const hotkeyInput = document.getElementById('setting-global-shortcut');
-        const shortcutValue = config.shortcuts.global_shortcut;
-        hotkeyInput.dataset.shortcut = shortcutValue;
-        hotkeyInput.value = toDisplay(shortcutValue);
-        document.getElementById('setting-global-shortcut-clear').disabled = !shortcutValue;
+        this.populateHotkeyInput('setting-global-shortcut', config.shortcuts.global_shortcut);
+        this.populateHotkeyInput('setting-copy-markdown', config.shortcuts.copy_markdown);
+        this.populateHotkeyInput('setting-copy-html', config.shortcuts.copy_html);
+        this.populateHotkeyInput('setting-copy-files', config.shortcuts.copy_files);
 
         // Lifecycle
         document.getElementById('setting-trash-ttl').value = config.lifecycle.trash_ttl_days;
@@ -237,6 +263,9 @@ export const Settings = {
         config.general.theme = document.getElementById('setting-theme').dataset.value;
         config.general.show_tray_icon = document.getElementById('setting-show-tray-icon').checked;
         config.shortcuts.global_shortcut = document.getElementById('setting-global-shortcut').dataset.shortcut || '';
+        config.shortcuts.copy_markdown = document.getElementById('setting-copy-markdown').dataset.shortcut || '';
+        config.shortcuts.copy_html = document.getElementById('setting-copy-html').dataset.shortcut || '';
+        config.shortcuts.copy_files = document.getElementById('setting-copy-files').dataset.shortcut || '';
         config.lifecycle.trash_ttl_days = parseInt(document.getElementById('setting-trash-ttl').value, 10) || 30;
         config.lifecycle.purge_ttl_days = parseInt(document.getElementById('setting-purge-ttl').value, 10) || 7;
 
@@ -255,6 +284,34 @@ export const Settings = {
 
         if (config.lifecycle.purge_ttl_days < 1 || config.lifecycle.purge_ttl_days > 365000) {
             errors.push('Purge TTL must be between 1 and 365000 days');
+        }
+
+        // Check for shortcut conflicts (only non-empty shortcuts can conflict)
+        const shortcuts = [
+            { name: 'Global Shortcut', value: config.shortcuts.global_shortcut },
+            { name: 'Copy Markdown', value: config.shortcuts.copy_markdown },
+            { name: 'Copy HTML', value: config.shortcuts.copy_html },
+            { name: 'Copy Files', value: config.shortcuts.copy_files },
+        ].filter(s => s.value); // Only check non-empty shortcuts
+
+        for (let i = 0; i < shortcuts.length; i++) {
+            for (let j = i + 1; j < shortcuts.length; j++) {
+                if (shortcuts[i].value === shortcuts[j].value) {
+                    errors.push(shortcuts[i].name + ' and ' + shortcuts[j].name + ' have the same shortcut');
+                }
+            }
+        }
+
+        // Check against reserved shortcuts (hardcoded in native code)
+        const reserved = [
+            { name: 'Open Settings', value: 'Ctrl+Comma' },
+        ];
+        for (const shortcut of shortcuts) {
+            for (const res of reserved) {
+                if (shortcut.value === res.value) {
+                    errors.push(shortcut.name + ' conflicts with ' + res.name + ' (' + res.value + ')');
+                }
+            }
         }
 
         return errors;

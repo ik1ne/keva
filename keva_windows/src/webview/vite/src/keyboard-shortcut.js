@@ -20,7 +20,7 @@ export function isModifierKey(code) {
 }
 
 export function hasRequiredModifier(e) {
-    return e.ctrlKey || e.altKey;
+    return e.ctrlKey || e.altKey || e.metaKey || e.shiftKey;
 }
 
 // Converts KeyboardEvent to storage format: "Ctrl+Alt+KeyA"

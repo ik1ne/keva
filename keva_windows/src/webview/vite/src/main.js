@@ -718,6 +718,14 @@ export const Main = {
             },
 
             openSettings: function (msg) {
+                // If settings already open, ignore (prevents resetting unsaved changes/tab)
+                // If capturing hotkey, show toast about Ctrl+Comma being reserved
+                if (!Settings.overlay.classList.contains('hidden')) {
+                    if (Settings.isCapturingHotkey) {
+                        showToast('Ctrl+, is reserved for Open Settings');
+                    }
+                    return;
+                }
                 Settings.open(msg.config, msg.launchAtLogin);
             },
 

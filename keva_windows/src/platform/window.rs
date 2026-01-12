@@ -28,7 +28,8 @@ use windows::{
         UI::{
             HiDpi::GetDpiForSystem,
             WindowsAndMessaging::{
-                CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, GetSystemMetrics,
+                CreateWindowExW, DefWindowProcW, DispatchMessageW, GetForegroundWindow,
+                GetMessageW, GetSystemMetrics,
                 HCURSOR, HTCLIENT, IDC_ARROW, LoadCursorW, MSG, PostQuitMessage, RegisterClassW,
                 SM_CXSCREEN, SM_CYSCREEN, SW_SHOW, SWP_NOCOPYBITS, SetCursor, SetForegroundWindow,
                 ShowWindow, TranslateMessage, WINDOWPOS, WM_ACTIVATE, WM_CLOSE, WM_COMMAND,
@@ -248,7 +249,11 @@ extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM)
         WM_PAINT => on_paint(hwnd),
         WM_DESTROY => on_destroy(hwnd),
         WM_HOTKEY => {
-            show_and_focus_window(hwnd);
+            // Only activate if we're not already the foreground window.
+            // This prevents stealing focus from hotkey capture in settings.
+            if unsafe { GetForegroundWindow() } != hwnd {
+                show_and_focus_window(hwnd);
+            }
             LRESULT(0)
         }
         wm::ACTIVATE_INSTANCE => {

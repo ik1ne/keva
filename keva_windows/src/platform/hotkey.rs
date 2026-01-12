@@ -28,6 +28,21 @@ pub struct ShortcutBinding {
 }
 
 impl ShortcutBinding {
+    /// Checks if this binding matches the given virtual key and modifier state.
+    ///
+    /// Used by AcceleratorKeyPressed to match configured shortcuts against current input.
+    pub fn matches(&self, vk: u32, ctrl: bool, alt: bool, shift: bool) -> bool {
+        if self.vk_code != vk {
+            return false;
+        }
+
+        let has_ctrl = (self.modifiers & MOD_CONTROL).0 != 0;
+        let has_alt = (self.modifiers & MOD_ALT).0 != 0;
+        let has_shift = (self.modifiers & MOD_SHIFT).0 != 0;
+
+        ctrl == has_ctrl && alt == has_alt && shift == has_shift
+    }
+
     /// Parses a shortcut string like "Ctrl+Alt+KeyK" into a ShortcutBinding.
     ///
     /// Format: `[Ctrl+][Alt+][Shift+][Win+]<e.code>`
@@ -106,9 +121,12 @@ pub fn register_global_hotkey(hwnd: HWND, shortcut: &str) -> bool {
         return false;
     };
 
-    // Require Ctrl or Alt (matches JS validation in settings.js)
-    if (binding.modifiers & (MOD_CONTROL | MOD_ALT)).0 == 0 {
-        eprintln!("[Hotkey] Shortcut must include Ctrl or Alt: {}", shortcut);
+    // Require at least one modifier key
+    if (binding.modifiers & (MOD_CONTROL | MOD_ALT | MOD_WIN | MOD_SHIFT)).0 == 0 {
+        eprintln!(
+            "[Hotkey] Shortcut must include a modifier key: {}",
+            shortcut
+        );
         return false;
     }
 

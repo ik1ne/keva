@@ -88,4 +88,8 @@ pub enum IncomingMessage {
     WelcomeResult {
         launch_at_login: bool,
     },
+    /// Temporarily suspend global hotkey (for hotkey capture in settings).
+    SuspendGlobalHotkey,
+    /// Resume global hotkey after capture.
+    ResumeGlobalHotkey,
 }
