@@ -28,7 +28,7 @@ and includes test cases for verification.
 | M17  | Single Instance        | Named mutex, activate existing window         | ✅      |
 | M18  | First-Run Dialog       | Welcome message, launch at login checkbox     | ✅      |
 | M19  | Monaco Bundling        | Embed resources, single exe                   | ✅      |
-| M20  | Layout Polish          | Resizable panes with draggable dividers       | ❌      |
+| M20  | Layout Polish          | Resizable panes with draggable dividers       | ✅      |
 | M21  | Copy Keybindings       | Configurable copy shortcuts, conflict detect  | ❌      |
 | M22  | Drag-Drop Modifiers    | Shift to move for import/export               | ❌      |
 | M23  | Installer              | WiX/MSIX, uninstaller, WebView2 version check | ❌      |
@@ -974,22 +974,22 @@ divider resizes attachments panel height. Handle window resize gracefully by cla
 - Drag handle between editor and attachments pane (4-6px tall)
 - Cursor changes to `col-resize` / `row-resize` on hover
 - Left pane: min 150px, max 50% of window width
-- Attachments pane: min 60px, max 50% of right pane height
+- Attachments pane: min 100px, max 50% of right pane height
 - On window resize: clamp pane sizes if exceeds max
 
 **Test Cases:**
 
-| TC        | Description                                     | Status |
-|-----------|-------------------------------------------------|--------|
-| TC-M20-01 | Drag divider resizes left pane                  | ❌      |
-| TC-M20-02 | Left pane respects minimum width (150px)        | ❌      |
-| TC-M20-03 | Left pane respects maximum width (50% window)   | ❌      |
-| TC-M20-04 | Window resize clamps pane sizes if needed       | ❌      |
-| TC-M20-05 | Cursor shows col-resize on left/right divider   | ❌      |
-| TC-M20-06 | Drag divider resizes attachments pane height    | ❌      |
-| TC-M20-07 | Attachments pane respects minimum height (60px) | ❌      |
-| TC-M20-08 | Attachments pane respects maximum height (50%)  | ❌      |
-| TC-M20-09 | Cursor shows row-resize on editor/att divider   | ❌      |
+| TC        | Description                                      | Status |
+|-----------|--------------------------------------------------|--------|
+| TC-M20-01 | Drag divider resizes left pane                   | ✅      |
+| TC-M20-02 | Left pane respects minimum width (150px)         | ✅      |
+| TC-M20-03 | Left pane respects maximum width (50% window)    | ✅      |
+| TC-M20-04 | Window resize clamps pane sizes if needed        | ✅      |
+| TC-M20-05 | Cursor shows col-resize on left/right divider    | ✅      |
+| TC-M20-06 | Drag divider resizes attachments pane height     | ✅      |
+| TC-M20-07 | Attachments pane respects minimum height (100px) | ✅      |
+| TC-M20-08 | Attachments pane respects maximum height (50%)   | ✅      |
+| TC-M20-09 | Cursor shows row-resize on editor/att divider    | ✅      |
 
 ---
 
