@@ -17,7 +17,9 @@ use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN, CreateCoreWebView2EnvironmentWithOptions,
     ICoreWebView2, ICoreWebView2_3, ICoreWebView2AcceleratorKeyPressedEventArgs,
     ICoreWebView2CompositionController5, ICoreWebView2Controller, ICoreWebView2Environment,
-    ICoreWebView2Environment3, ICoreWebView2EnvironmentOptions, ICoreWebView2Settings9,
+    ICoreWebView2Environment3, ICoreWebView2EnvironmentOptions, ICoreWebView2Settings3,
+    ICoreWebView2Settings4, ICoreWebView2Settings5, ICoreWebView2Settings6, ICoreWebView2Settings8,
+    ICoreWebView2Settings9,
     ICoreWebView2WebMessageReceivedEventArgs,
 };
 use webview2_com::{
@@ -258,7 +260,39 @@ fn setup_webview(
             #[cfg(not(debug_assertions))]
             let _ = settings.SetAreDevToolsEnabled(false);
 
-            // Enable CSS app-region: drag support for window dragging
+            // Disable browser context menu (Inspect, Reload, etc.)
+            let _ = settings.SetAreDefaultContextMenusEnabled(false);
+            // Disable built-in error pages ("This site can't be reached")
+            let _ = settings.SetIsBuiltInErrorPageEnabled(false);
+            // Disable status bar (shows URL on hover)
+            let _ = settings.SetIsStatusBarEnabled(false);
+
+            // Settings3: Disable browser accelerator keys (F5, Ctrl+R, Ctrl+P, etc.)
+            if let Ok(settings3) = settings.cast::<ICoreWebView2Settings3>() {
+                let _ = settings3.SetAreBrowserAcceleratorKeysEnabled(false);
+            }
+
+            // Settings4: Disable form autofill
+            if let Ok(settings4) = settings.cast::<ICoreWebView2Settings4>() {
+                let _ = settings4.SetIsGeneralAutofillEnabled(false);
+            }
+
+            // Settings5: Disable pinch zoom
+            if let Ok(settings5) = settings.cast::<ICoreWebView2Settings5>() {
+                let _ = settings5.SetIsPinchZoomEnabled(false);
+            }
+
+            // Settings6: Disable swipe navigation
+            if let Ok(settings6) = settings.cast::<ICoreWebView2Settings6>() {
+                let _ = settings6.SetIsSwipeNavigationEnabled(false);
+            }
+
+            // Settings8: Disable SmartScreen (not needed for local content)
+            if let Ok(settings8) = settings.cast::<ICoreWebView2Settings8>() {
+                let _ = settings8.SetIsReputationCheckingRequired(false);
+            }
+
+            // Settings9: Enable CSS app-region: drag support for window dragging
             if let Ok(settings9) = settings.cast::<ICoreWebView2Settings9>() {
                 let _ = settings9.SetIsNonClientRegionSupportEnabled(true);
             }
