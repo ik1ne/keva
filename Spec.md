@@ -276,12 +276,14 @@ Left pane selection takes priority.
 
 **Copy Shortcuts:**
 
-| Key          | Action                             | On Success  |
-|--------------|------------------------------------|-------------|
-| `Ctrl+C`     | Copy selection (context-dependent) | Stay open   |
-| `Ctrl+Alt+T` | Copy whole markdown as plain text  | Hide window |
-| `Ctrl+Alt+R` | Copy rendered preview as HTML      | Hide window |
-| `Ctrl+Alt+F` | Copy all attachments to clipboard  | Hide window |
+| Key              | Action                             | On Success  |
+|------------------|------------------------------------|-------------|
+| `Ctrl+C`         | Copy selection (context-dependent) | Stay open   |
+| `Ctrl+Alt+T` (1) | Copy whole markdown as plain text  | Hide window |
+| `Ctrl+Alt+R` (1) | Copy rendered preview as HTML      | Hide window |
+| `Ctrl+Alt+F` (1) | Copy all attachments to clipboard  | Hide window |
+
+(1) Default shortcut; can be reconfigured or disabled in Settings. Ctrl+C is not configurable.
 
 **Copy Shortcut Logic (Ctrl+Alt+T/R/F):**
 
@@ -559,16 +561,48 @@ Duplicate filenames are not allowed within a key.
 | Trashed key        | Rejected                | Rejected                          |
 | Search bar         | Not a drop target       | Not a drop target                 |
 
+**Import Modifier Keys:**
+
+| Modifier | Effect | Description                                    |
+|----------|--------|------------------------------------------------|
+| None     | Copy   | Default behavior, source file unchanged        |
+| Ctrl     | Copy   | Explicit copy, source file unchanged           |
+| Shift    | Move   | Source application deletes file after transfer |
+
 **Drag from Attachments Panel (Internal):**
 
 - Drag file to Monaco → Insert `[filename](att:filename)` at drop position (or `![filename](att:filename)` for images)
 
 **Drag from Attachments Panel (Export):**
 
-- Drag file to external application (Explorer, email client, etc.) → Copy file
+- Drag file to external application (Explorer, email client, etc.)
 - Multi-select supported: all selected files included in drag
 - Trashed key attachments: drag rejected (cursor shows "not allowed")
-- Effect: Copy only (attachment remains in Keva)
+
+**Export Modifier Keys:**
+
+| Modifier | Effect | Description                                       |
+|----------|--------|---------------------------------------------------|
+| None     | Copy   | Default behavior, attachment remains in Keva      |
+| Ctrl     | Copy   | Explicit copy, attachment remains in Keva         |
+| Shift    | Move   | Remove attachment from Keva after successful drop |
+
+**Export Move with References:**
+
+When Shift+drag removes an attachment that was referenced in markdown, a post-drop dialog appears:
+
+```
+┌─────────────────────────────────────────────────────┐
+│ "file.pdf" was referenced in your notes.            │
+│                                                     │
+│ [Remove References]  [Keep Broken]                  │
+└─────────────────────────────────────────────────────┘
+```
+
+- **Remove References:** Delete all `att:filename` references in editor
+- **Keep Broken:** Leave references (now broken)
+
+No Cancel option because file transfer already completed. Dialog not shown if attachment had no references.
 
 **Monaco Text Drop:**
 
@@ -610,6 +644,9 @@ On first launch (no config.toml exists):
 | General   | Launch at Login | Toggle auto-start                     |
 | General   | Show Tray Icon  | Toggle tray icon visibility           |
 | Shortcuts | Global Shortcut | Key combination to show window        |
+| Shortcuts | Copy Markdown   | Key combination for Ctrl+Alt+T action |
+| Shortcuts | Copy HTML       | Key combination for Ctrl+Alt+R action |
+| Shortcuts | Copy Files      | Key combination for Ctrl+Alt+F action |
 | Lifecycle | Trash TTL       | Days before items auto-trash          |
 | Lifecycle | Purge TTL       | Days before trashed items are deleted |
 
@@ -719,37 +756,20 @@ If copy shortcut fails (no target key, no content):
 
 Features considered but not scheduled for initial release.
 
-### Drag Modifier Keys (Import)
+### Drag Modifier Keys (Alt to Link)
 
-Modifier keys for dropping files into Keva from external sources:
+Alt+drag for creating Windows shortcuts was considered but deferred:
 
-| Modifier | Effect | Description                     |
-|----------|--------|---------------------------------|
-| None     | Copy   | Default behavior (current)      |
-| Ctrl     | Copy   | Force copy (explicit)           |
-| Shift    | Move   | Delete source file after import |
+| Modifier | Effect | Description                                 |
+|----------|--------|---------------------------------------------|
+| Alt      | Link   | Create Windows shortcut (.lnk) to blob file |
 
-### Drag Modifier Keys (Export)
-
-Modifier keys for dragging files from attachments panel to external applications:
-
-| Modifier | Effect | Description                                       |
-|----------|--------|---------------------------------------------------|
-| None     | Copy   | Default behavior (current)                        |
-| Ctrl     | Copy   | Force copy (explicit)                             |
-| Shift    | Move   | Remove attachment from Keva after successful drop |
-| Alt      | Link   | Create Windows shortcut (.lnk) to blob file       |
-
-**Move (Shift+drag) considerations:**
-
-- Attachment removed only if external drop succeeds
-- If attachment referenced in markdown: offer to remove broken links after move
-
-**Link (Alt+drag) considerations:**
+**Considerations:**
 
 - Shortcut points to internal blob path (`%LOCALAPPDATA%\keva\blobs\...`)
 - Shortcut breaks if Keva storage reorganized or data deleted
 - Shortcut is user-specific (won't work if shared)
+- Power user feature with limited practical value
 
 ### Drag to Different Key
 
