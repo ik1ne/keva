@@ -1,6 +1,19 @@
 'use strict';
 
-const KeyList = {
+import { Utils } from './utils.js';
+import { State } from './state.js';
+import { Dialog } from './dialog.js';
+import { Api } from './api.js';
+import { Editor } from './editor.js';
+
+// Main reference set later to avoid circular dependency
+let Main = null;
+
+export function setMainRef(main) {
+    Main = main;
+}
+
+export const KeyList = {
     dom: null,
     renameState: null,
 
@@ -266,3 +279,6 @@ const KeyList = {
         });
     }
 };
+
+// Expose globally for onclick handlers
+window.KeyList = KeyList;

@@ -1,6 +1,21 @@
 'use strict';
 
-const Editor = {
+import * as monaco from 'monaco-editor';
+import markdownit from 'markdown-it';
+import DOMPurify from 'dompurify';
+import hljs from 'highlight.js';
+
+import { State } from './state.js';
+import { Api } from './api.js';
+
+// Main reference set later to avoid circular dependency
+let Main = null;
+
+export function setMainRef(main) {
+    Main = main;
+}
+
+export const Editor = {
     instance: null,
     saveTimer: null,
     dom: null,
@@ -36,38 +51,35 @@ const Editor = {
         this.overflowContainer.className = 'monaco-editor';
         document.body.appendChild(this.overflowContainer);
 
-        require.config({paths: {'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs'}});
-        require(['vs/editor/editor.main'], function () {
-            self.instance = monaco.editor.create(dom.editorContainer, {
-                value: '',
-                language: 'markdown',
-                theme: 'vs-dark',
-                automaticLayout: true,
-                minimap: {enabled: false},
-                fontSize: 14,
-                wordWrap: 'on',
-                scrollBeyondLastLine: false,
-                readOnlyMessage: {value: 'Restore from trash to edit', isTrusted: true},
-                dropIntoEditor: {enabled: false},
-                fixedOverflowWidgets: true,
-                overflowWidgetsDomNode: self.overflowContainer
-            });
-
-            self.instance.onDidChangeModelContent(function () {
-                if (State.data.selectedKey && !self.isReadOnly) {
-                    State.data.isDirty = true;
-                    self.scheduleSave();
-                }
-                self.updatePlaceholder();
-                self.invalidatePreviewCache();
-            });
-
-            self.instance.onDidFocusEditorWidget(function () {
-                Main.setActivePane('editor');
-            });
-
-            if (callback) callback();
+        self.instance = monaco.editor.create(dom.editorContainer, {
+            value: '',
+            language: 'markdown',
+            theme: 'vs-dark',
+            automaticLayout: true,
+            minimap: {enabled: false},
+            fontSize: 14,
+            wordWrap: 'on',
+            scrollBeyondLastLine: false,
+            readOnlyMessage: {value: 'Restore from trash to edit', isTrusted: true},
+            dropIntoEditor: {enabled: false},
+            fixedOverflowWidgets: true,
+            overflowWidgetsDomNode: self.overflowContainer
         });
+
+        self.instance.onDidChangeModelContent(function () {
+            if (State.data.selectedKey && !self.isReadOnly) {
+                State.data.isDirty = true;
+                self.scheduleSave();
+            }
+            self.updatePlaceholder();
+            self.invalidatePreviewCache();
+        });
+
+        self.instance.onDidFocusEditorWidget(function () {
+            Main.setActivePane('editor');
+        });
+
+        if (callback) callback();
     },
 
     updatePlaceholder: function () {
@@ -321,13 +333,13 @@ const Editor = {
 
     initMarkdownIt: function () {
         if (this.markdownIt) return;
-        this.markdownIt = window.markdownit({
+        this.markdownIt = markdownit({
             html: false,
             linkify: true,
             highlight: function (str, lang) {
-                if (lang && window.hljs && window.hljs.getLanguage(lang)) {
+                if (lang && hljs.getLanguage(lang)) {
                     try {
-                        return window.hljs.highlight(str, {language: lang}).value;
+                        return hljs.highlight(str, {language: lang}).value;
                     } catch (e) {
                         // ignore
                     }
@@ -356,7 +368,7 @@ const Editor = {
         const transformed = this.transformAttLinks(content, this.keyHash, State.data.attachments);
         const rawHtml = this.markdownIt.render(transformed);
         // Allow att: scheme for attachment links
-        const cleanHtml = window.DOMPurify.sanitize(rawHtml, {
+        const cleanHtml = DOMPurify.sanitize(rawHtml, {
             ADD_ATTR: ['target'],
             ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel|att):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))/i
         });
@@ -375,3 +387,6 @@ const Editor = {
         this.previewCache.html = null;
     }
 };
+
+// Expose retrySave globally for onclick handler
+window.Editor = Editor;

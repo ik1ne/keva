@@ -1,6 +1,10 @@
 'use strict';
 
-const Settings = {
+import { Api } from './api.js';
+import { Drop } from './drop.js';
+import { isModifierKey, hasRequiredModifier, fromEvent, toDisplay } from './keyboard-shortcut.js';
+
+export const Settings = {
     overlay: null,
     originalConfig: null,
     launchAtLogin: false,
@@ -68,18 +72,18 @@ const Settings = {
             e.stopPropagation();
 
             // Ignore modifier-only presses
-            if (KeyboardShortcut.isModifierKey(e.code)) {
+            if (isModifierKey(e.code)) {
                 return;
             }
 
             // Require Ctrl or Alt
-            if (!KeyboardShortcut.hasRequiredModifier(e)) {
+            if (!hasRequiredModifier(e)) {
                 Drop.showToast('Shortcut must include Ctrl or Alt');
                 return;
             }
 
             // Build storage format (e.code based)
-            const shortcut = KeyboardShortcut.fromEvent(e);
+            const shortcut = fromEvent(e);
             if (!shortcut) {
                 Drop.showToast('Unsupported key');
                 return;
@@ -87,7 +91,7 @@ const Settings = {
 
             // Store e.code format in data attribute, display human-readable in value
             hotkeyInput.dataset.shortcut = shortcut;
-            hotkeyInput.value = KeyboardShortcut.toDisplay(shortcut);
+            hotkeyInput.value = toDisplay(shortcut);
             hotkeyClear.disabled = false;
             hotkeyInput.blur();
         });
@@ -217,7 +221,7 @@ const Settings = {
         const hotkeyInput = document.getElementById('setting-global-shortcut');
         const shortcutValue = config.shortcuts.global_shortcut;
         hotkeyInput.dataset.shortcut = shortcutValue;
-        hotkeyInput.value = KeyboardShortcut.toDisplay(shortcutValue);
+        hotkeyInput.value = toDisplay(shortcutValue);
         document.getElementById('setting-global-shortcut-clear').disabled = !shortcutValue;
 
         // Lifecycle
@@ -278,6 +282,3 @@ const Settings = {
         this.close();
     },
 };
-
-// Initialize on DOM ready (already loaded since script is at end of body)
-Settings.init();

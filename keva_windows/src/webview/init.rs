@@ -202,12 +202,12 @@ fn create_composition_controller(
                     // Commit composition after WebView visual is attached
                     wv.commit_composition();
 
-                    // Map virtual host to source directory for file-based loading
+                    // Map virtual host to dist directory (Vite build output)
                     if let Ok(wv3) = wv.webview.cast::<ICoreWebView2_3>() {
                         // UI files
                         let _ = wv3.SetVirtualHostNameToFolderMapping(
                             w!("keva.local"),
-                            w!("../../keva_windows/src/webview/ui"),
+                            w!("../../keva_windows/src/webview/vite/dist"),
                             COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW,
                         );
 

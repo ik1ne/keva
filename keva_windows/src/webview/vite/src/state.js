@@ -1,6 +1,13 @@
 'use strict';
 
-const State = {
+// Editor reference set later to avoid circular dependency
+let Editor = null;
+
+export function setEditorRef(editor) {
+    Editor = editor;
+}
+
+export const State = {
     data: {
         keys: [],
         trashedKeys: [],

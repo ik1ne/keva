@@ -1,7 +1,9 @@
 'use strict';
 
+import { State } from './state.js';
+
 // Reusable conflict dialog for file operations (drop, clipboard paste, file picker)
-const ConflictDialog = {
+export const ConflictDialog = {
     /// Partitions files into conflicts/nonConflicts based on existing attachments.
     /// fileList: array of {id, filename} where id is index or path
     /// Returns: {conflicts: [[id, filename], ...], nonConflicts: [[id, filename], ...]}

@@ -1,6 +1,6 @@
 'use strict';
 
-const Dialog = {
+export const Dialog = {
     show: function (options) {
         const overlay = document.createElement('div');
         overlay.className = 'dialog-overlay';

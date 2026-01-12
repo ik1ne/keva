@@ -1,6 +1,18 @@
 'use strict';
 
-const Main = {
+import './styles.css';
+
+import { State, setEditorRef } from './state.js';
+import { Api } from './api.js';
+import { Editor, setMainRef as setEditorMainRef } from './editor.js';
+import { KeyList, setMainRef as setKeyListMainRef } from './keylist.js';
+import { Attachments, setMainRef as setAttachmentsMainRef } from './attachments.js';
+import { Drop, setMainRef as setDropMainRef } from './drop.js';
+import { ConflictDialog } from './conflict-dialog.js';
+import { Settings } from './settings.js';
+import { Welcome } from './welcome.js';
+
+export const Main = {
     dom: null,
     messageHandlers: null,
     paneElements: null,
@@ -45,6 +57,13 @@ const Main = {
 
     init: function () {
         const self = this;
+
+        // Wire up circular dependencies
+        setEditorRef(Editor);
+        setEditorMainRef(this);
+        setKeyListMainRef(this);
+        setAttachmentsMainRef(this);
+        setDropMainRef(this);
 
         // Cache DOM references
         this.dom = {
@@ -100,6 +119,10 @@ const Main = {
         });
 
         Drop.init();
+
+        Settings.init();
+
+        Welcome.init();
 
         // Set up event handlers
         this.setupEventHandlers();

@@ -1,6 +1,6 @@
 'use strict';
 
-const Utils = {
+export const Utils = {
     escapeHtml: function (str) {
         return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     },

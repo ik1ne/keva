@@ -1,6 +1,8 @@
 'use strict';
 
-const Welcome = {
+import { Api } from './api.js';
+
+export const Welcome = {
     overlay: null,
 
     init: function () {
@@ -40,5 +42,3 @@ const Welcome = {
         this.overlay.classList.add('hidden');
     },
 };
-
-Welcome.init();

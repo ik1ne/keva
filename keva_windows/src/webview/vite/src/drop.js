@@ -1,6 +1,17 @@
 'use strict';
 
-const Drop = {
+import { State } from './state.js';
+import { Editor } from './editor.js';
+import { ConflictDialog } from './conflict-dialog.js';
+
+// Main reference set later to avoid circular dependency
+let Main = null;
+
+export function setMainRef(main) {
+    Main = main;
+}
+
+export const Drop = {
     dropCursorDecorations: [],
     isDragging: false,
 
