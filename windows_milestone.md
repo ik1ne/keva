@@ -30,8 +30,7 @@ and includes test cases for verification.
 | M19  | Monaco Bundling        | Embed resources, single exe                   | ✅      |
 | M20  | Layout Polish          | Resizable panes with draggable dividers       | ✅      |
 | M21  | Copy Keybindings       | Configurable copy shortcuts, conflict detect  | ✅      |
-| M22  | Drag-Drop Modifiers    | Shift to move for import/export               | ❌      |
-| M23  | Installer              | WiX/MSIX, uninstaller, WebView2 version check | ❌      |
+| M22  | Installer              | WiX/MSIX, uninstaller, WebView2 version check | ❌      |
 
 ---
 
@@ -1032,73 +1031,7 @@ shortcuts and global hotkey.
 
 ---
 
-## M22: Drag-Drop Modifiers
-
-**Goal:** Modifier keys for drag-drop import and export operations.
-
-**Description:** Support Ctrl/Shift modifiers for import (files into Keva) and export (attachments out of Keva).
-Visual feedback shows active mode during drag. Shift+drag enables move semantics.
-
-**Import Modifiers (External → Keva):**
-
-| Modifier | Effect | DROPEFFECT returned | Source behavior      |
-|----------|--------|---------------------|----------------------|
-| None     | Copy   | DROPEFFECT_COPY     | Source unchanged     |
-| Ctrl     | Copy   | DROPEFFECT_COPY     | Source unchanged     |
-| Shift    | Move   | DROPEFFECT_MOVE     | Source deletes file  |
-
-**Export Modifiers (Keva → External):**
-
-| Modifier | Effect | Keva behavior                              |
-|----------|--------|--------------------------------------------|
-| None     | Copy   | Attachment remains                         |
-| Ctrl     | Copy   | Attachment remains                         |
-| Shift    | Move   | Remove attachment if target accepts MOVE   |
-
-**Implementation Notes:**
-
-- Import: Check `grfKeyState` in `IDropTarget::DragOver` and `Drop`, return appropriate DROPEFFECT
-- Export: Pass `DROPEFFECT_COPY | DROPEFFECT_MOVE` to `DoDragDrop()`, check returned effect
-- Export move with markdown references: show post-drop dialog (no cancel, file already transferred)
-- Cursor feedback updates mid-drag as user presses/releases Shift
-
-**Reference Update Dialog (Export Move):**
-
-Shown only when moved attachment had markdown references:
-
-```
-┌─────────────────────────────────────────────────────┐
-│ "file.pdf" was referenced in your notes.            │
-│                                                     │
-│ [Remove References]  [Keep Broken]                  │
-└─────────────────────────────────────────────────────┘
-```
-
-- **Remove References:** Delete all `att:file.pdf` references in editor
-- **Keep Broken:** Leave references (now broken)
-
-No Cancel button because file transfer already completed. Dialog not shown if attachment had no references
-(silent removal).
-
-**Test Cases:**
-
-| TC        | Description                                             | Status |
-|-----------|---------------------------------------------------------|--------|
-| TC-M22-01 | Import with no modifier copies (source remains)         | ❌      |
-| TC-M22-02 | Import with Ctrl copies (source remains)                | ❌      |
-| TC-M22-03 | Import with Shift moves (source deleted by Explorer)    | ❌      |
-| TC-M22-04 | Export with no modifier copies (attachment remains)     | ❌      |
-| TC-M22-05 | Export with Ctrl copies (attachment remains)            | ❌      |
-| TC-M22-06 | Export with Shift moves (attachment removed)            | ❌      |
-| TC-M22-07 | Export move to target rejecting MOVE falls back to copy | ❌      |
-| TC-M22-08 | Export move with reference shows dialog (no Cancel)     | ❌      |
-| TC-M22-09 | Cursor updates when Shift pressed/released mid-drag     | ❌      |
-| TC-M22-10 | Import Shift+drop onto trashed key rejected             | ❌      |
-| TC-M22-11 | Export move without reference removes silently          | ❌      |
-
----
-
-## M23: Installer
+## M22: Installer
 
 **Goal:** Professional installer with clean uninstall and WebView2 version check.
 
@@ -1134,16 +1067,16 @@ Keva requires WebView2 Runtime with `ICoreWebView2CompositionController5` suppor
 
 | TC        | Description                            | Status |
 |-----------|----------------------------------------|--------|
-| TC-M23-01 | Installer completes without error      | ❌      |
-| TC-M23-02 | App appears in Start Menu              | ❌      |
-| TC-M23-03 | App appears in Add/Remove Programs     | ❌      |
-| TC-M23-04 | Uninstaller removes application files  | ❌      |
-| TC-M23-05 | Uninstaller prompts for data deletion  | ❌      |
-| TC-M23-06 | "Yes" deletes data directory           | ❌      |
-| TC-M23-07 | "No" preserves data directory          | ❌      |
-| TC-M23-08 | Upgrade install preserves user data    | ❌      |
-| TC-M23-09 | Installer detects missing WebView2     | ❌      |
-| TC-M23-10 | Installer detects outdated WebView2    | ❌      |
-| TC-M23-11 | Installer proceeds with valid WebView2 | ❌      |
+| TC-M22-01 | Installer completes without error      | ❌      |
+| TC-M22-02 | App appears in Start Menu              | ❌      |
+| TC-M22-03 | App appears in Add/Remove Programs     | ❌      |
+| TC-M22-04 | Uninstaller removes application files  | ❌      |
+| TC-M22-05 | Uninstaller prompts for data deletion  | ❌      |
+| TC-M22-06 | "Yes" deletes data directory           | ❌      |
+| TC-M22-07 | "No" preserves data directory          | ❌      |
+| TC-M22-08 | Upgrade install preserves user data    | ❌      |
+| TC-M22-09 | Installer detects missing WebView2     | ❌      |
+| TC-M22-10 | Installer detects outdated WebView2    | ❌      |
+| TC-M22-11 | Installer proceeds with valid WebView2 | ❌      |
 
 ---

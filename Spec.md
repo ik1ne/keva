@@ -561,14 +561,6 @@ Duplicate filenames are not allowed within a key.
 | Trashed key        | Rejected                | Rejected                          |
 | Search bar         | Not a drop target       | Not a drop target                 |
 
-**Import Modifier Keys:**
-
-| Modifier | Effect | Description                                    |
-|----------|--------|------------------------------------------------|
-| None     | Copy   | Default behavior, source file unchanged        |
-| Ctrl     | Copy   | Explicit copy, source file unchanged           |
-| Shift    | Move   | Source application deletes file after transfer |
-
 **Drag from Attachments Panel (Internal):**
 
 - Drag file to Monaco → Insert `[filename](att:filename)` at drop position (or `![filename](att:filename)` for images)
@@ -578,31 +570,7 @@ Duplicate filenames are not allowed within a key.
 - Drag file to external application (Explorer, email client, etc.)
 - Multi-select supported: all selected files included in drag
 - Trashed key attachments: drag rejected (cursor shows "not allowed")
-
-**Export Modifier Keys:**
-
-| Modifier | Effect | Description                                       |
-|----------|--------|---------------------------------------------------|
-| None     | Copy   | Default behavior, attachment remains in Keva      |
-| Ctrl     | Copy   | Explicit copy, attachment remains in Keva         |
-| Shift    | Move   | Remove attachment from Keva after successful drop |
-
-**Export Move with References:**
-
-When Shift+drag removes an attachment that was referenced in markdown, a post-drop dialog appears:
-
-```
-┌─────────────────────────────────────────────────────┐
-│ "file.pdf" was referenced in your notes.            │
-│                                                     │
-│ [Remove References]  [Keep Broken]                  │
-└─────────────────────────────────────────────────────┘
-```
-
-- **Remove References:** Delete all `att:filename` references in editor
-- **Keep Broken:** Leave references (now broken)
-
-No Cancel option because file transfer already completed. Dialog not shown if attachment had no references.
+- Copy only: attachment remains in Keva after drag
 
 **Monaco Text Drop:**
 
