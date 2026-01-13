@@ -2,25 +2,23 @@
 //!
 //! Run: cargo run -q --example test_monaco_paste
 
-use std::ffi::c_void;
 use std::sync::OnceLock;
 use webview2_com::Microsoft::Web::WebView2::Win32::{
-    CreateCoreWebView2Environment, ICoreWebView2, ICoreWebView2Controller,
-    ICoreWebView2Environment, ICoreWebView2WebMessageReceivedEventArgs,
+    CreateCoreWebView2Environment, ICoreWebView2, ICoreWebView2Controller, ICoreWebView2Environment,
 };
 use webview2_com::{
     CreateCoreWebView2ControllerCompletedHandler, CreateCoreWebView2EnvironmentCompletedHandler,
-    WebMessageReceivedEventHandler, pwstr_from_str,
+    pwstr_from_str,
 };
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
-use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx, CoTaskMemFree};
+use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, IDC_ARROW, LoadCursorW, MSG,
     PostQuitMessage, RegisterClassW, SW_SHOW, ShowWindow, WM_CLOSE, WM_DESTROY, WNDCLASSW,
     WS_OVERLAPPEDWINDOW,
 };
-use windows::core::{Interface, PWSTR, w};
+use windows::core::w;
 
 static WEBVIEW: OnceLock<WebViewState> = OnceLock::new();
 

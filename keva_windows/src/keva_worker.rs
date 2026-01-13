@@ -12,7 +12,7 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
-    IDYES, IsWindowVisible, MB_ICONERROR, MB_OK, MB_YESNO, MessageBoxW, PostMessageW,
+    IDYES, MB_ICONERROR, MB_OK, MB_YESNO, MessageBoxW, PostMessageW,
 };
 use windows_strings::w;
 
@@ -111,8 +111,18 @@ pub fn start(hwnd: HWND) -> Sender<Request> {
         let keva = match open_keva() {
             Ok(keva) => keva,
             Err(e) => {
-                show_database_error(&e, &get_data_path());
-                panic!("Failed to open database: {e}");
+                let data_path = get_data_path();
+                show_database_error(&e, &data_path);
+
+                // Do not panic in a background thread. Inform the UI and exit the worker loop cleanly.
+                post_response(
+                    hwnd,
+                    OutgoingMessage::CoreInitFailed {
+                        message: format!("Failed to open database: {e}"),
+                        data_dir: data_path.to_string_lossy().into_owned(),
+                    },
+                );
+                return;
             }
         };
 
@@ -177,18 +187,15 @@ fn worker_loop(
         let request = match requests.recv_timeout(timeout) {
             Ok(req) => Some(req),
             Err(RecvTimeoutError::Timeout) => {
-                // Timer fired - only run if window is hidden to avoid UI state issues
-                let is_visible = unsafe { IsWindowVisible(hwnd).as_bool() };
-                if !is_visible {
-                    handle_maintenance(
-                        &mut keva,
-                        &mut search,
-                        &current_query,
-                        false,
-                        gc_config,
-                        hwnd,
-                    );
-                }
+                // Timer fired - scheduled maintenance should not depend on window visibility.
+                handle_maintenance(
+                    &mut keva,
+                    &mut search,
+                    &current_query,
+                    false,
+                    gc_config,
+                    hwnd,
+                );
                 next_maintenance = Instant::now() + MAINTENANCE_INTERVAL;
                 continue;
             }
@@ -208,7 +215,7 @@ fn worker_loop(
                 handle_get_value(&mut keva, &key, hwnd);
             }
             Request::Save { key, content } => {
-                handle_save(&mut keva, &key, &content);
+                handle_save(&mut keva, &key, &content, hwnd);
             }
             Request::Create { key } => {
                 handle_create(&mut keva, &mut search, &key, &current_query, hwnd);
@@ -333,17 +340,11 @@ fn handle_get_value(keva: &mut KevaCore, key_str: &str, hwnd: HWND) {
         })
         .collect();
 
-    let blobs_path = get_data_path()
-        .join("blobs")
-        .to_string_lossy()
-        .replace('\\', "/");
-
     post_response(
         hwnd,
         OutgoingMessage::Value {
             key: key_str.to_string(),
             key_hash,
-            blobs_path,
             content_path: keva.content_path(&key),
             read_only,
             attachments,
@@ -351,12 +352,40 @@ fn handle_get_value(keva: &mut KevaCore, key_str: &str, hwnd: HWND) {
     );
 }
 
-fn handle_save(keva: &mut KevaCore, key_str: &str, content: &str) {
-    if let Ok(key) = Key::try_from(key_str) {
-        let content_path = keva.content_path(&key);
-        if std::fs::write(&content_path, content).is_ok() {
-            let _ = keva.touch(&key, SystemTime::now());
-        }
+fn handle_save(keva: &mut KevaCore, key_str: &str, content: &str, hwnd: HWND) {
+    let Ok(key) = Key::try_from(key_str) else {
+        post_response(
+            hwnd,
+            OutgoingMessage::Error {
+                title: "Save Failed".to_string(),
+                message: format!("Invalid key: '{key_str}'"),
+            },
+        );
+        return;
+    };
+
+    let content_path = keva.content_path(&key);
+    if let Err(e) = std::fs::write(&content_path, content) {
+        post_response(
+            hwnd,
+            OutgoingMessage::Error {
+                title: "Save Failed".to_string(),
+                message: format!("Failed to write content file:\n{}\n\nError: {e}", content_path.display()),
+            },
+        );
+        return;
+    }
+
+    if let Err(e) = keva.touch(&key, SystemTime::now()) {
+        post_response(
+            hwnd,
+            OutgoingMessage::Error {
+                title: "Save Warning".to_string(),
+                message: format!(
+                    "Content was saved, but failed to update timestamp for '{key_str}'.\n\nError: {e}"
+                ),
+            },
+        );
     }
 }
 
@@ -382,6 +411,13 @@ fn handle_add_attachments(
     hwnd: HWND,
 ) {
     let Ok(key) = Key::try_from(key_str) else {
+        post_response(
+            hwnd,
+            OutgoingMessage::Error {
+                title: "Add Attachments Failed".to_string(),
+                message: format!("Invalid key: '{key_str}'"),
+            },
+        );
         return;
     };
 
@@ -390,22 +426,46 @@ fn handle_add_attachments(
         .map(|(path, name)| (PathBuf::from(path), name))
         .collect();
 
-    if keva.add_attachments(&key, files, SystemTime::now()).is_ok() {
-        handle_get_value(keva, key_str, hwnd);
+    if let Err(e) = keva.add_attachments(&key, files, SystemTime::now()) {
+        post_response(
+            hwnd,
+            OutgoingMessage::Error {
+                title: "Add Attachments Failed".to_string(),
+                message: format!("Failed to add attachments for '{key_str}'.\n\nError: {e}"),
+            },
+        );
+        return;
     }
+
+    handle_get_value(keva, key_str, hwnd);
 }
 
 fn handle_remove_attachment(keva: &mut KevaCore, key_str: &str, filename: &str, hwnd: HWND) {
     let Ok(key) = Key::try_from(key_str) else {
+        post_response(
+            hwnd,
+            OutgoingMessage::Error {
+                title: "Remove Attachment Failed".to_string(),
+                message: format!("Invalid key: '{key_str}'"),
+            },
+        );
         return;
     };
 
-    if keva
-        .remove_attachment(&key, filename, SystemTime::now())
-        .is_ok()
-    {
-        handle_get_value(keva, key_str, hwnd);
+    if let Err(e) = keva.remove_attachment(&key, filename, SystemTime::now()) {
+        post_response(
+            hwnd,
+            OutgoingMessage::Error {
+                title: "Remove Attachment Failed".to_string(),
+                message: format!(
+                    "Failed to remove attachment '{filename}' from '{key_str}'.\n\nError: {e}"
+                ),
+            },
+        );
+        return;
     }
+
+    handle_get_value(keva, key_str, hwnd);
 }
 
 fn handle_rename_attachment(
@@ -417,30 +477,70 @@ fn handle_rename_attachment(
     hwnd: HWND,
 ) {
     let Ok(key) = Key::try_from(key_str) else {
+        post_response(
+            hwnd,
+            OutgoingMessage::Error {
+                title: "Rename Attachment Failed".to_string(),
+                message: format!("Invalid key: '{key_str}'"),
+            },
+        );
         return;
     };
 
     // If force, remove destination first
-    if force {
-        let _ = keva.remove_attachment(&key, new_filename, SystemTime::now());
+    if force && let Err(e) = keva.remove_attachment(&key, new_filename, SystemTime::now()) {
+        post_response(
+            hwnd,
+            OutgoingMessage::Error {
+                title: "Rename Attachment Failed".to_string(),
+                message: format!(
+                    "Failed to overwrite existing attachment '{new_filename}' in '{key_str}'.\n\nError: {e}"
+                ),
+            },
+        );
+        return;
     }
 
-    if keva
-        .rename_attachment(&key, old_filename, new_filename, SystemTime::now())
-        .is_ok()
-    {
-        handle_get_value(keva, key_str, hwnd);
+    if let Err(e) = keva.rename_attachment(&key, old_filename, new_filename, SystemTime::now()) {
+        post_response(
+            hwnd,
+            OutgoingMessage::Error {
+                title: "Rename Attachment Failed".to_string(),
+                message: format!(
+                    "Failed to rename attachment '{old_filename}' -> '{new_filename}' in '{key_str}'.\n\nError: {e}"
+                ),
+            },
+        );
+        return;
     }
+
+    handle_get_value(keva, key_str, hwnd);
 }
 
 fn handle_add_files(keva: &mut KevaCore, key_str: &str, files: Vec<(PathBuf, String)>, hwnd: HWND) {
     let Ok(key) = Key::try_from(key_str) else {
+        post_response(
+            hwnd,
+            OutgoingMessage::Error {
+                title: "Add Files Failed".to_string(),
+                message: format!("Invalid key: '{key_str}'"),
+            },
+        );
         return;
     };
 
-    if keva.add_attachments(&key, files, SystemTime::now()).is_ok() {
-        handle_get_value(keva, key_str, hwnd);
+    if let Err(e) = keva.add_attachments(&key, files, SystemTime::now()) {
+        post_response(
+            hwnd,
+            OutgoingMessage::Error {
+                title: "Add Files Failed".to_string(),
+                message: format!("Failed to add files to '{key_str}'.\n\nError: {e}"),
+            },
+        );
+        return;
     }
+
+    handle_get_value(keva, key_str, hwnd);
 }
 
 fn handle_create(
@@ -500,7 +600,7 @@ fn try_rename(
     new_key_str: &str,
     force: bool,
 ) -> Result<RenameResultType, RenameResultType> {
-    let old_key = Key::try_from(old_key_str).map_err(|_| RenameResultType::NotFound)?;
+    let old_key = Key::try_from(old_key_str).map_err(|_| RenameResultType::InvalidKey)?;
     let new_key = Key::try_from(new_key_str).map_err(|_| RenameResultType::InvalidKey)?;
 
     if keva.get(&new_key).ok().flatten().is_some() {
@@ -647,9 +747,10 @@ fn send_search_results(search: &SearchEngine, current_query: &str, hwnd: HWND) {
 }
 
 fn open_keva() -> Result<KevaCore, keva_core::core::error::KevaError> {
-    let config = Config {
-        base_path: get_data_path(),
-    };
+    let base_path = get_data_path();
+    ensure_data_dir_exists_or_exit(&base_path);
+
+    let config = Config { base_path };
     KevaCore::open(config)
 }
 
@@ -708,6 +809,27 @@ fn show_database_error(error: &keva_core::core::error::KevaError, data_path: &st
             w!("Keva - Database Error"),
             MB_ICONERROR | MB_OK,
         );
+    }
+}
+
+fn ensure_data_dir_exists_or_exit(data_path: &std::path::Path) {
+    if let Err(e) = std::fs::create_dir_all(data_path) {
+        let msg = format!(
+            "Failed to create data directory.\n\n\
+             Data directory: {}\n\n\
+             Error: {e}",
+            data_path.display()
+        );
+        let msg_wide: Vec<u16> = msg.encode_utf16().chain(std::iter::once(0)).collect();
+        unsafe {
+            MessageBoxW(
+                None,
+                windows::core::PCWSTR(msg_wide.as_ptr()),
+                w!("Keva - Data Directory Error"),
+                MB_ICONERROR | MB_OK,
+            );
+        }
+        std::process::exit(1);
     }
 }
 

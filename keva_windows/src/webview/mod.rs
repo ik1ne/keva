@@ -38,6 +38,13 @@ pub struct AttachmentInfo {
 pub enum OutgoingMessage {
     /// Signals WebView that core is ready. Hide splash screen.
     CoreReady,
+    /// Signals WebView that core initialization failed.
+    ///
+    /// Frontend should show an error dialog and then request app shutdown.
+    CoreInitFailed {
+        message: String,
+        data_dir: String,
+    },
     Theme {
         theme: String,
     },
@@ -68,8 +75,6 @@ pub enum OutgoingMessage {
     Value {
         key: String,
         key_hash: String,
-        /// Base path to blobs directory for constructing file:// URLs.
-        blobs_path: String,
         #[serde(skip)]
         content_path: std::path::PathBuf,
         read_only: bool,
@@ -95,6 +100,13 @@ pub enum OutgoingMessage {
     },
     /// Show a toast notification to the user.
     Toast {
+        message: String,
+    },
+    /// Show an error dialog to the user.
+    ///
+    /// Use this for UI-visible failures (I/O errors, copy failures, etc.).
+    Error {
+        title: String,
         message: String,
     },
     /// Focus the search bar.
