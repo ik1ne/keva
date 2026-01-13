@@ -303,9 +303,7 @@ html, body {
 }
 
 .key-item:hover .key-actions,
-.key-item.selected .key-actions,
-.trash-item:hover .key-actions,
-.trash-item.selected .key-actions {
+.trash-item:hover .key-actions {
     display: flex;
 }
 
@@ -316,6 +314,7 @@ html, body {
     cursor: pointer;
     padding: 2px var(--space-1);
     font-size: var(--text-sm);
+    line-height: 1;
     border-radius: var(--radius-sm);
     transition: all var(--transition-fast);
 }
@@ -323,6 +322,16 @@ html, body {
 .key-action-btn:hover {
     color: var(--text-primary);
     background: var(--bg-active);
+}
+
+.key-delete-btn,
+.trash-purge {
+    color: var(--danger);
+}
+
+.key-delete-btn:hover,
+.trash-purge:hover {
+    color: var(--danger-hover);
 }
 
 /* === Trash Section === */
@@ -779,9 +788,6 @@ html, body {
     /* Focus indicated by editor cursor */
 }
 
-.attachments-container.pane-active {
-    border-top-color: var(--accent);
-}
 
 .search-bar.pane-inactive .search-input {
     border-color: var(--border-subtle);
@@ -945,6 +951,14 @@ html, body {
 .attachment-action-btn:hover {
     color: var(--text-primary);
     background: var(--bg-active);
+}
+
+.attachment-action-btn[data-action="delete"] {
+    color: var(--danger);
+}
+
+.attachment-action-btn[data-action="delete"]:hover {
+    color: var(--danger-hover);
 }
 
 .attachment-item.editing .attachment-name,

@@ -30,6 +30,24 @@ export const Attachments = {
         const self = this;
         if (!this.dom.container) return;
 
+        this.dom.container.addEventListener('dblclick', function (e) {
+            const item = e.target.closest('.attachment-item');
+            if (!item) return;
+
+            // Don't open during rename
+            if (self.renameState) return;
+
+            // Don't open action buttons
+            if (e.target.closest('.attachment-action-btn')) return;
+
+            // Navigate to att: URL - NavigationStarting handler will intercept and open file
+            const filename = item.dataset.filename;
+            const keyHash = Editor.keyHash;
+            if (keyHash) {
+                window.location = 'att:' + keyHash + '/' + encodeURIComponent(filename);
+            }
+        });
+
         this.dom.container.addEventListener('click', function (e) {
             // Handle action buttons
             const actionBtn = e.target.closest('.attachment-action-btn');

@@ -26,8 +26,8 @@ export const KeyList = {
             return '<div class="key-item" tabindex="-1" data-key="' + Utils.escapeHtml(key) + '" onclick="KeyList.requestSelect(\'' + Utils.escapeJs(key) + '\')">' +
                 '<span class="key-name">' + Utils.escapeHtml(key) + '</span>' +
                 '<div class="key-actions">' +
-                '<button class="key-action-btn" onclick="event.stopPropagation(); KeyList.rename(\'' + Utils.escapeJs(key) + '\')" title="Rename">&#9998;</button>' +
-                '<button class="key-action-btn" onclick="event.stopPropagation(); KeyList.trash(\'' + Utils.escapeJs(key) + '\')" title="Delete">&#128465;</button>' +
+                '<button class="key-action-btn" onclick="event.stopPropagation(); KeyList.rename(\'' + Utils.escapeJs(key) + '\')" title="Rename">\u270F\uFE0F</button>' +
+                '<button class="key-action-btn key-delete-btn" onclick="event.stopPropagation(); KeyList.trash(\'' + Utils.escapeJs(key) + '\')" title="Trash">\u2716</button>' +
                 '</div>' +
                 '</div>';
         }).join('');
@@ -43,11 +43,11 @@ export const KeyList = {
         this.dom.trashCount.textContent = State.data.trashedKeys.length.toString();
         this.dom.trashList.innerHTML = State.data.trashedKeys.map(function (key) {
             return '<div class="trash-item" tabindex="-1" data-key="' + Utils.escapeHtml(key) + '" onclick="KeyList.requestSelect(\'' + Utils.escapeJs(key) + '\')">' +
-                '<span class="trash-icon">T</span>' +
+                '<span class="trash-icon">\uD83D\uDDD1</span>' +
                 '<span class="key-name">' + Utils.escapeHtml(key) + '</span>' +
                 '<div class="key-actions">' +
-                '<button class="key-action-btn" onclick="event.stopPropagation(); KeyList.restore(\'' + Utils.escapeJs(key) + '\')" title="Restore">&#8634;</button>' +
-                '<button class="key-action-btn trash-purge" onclick="event.stopPropagation(); KeyList.purge(\'' + Utils.escapeJs(key) + '\')" title="Delete permanently">&#128465;</button>' +
+                '<button class="key-action-btn" onclick="event.stopPropagation(); KeyList.restore(\'' + Utils.escapeJs(key) + '\')" title="Restore">\u21B6</button>' +
+                '<button class="key-action-btn trash-purge" onclick="event.stopPropagation(); KeyList.purge(\'' + Utils.escapeJs(key) + '\')" title="Delete permanently">\u2716</button>' +
                 '</div>' +
                 '</div>';
         }).join('');
