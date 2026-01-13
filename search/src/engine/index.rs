@@ -14,6 +14,8 @@ pub(crate) struct Index {
     result_limit: usize,
     at_threshold: bool,
     current_pattern: String,
+    /// True when current query uses append optimization (count may be stale until done).
+    is_appending: bool,
 }
 
 impl Index {
@@ -34,6 +36,7 @@ impl Index {
             result_limit,
             at_threshold: false,
             current_pattern: String::new(),
+            is_appending: false,
         };
 
         for key in initial {
@@ -82,9 +85,10 @@ impl Index {
             .reparse(0, pattern, case_matching, normalization, append);
         self.current_pattern = pattern.to_string();
         self.at_threshold = false;
+        self.is_appending = append;
     }
 
-    /// Returns true if results may have changed.
+    /// Returns true if results may have changed and we should send updates.
     pub(crate) fn tick(&mut self) -> bool {
         if self.at_threshold {
             return false;
@@ -92,14 +96,18 @@ impl Index {
 
         let status = self.nucleo.tick(0);
 
-        let result_count = self
-            .nucleo
-            .snapshot()
-            .matched_items(..)
-            .filter(|item| !self.tombstones.contains(item.data))
-            .count();
+        // With append optimization, the count includes stale matches until filtering completes.
+        // Only use count threshold when not appending (fresh search) or when nucleo is done.
+        let count_reliable = !self.is_appending || !status.running;
+        if count_reliable {
+            let result_count = self.nucleo.snapshot().matched_item_count();
+            if result_count >= self.result_limit as u32 {
+                self.at_threshold = true;
+                return true;
+            }
+        }
 
-        if result_count >= self.result_limit || !status.running {
+        if !status.running {
             self.at_threshold = true;
         }
 
@@ -138,6 +146,7 @@ impl Index {
         SearchResults {
             snapshot: self.nucleo.snapshot(),
             tombstones: &self.tombstones,
+            result_limit: self.result_limit,
         }
     }
 }
@@ -145,6 +154,7 @@ impl Index {
 pub struct SearchResults<'a> {
     pub(crate) snapshot: &'a Snapshot<Key>,
     pub(crate) tombstones: &'a HashSet<Key>,
+    pub(crate) result_limit: usize,
 }
 
 impl<'a> SearchResults<'a> {
@@ -153,5 +163,6 @@ impl<'a> SearchResults<'a> {
             .matched_items(..)
             .filter(|item| !self.tombstones.contains(item.data))
             .map(|item| item.data)
+            .take(self.result_limit)
     }
 }

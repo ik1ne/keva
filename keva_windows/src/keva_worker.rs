@@ -243,7 +243,6 @@ fn worker_loop(
                 current_query = query.clone();
                 search.set_query(SearchQuery::Fuzzy(query));
                 search.tick();
-                send_search_results(&search, &current_query, hwnd);
             }
             Request::SearchTick => {
                 if search.tick() {
