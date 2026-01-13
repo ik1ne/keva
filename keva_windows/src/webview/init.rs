@@ -17,7 +17,8 @@ use webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_CHANNEL_SEARCH_K
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW, COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN,
     COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN, COREWEBVIEW2_PERMISSION_KIND_CLIPBOARD_READ,
-    COREWEBVIEW2_PERMISSION_STATE_ALLOW, CreateCoreWebView2EnvironmentWithOptions,
+    COREWEBVIEW2_PERMISSION_KIND_FILE_READ_WRITE, COREWEBVIEW2_PERMISSION_STATE_ALLOW,
+    CreateCoreWebView2EnvironmentWithOptions,
     ICoreWebView2, ICoreWebView2_3, ICoreWebView2AcceleratorKeyPressedEventArgs,
     ICoreWebView2CompositionController5, ICoreWebView2Controller, ICoreWebView2Environment,
     ICoreWebView2Environment3, ICoreWebView2EnvironmentOptions,
@@ -302,7 +303,7 @@ fn setup_webview(
             }
         }
 
-        // Auto-grant clipboard permission (needed for navigator.clipboard.writeText)
+        // Auto-grant permissions for clipboard and file system access
         let mut perm_token = 0i64;
         let _ = webview.add_PermissionRequested(
             &PermissionRequestedEventHandler::create(Box::new(
@@ -310,7 +311,8 @@ fn setup_webview(
                     let Some(args) = args else { return Ok(()) };
                     let mut kind = Default::default();
                     if args.PermissionKind(&mut kind).is_ok()
-                        && kind == COREWEBVIEW2_PERMISSION_KIND_CLIPBOARD_READ
+                        && (kind == COREWEBVIEW2_PERMISSION_KIND_CLIPBOARD_READ
+                            || kind == COREWEBVIEW2_PERMISSION_KIND_FILE_READ_WRITE)
                     {
                         let _ = args.SetState(COREWEBVIEW2_PERMISSION_STATE_ALLOW);
                     }
