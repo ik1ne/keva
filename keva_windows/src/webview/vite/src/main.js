@@ -736,11 +736,9 @@ export const Main = {
                 showToast(msg.message);
             },
 
-            error: function (msg) {
-                Dialog.show({
-                    message: (msg.title ? msg.title + '\n\n' : '') + (msg.message || ''),
-                    buttons: [{label: 'OK', action: 'ok', primary: true, focus: true}]
-                });
+            saveFailed: function (msg) {
+                // Show inline banner with retry - less intrusive than dialog
+                Editor.showWriteError(msg.message);
             },
 
             coreInitFailed: function (msg) {

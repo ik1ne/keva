@@ -356,8 +356,8 @@ fn handle_save(keva: &mut KevaCore, key_str: &str, content: &str, hwnd: HWND) {
     let Ok(key) = Key::try_from(key_str) else {
         post_response(
             hwnd,
-            OutgoingMessage::Error {
-                title: "Save Failed".to_string(),
+            OutgoingMessage::SaveFailed {
+                key: key_str.to_string(),
                 message: format!("Invalid key: '{key_str}'"),
             },
         );
@@ -368,24 +368,17 @@ fn handle_save(keva: &mut KevaCore, key_str: &str, content: &str, hwnd: HWND) {
     if let Err(e) = std::fs::write(&content_path, content) {
         post_response(
             hwnd,
-            OutgoingMessage::Error {
-                title: "Save Failed".to_string(),
-                message: format!("Failed to write content file:\n{}\n\nError: {e}", content_path.display()),
+            OutgoingMessage::SaveFailed {
+                key: key_str.to_string(),
+                message: format!("Write failed: {e}"),
             },
         );
         return;
     }
 
     if let Err(e) = keva.touch(&key, SystemTime::now()) {
-        post_response(
-            hwnd,
-            OutgoingMessage::Error {
-                title: "Save Warning".to_string(),
-                message: format!(
-                    "Content was saved, but failed to update timestamp for '{key_str}'.\n\nError: {e}"
-                ),
-            },
-        );
+        // Content was saved but timestamp update failed - just log, don't show error
+        eprintln!("Warning: failed to update timestamp for '{key_str}': {e}");
     }
 }
 
@@ -413,9 +406,8 @@ fn handle_add_attachments(
     let Ok(key) = Key::try_from(key_str) else {
         post_response(
             hwnd,
-            OutgoingMessage::Error {
-                title: "Add Attachments Failed".to_string(),
-                message: format!("Invalid key: '{key_str}'"),
+            OutgoingMessage::Toast {
+                message: "Failed to add attachments: invalid key".to_string(),
             },
         );
         return;
@@ -429,9 +421,8 @@ fn handle_add_attachments(
     if let Err(e) = keva.add_attachments(&key, files, SystemTime::now()) {
         post_response(
             hwnd,
-            OutgoingMessage::Error {
-                title: "Add Attachments Failed".to_string(),
-                message: format!("Failed to add attachments for '{key_str}'.\n\nError: {e}"),
+            OutgoingMessage::Toast {
+                message: format!("Failed to add attachments: {e}"),
             },
         );
         return;
@@ -444,9 +435,8 @@ fn handle_remove_attachment(keva: &mut KevaCore, key_str: &str, filename: &str, 
     let Ok(key) = Key::try_from(key_str) else {
         post_response(
             hwnd,
-            OutgoingMessage::Error {
-                title: "Remove Attachment Failed".to_string(),
-                message: format!("Invalid key: '{key_str}'"),
+            OutgoingMessage::Toast {
+                message: "Failed to remove attachment: invalid key".to_string(),
             },
         );
         return;
@@ -455,11 +445,8 @@ fn handle_remove_attachment(keva: &mut KevaCore, key_str: &str, filename: &str, 
     if let Err(e) = keva.remove_attachment(&key, filename, SystemTime::now()) {
         post_response(
             hwnd,
-            OutgoingMessage::Error {
-                title: "Remove Attachment Failed".to_string(),
-                message: format!(
-                    "Failed to remove attachment '{filename}' from '{key_str}'.\n\nError: {e}"
-                ),
+            OutgoingMessage::Toast {
+                message: format!("Failed to remove '{filename}': {e}"),
             },
         );
         return;
@@ -479,36 +466,24 @@ fn handle_rename_attachment(
     let Ok(key) = Key::try_from(key_str) else {
         post_response(
             hwnd,
-            OutgoingMessage::Error {
-                title: "Rename Attachment Failed".to_string(),
-                message: format!("Invalid key: '{key_str}'"),
+            OutgoingMessage::Toast {
+                message: "Failed to rename attachment: invalid key".to_string(),
             },
         );
         return;
     };
 
     // If force, remove destination first
-    if force && let Err(e) = keva.remove_attachment(&key, new_filename, SystemTime::now()) {
-        post_response(
-            hwnd,
-            OutgoingMessage::Error {
-                title: "Rename Attachment Failed".to_string(),
-                message: format!(
-                    "Failed to overwrite existing attachment '{new_filename}' in '{key_str}'.\n\nError: {e}"
-                ),
-            },
-        );
-        return;
+    if force {
+        // Ignore errors when removing destination - it might not exist
+        let _ = keva.remove_attachment(&key, new_filename, SystemTime::now());
     }
 
     if let Err(e) = keva.rename_attachment(&key, old_filename, new_filename, SystemTime::now()) {
         post_response(
             hwnd,
-            OutgoingMessage::Error {
-                title: "Rename Attachment Failed".to_string(),
-                message: format!(
-                    "Failed to rename attachment '{old_filename}' -> '{new_filename}' in '{key_str}'.\n\nError: {e}"
-                ),
+            OutgoingMessage::Toast {
+                message: format!("Failed to rename '{old_filename}': {e}"),
             },
         );
         return;
@@ -521,9 +496,8 @@ fn handle_add_files(keva: &mut KevaCore, key_str: &str, files: Vec<(PathBuf, Str
     let Ok(key) = Key::try_from(key_str) else {
         post_response(
             hwnd,
-            OutgoingMessage::Error {
-                title: "Add Files Failed".to_string(),
-                message: format!("Invalid key: '{key_str}'"),
+            OutgoingMessage::Toast {
+                message: "Failed to add files: invalid key".to_string(),
             },
         );
         return;
@@ -532,9 +506,8 @@ fn handle_add_files(keva: &mut KevaCore, key_str: &str, files: Vec<(PathBuf, Str
     if let Err(e) = keva.add_attachments(&key, files, SystemTime::now()) {
         post_response(
             hwnd,
-            OutgoingMessage::Error {
-                title: "Add Files Failed".to_string(),
-                message: format!("Failed to add files to '{key_str}'.\n\nError: {e}"),
+            OutgoingMessage::Toast {
+                message: format!("Failed to add files: {e}"),
             },
         );
         return;

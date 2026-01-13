@@ -99,14 +99,14 @@ pub enum OutgoingMessage {
         launch_at_login: bool,
     },
     /// Show a toast notification to the user.
+    ///
+    /// Use for informational messages and non-critical errors.
     Toast {
         message: String,
     },
-    /// Show an error dialog to the user.
-    ///
-    /// Use this for UI-visible failures (I/O errors, copy failures, etc.).
-    Error {
-        title: String,
+    /// Save operation failed. Frontend should show inline banner with retry.
+    SaveFailed {
+        key: String,
         message: String,
     },
     /// Focus the search bar.

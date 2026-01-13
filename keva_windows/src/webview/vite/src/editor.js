@@ -200,16 +200,17 @@ export const Editor = {
         if (this.dom.editorViewport) this.dom.editorViewport.style.display = 'none';
     },
 
-    showWriteError: function () {
+    showWriteError: function (message) {
         // Show warning banner but keep editor visible so user can copy content
         if (!this.dom.writeError) {
             const banner = document.createElement('div');
             banner.id = 'write-error';
             banner.className = 'write-error-banner';
-            banner.innerHTML = '<span>Failed to save. </span><button onclick="Editor.retrySave()">Retry</button>';
             this.dom.editorContainer.parentNode.insertBefore(banner, this.dom.editorContainer);
             this.dom.writeError = banner;
         }
+        var text = message || 'Failed to save.';
+        this.dom.writeError.innerHTML = '<span>' + text + ' </span><button onclick="Editor.retrySave()">Retry</button>';
         this.dom.writeError.style.display = 'flex';
     },
 
