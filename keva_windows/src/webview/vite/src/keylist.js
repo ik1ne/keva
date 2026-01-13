@@ -27,7 +27,7 @@ export const KeyList = {
                 '<span class="key-name">' + Utils.escapeHtml(key) + '</span>' +
                 '<div class="key-actions">' +
                 '<button class="key-action-btn" onclick="event.stopPropagation(); KeyList.rename(\'' + Utils.escapeJs(key) + '\')" title="Rename">\u270F\uFE0F</button>' +
-                '<button class="key-action-btn key-delete-btn" onclick="event.stopPropagation(); KeyList.trash(\'' + Utils.escapeJs(key) + '\')" title="Trash">\u2716</button>' +
+                '<button class="key-action-btn key-delete-btn" onclick="event.stopPropagation(); KeyList.trash(\'' + Utils.escapeJs(key) + '\')" title="Trash">\uD83D\uDDD1\uFE0F</button>' +
                 '</div>' +
                 '</div>';
         }).join('');
@@ -43,7 +43,7 @@ export const KeyList = {
         this.dom.trashCount.textContent = State.data.trashedKeys.length.toString();
         this.dom.trashList.innerHTML = State.data.trashedKeys.map(function (key) {
             return '<div class="trash-item" tabindex="-1" data-key="' + Utils.escapeHtml(key) + '" onclick="KeyList.requestSelect(\'' + Utils.escapeJs(key) + '\')">' +
-                '<span class="trash-icon">\uD83D\uDDD1</span>' +
+                '<span class="trash-icon">\uD83D\uDDD1\uFE0F</span>' +
                 '<span class="key-name">' + Utils.escapeHtml(key) + '</span>' +
                 '<div class="key-actions">' +
                 '<button class="key-action-btn" onclick="event.stopPropagation(); KeyList.restore(\'' + Utils.escapeJs(key) + '\')" title="Restore">\u21B6</button>' +
