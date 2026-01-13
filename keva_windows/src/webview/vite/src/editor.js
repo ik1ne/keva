@@ -7,6 +7,7 @@ import hljs from 'highlight.js';
 
 import { State } from './state.js';
 import { Api } from './api.js';
+import { SaveBanner } from './save-banner.js';
 
 // Main reference set later to avoid circular dependency
 let Main = null;
@@ -98,7 +99,7 @@ export const Editor = {
         this.currentHandle = handle;
         this.currentKey = key;
         this.isReadOnly = readOnly;
-        this.hideError();
+        SaveBanner.hide();
 
         if (!this.instance) return;
 
@@ -144,7 +145,7 @@ export const Editor = {
             return true;
         } catch (error) {
             console.error('[Editor] Failed to write file:', error);
-            this.showWriteError();
+            SaveBanner.show(null, this.retrySave.bind(this));
             return false;
         } finally {
             this.isSaving = false;
@@ -177,7 +178,7 @@ export const Editor = {
     show: function (content) {
         this.dom.emptyState.style.display = 'none';
         this.dom.editorContainer.style.display = 'block';
-        this.hideError();
+        SaveBanner.hide();
         if (this.instance) {
             this.instance.setValue(content || '');
             this.instance.updateOptions({readOnly: State.data.isSelectedTrashed});
@@ -190,7 +191,7 @@ export const Editor = {
         this.currentKey = null;
         this.keyHash = null;
         this.invalidatePreviewCache();
-        this.hideError();
+        SaveBanner.hide();
     },
 
     showError: function (message) {
@@ -200,28 +201,7 @@ export const Editor = {
         if (this.dom.editorViewport) this.dom.editorViewport.style.display = 'none';
     },
 
-    showWriteError: function (message) {
-        // Show warning banner but keep editor visible so user can copy content
-        if (!this.dom.writeError) {
-            const banner = document.createElement('div');
-            banner.id = 'write-error';
-            banner.className = 'write-error-banner';
-            this.dom.editorContainer.parentNode.insertBefore(banner, this.dom.editorContainer);
-            this.dom.writeError = banner;
-        }
-        var text = message || 'Failed to save.';
-        this.dom.writeError.innerHTML = '<span>' + text + ' </span><button onclick="Editor.retrySave()">Retry</button>';
-        this.dom.writeError.style.display = 'flex';
-    },
-
-    hideError: function () {
-        if (this.dom.writeError) {
-            this.dom.writeError.style.display = 'none';
-        }
-    },
-
     retrySave: async function () {
-        this.hideError();
         State.data.isDirty = true;
         const success = await this.writeToHandle();
         if (success) {
@@ -382,6 +362,3 @@ export const Editor = {
         this.previewCache.html = null;
     }
 };
-
-// Expose retrySave globally for onclick handler
-window.Editor = Editor;

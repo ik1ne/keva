@@ -14,6 +14,7 @@ import {Welcome} from './welcome.js';
 import {showToast} from './toast.js';
 import {Resizer} from './resizer.js';
 import {Dialog} from './dialog.js';
+import {SaveBanner} from './save-banner.js';
 
 export const Main = {
     dom: null,
@@ -116,6 +117,8 @@ export const Main = {
         }, function () {
             Api.send({type: 'ready'});
         });
+
+        SaveBanner.init(this.dom.editorViewport);
 
         // Set up tab handlers
         this.setupTabHandlers();
@@ -737,8 +740,7 @@ export const Main = {
             },
 
             saveFailed: function (msg) {
-                // Show inline banner with retry - less intrusive than dialog
-                Editor.showWriteError(msg.message);
+                SaveBanner.show(msg.message, Editor.retrySave.bind(Editor));
             },
 
             coreInitFailed: function (msg) {
