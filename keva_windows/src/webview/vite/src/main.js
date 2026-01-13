@@ -13,6 +13,7 @@ import {Settings} from './settings.js';
 import {Welcome} from './welcome.js';
 import {showToast} from './toast.js';
 import {Resizer} from './resizer.js';
+import {Dialog} from './dialog.js';
 
 export const Main = {
     dom: null,
@@ -527,9 +528,8 @@ export const Main = {
                 Attachments.render();
                 self.updateAddFilesBtn();
 
-                // Store keyHash and blobsPath for preview rendering
+                // Store keyHash for preview rendering
                 Editor.keyHash = msg.keyHash;
-                Editor.blobsPath = msg.blobsPath;
 
                 // Insert links if pending from drop/paste
                 if (State.data.pendingLinkInsert) {
@@ -734,6 +734,30 @@ export const Main = {
 
             toast: function (msg) {
                 showToast(msg.message);
+            },
+
+            error: function (msg) {
+                Dialog.show({
+                    message: (msg.title ? msg.title + '\n\n' : '') + (msg.message || ''),
+                    buttons: [{label: 'OK', action: 'ok', primary: true, focus: true}]
+                });
+            },
+
+            coreInitFailed: function (msg) {
+                var message = (msg.message || 'Core initialization failed.');
+                if (msg.dataDir) {
+                    message += '\n\nData directory:\n' + msg.dataDir;
+                }
+                Dialog.show({
+                    message: message,
+                    buttons: [{label: 'Quit', action: 'quit', danger: true, primary: true, focus: true}],
+                    onClose: function () {
+                        Api.send({type: 'shutdownAck'});
+                    },
+                    onEscape: function () {
+                        Api.send({type: 'shutdownAck'});
+                    }
+                });
             },
 
             showWelcome: function () {

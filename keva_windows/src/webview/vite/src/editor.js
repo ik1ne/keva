@@ -22,7 +22,6 @@ export const Editor = {
     currentHandle: null,
     currentKey: null,
     keyHash: null,
-    blobsPath: null,
     isReadOnly: false,
     isSaving: false,
     isLargeFile: false,
@@ -315,17 +314,12 @@ export const Editor = {
         });
     },
 
-    // Transform attachment links to file:// URLs for export (e.g., copy HTML)
-    transformForExport: function (html, keyHash, blobsPath) {
-        // Replace virtual host URLs with file:// URLs
-        var virtualHostPattern = /https:\/\/keva-data\.local\/blobs\//g;
-        var filePrefix = 'file:///' + blobsPath + '/';
-        html = html.replace(virtualHostPattern, filePrefix);
-
-        // Replace att: links with file:// URLs
+    // Transform attachment links for export (e.g., copy HTML)
+    transformForExport: function (html, keyHash) {
+        // Convert att: links to virtual host blob URLs so exported HTML renders images.
         var attPattern = /att:([^"]+)/g;
         html = html.replace(attPattern, function (match, path) {
-            return 'file:///' + blobsPath + '/' + path;
+            return 'https://keva-data.local/blobs/' + path;
         });
 
         return html;
@@ -377,10 +371,10 @@ export const Editor = {
         return cleanHtml;
     },
 
-    // Render preview with file:// URLs for external use (copy HTML)
+    // Render preview for external use (copy HTML)
     renderPreviewForExport: function () {
         const html = this.renderPreview();
-        return this.transformForExport(html, this.keyHash, this.blobsPath);
+        return this.transformForExport(html, this.keyHash);
     },
 
     invalidatePreviewCache: function () {
