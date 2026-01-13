@@ -148,7 +148,11 @@ pub fn write_files(hwnd: HWND, paths: &[PathBuf]) -> bool {
         std::ptr::copy_nonoverlapping(data.as_ptr(), ptr as *mut u8, data.len());
         let _ = GlobalUnlock(hglobal);
 
+        // SetClipboardData takes ownership only on success; must free on failure
         let result = SetClipboardData(CF_HDROP.0 as u32, Some(HANDLE(hglobal.0))).is_ok();
+        if !result {
+            hglobal.free();
+        }
         let _ = CloseClipboard();
         result
     }
