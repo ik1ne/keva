@@ -12,7 +12,7 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
-    IDYES, MB_ICONERROR, MB_OK, MB_YESNO, MessageBoxW, PostMessageW,
+    IDYES, IsWindowVisible, MB_ICONERROR, MB_OK, MB_YESNO, MessageBoxW, PostMessageW,
 };
 use windows_strings::w;
 
@@ -187,15 +187,18 @@ fn worker_loop(
         let request = match requests.recv_timeout(timeout) {
             Ok(req) => Some(req),
             Err(RecvTimeoutError::Timeout) => {
-                // Timer fired - scheduled maintenance should not depend on window visibility.
-                handle_maintenance(
-                    &mut keva,
-                    &mut search,
-                    &current_query,
-                    false,
-                    gc_config,
-                    hwnd,
-                );
+                // Only run maintenance when window is hidden to avoid UI jank
+                let is_visible = unsafe { IsWindowVisible(hwnd).as_bool() };
+                if !is_visible {
+                    handle_maintenance(
+                        &mut keva,
+                        &mut search,
+                        &current_query,
+                        false,
+                        gc_config,
+                        hwnd,
+                    );
+                }
                 next_maintenance = Instant::now() + MAINTENANCE_INTERVAL;
                 continue;
             }
