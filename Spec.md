@@ -403,7 +403,7 @@ When dragging files over the attachments pane:
 **Features:**
 
 - File list with name, size, type icon
-- Thumbnail preview for images (png, jpg, jpeg, gif, webp, svg)
+- Thumbnail preview for images (png, jpg, jpeg, gif, webp)
 - Multi-select with Shift/Ctrl click
 - [X] button: Remove attachment (shows confirmation dialog)
 - [+ Add files]: File picker or drop zone
@@ -557,7 +557,6 @@ Duplicate filenames are not allowed within a key.
 |--------------------|-------------------------|-----------------------------------|
 | Right top (Monaco) | Insert at drop position | Add to attachments + insert links |
 | Right bottom       | No action               | Add to attachments                |
-| Key in left pane   | N/A                     | Add to that key's attachments     |
 | Trashed key        | Rejected                | Rejected                          |
 | Search bar         | Not a drop target       | Not a drop target                 |
 
@@ -577,11 +576,6 @@ Duplicate filenames are not allowed within a key.
 - Internal drag: Monaco built-in (`dragAndDrop: true`)
 - External text drop: DOM drop event → Monaco executeEdits
 - External text drag-out: Not supported (Monaco limitation - use copy-paste instead)
-
-**Large File Handling:**
-
-- Threshold applies **per file**, not total
-- Multiple files: each checked individually against threshold
 
 ### First-Run Experience
 
@@ -699,19 +693,9 @@ never fires.
 
 If the configured shortcut is already registered by another application:
 
-1. Show notification: "Shortcut Ctrl+Alt+K is in use by another application"
-2. Open settings dialog with shortcut field focused
-3. User must choose a different shortcut or resolve the conflict externally
-4. Alternative: User can double-click .exe to show window if hotkey unavailable
-
-### Database Errors
-
-| Error              | User Message                                       | Recovery Action                    |
-|--------------------|----------------------------------------------------|------------------------------------|
-| Database corrupted | "Database is corrupted. Create new database?"      | Backup old, create fresh           |
-| Disk full          | "Disk is full. Cannot save changes."               | Retry after user frees space       |
-| File locked        | "Database is locked by another process."           | Offer to force-quit other instance |
-| Permission denied  | "Cannot access data directory. Check permissions." | Show path, suggest fix             |
+- Show notification: "Shortcut [shortcut] is in use by another application"
+- User must open settings manually to choose a different shortcut
+- Alternative: User can double-click .exe to show window if hotkey unavailable
 
 ### Copy Failure
 
