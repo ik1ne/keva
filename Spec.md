@@ -74,12 +74,26 @@ Attachments are referenced in Markdown using filename-based links:
 - Only one instance runs at a time
 - Relaunch app (double-click) → activates existing instance's window
 
-### Windows Uninstaller
+### Windows Installation
 
-- Remove startup registry entry (`HKCU\...\Run`)
-- Remove application files
-- Prompt: "Delete all Keva data?" (config, database, blobs)
-    - Yes: Remove data directory
+**Requirements:**
+
+- Windows 10 or later (64-bit)
+- Microsoft Edge WebView2 Runtime
+
+**Installation:**
+
+- Installs to `%ProgramFiles%\Keva`
+- Creates Start Menu shortcut
+- Registers in Add/Remove Programs
+- WebView2 Runtime installed automatically if missing
+
+**Uninstallation:**
+
+- Removes startup registry entry (`HKCU\...\Run`) if present
+- Removes application files
+- Prompts: "Delete all Keva data?" (config, database, blobs)
+    - Yes: Remove `%LOCALAPPDATA%\keva`
     - No: Leave data directory intact
 
 ## 4. GUI

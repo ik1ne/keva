@@ -30,7 +30,7 @@ and includes test cases for verification.
 | M19  | Monaco Bundling        | Embed resources, single exe                   | ✅      |
 | M20  | Layout Polish          | Resizable panes with draggable dividers       | ✅      |
 | M21  | Copy Keybindings       | Configurable copy shortcuts, conflict detect  | ✅      |
-| M22  | Installer              | WiX/MSIX, uninstaller, WebView2 version check | ❌      |
+| M22  | Installer              | WiX v4, WebView2 bootstrapper, GitHub Actions | ❌      |
 
 ---
 
@@ -1033,50 +1033,168 @@ shortcuts and global hotkey.
 
 ## M22: Installer
 
-**Goal:** Professional installer with clean uninstall and WebView2 version check.
+**Goal:** Professional MSI installer with automatic WebView2 provisioning and GitHub Actions release pipeline.
 
-**Description:** Create Windows installer (WiX or MSIX). Install to Program Files. Register in Add/Remove Programs.
-Uninstaller removes files and optionally data. Verify WebView2 Runtime meets minimum version requirement.
+**Description:** WiX v4 installer with silent WebView2 bootstrapper, C# custom actions for uninstall cleanup, and
+automated releases triggered by Cargo.toml version changes.
 
-**Installation:**
+### Technology Stack
 
-- Install to `%ProgramFiles%\Keva`
-- Add to Start Menu
-- Register uninstaller in registry
+| Component             | Choice                                     |
+|-----------------------|--------------------------------------------|
+| Installer framework   | WiX Toolset v4                             |
+| Custom actions        | C# (.NET) with WixToolset.Dtf.CustomAction |
+| WebView2 provisioning | Microsoft Evergreen Bootstrapper (silent)  |
+| Build automation      | GitHub Actions                             |
+| Distribution          | GitHub Releases                            |
 
-**WebView2 Version Check:**
+### Product Configuration
 
-Keva requires WebView2 Runtime with `ICoreWebView2CompositionController5` support (DragStarting API).
+| Property      | Value                        |
+|---------------|------------------------------|
+| Product Name  | Keva                         |
+| Install Path  | `%ProgramFiles%\Keva`        |
+| Architecture  | x64 only                     |
+| Install Scope | Per-machine (requires admin) |
+| UpgradeCode   | Single GUID (never change)   |
 
-| Scenario                    | Installer Behavior                          |
-|-----------------------------|---------------------------------------------|
-| WebView2 not installed      | Prompt to download/install WebView2 Runtime |
-| WebView2 version too old    | Prompt to update via Windows Update         |
-| WebView2 version sufficient | Continue installation                       |
+### Version Management
 
-**Uninstallation:**
+- **Source of truth:** `keva_windows/Cargo.toml`
+- **Format:** Semantic versioning (MAJOR.MINOR.PATCH)
+- **MSI constraint:** Three-part version only, no prerelease suffixes
 
-1. Remove startup registry entry
-2. Remove application files
-3. Prompt: "Delete all Keva data?"
+### Installer UI
 
+WixUI_Minimal flow:
+
+1. Welcome screen
+2. License agreement (RTF format)
+3. Install button
+4. Progress bar
+5. Finish screen
+
+### WebView2 Handling
+
+Silent installation via Microsoft Evergreen Bootstrapper:
+
+1. Bootstrapper runs during install sequence
+2. If WebView2 missing/outdated: downloads and installs silently
+3. If WebView2 present and sufficient: skips
+4. If bootstrapper fails (offline, blocked): show error, abort install
+
+### Custom Actions (C#)
+
+**1. Remove Startup Registry (Uninstall):**
+
+- Trigger: Always on uninstall
+- Action: Delete `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\Keva`
+- Rationale: App manages this entry; installer must clean up regardless of origin
+
+**2. Data Deletion Prompt (Uninstall):**
+
+- Trigger: Always on uninstall
+- Action: MessageBox "Delete all Keva data?"
 - Yes: Remove `%LOCALAPPDATA%\keva`
 - No: Leave data intact
 
+### Upgrade Behavior
+
+- WiX `MajorUpgrade` element handles version upgrades
+- Detects previous version via UpgradeCode GUID
+- Uninstalls old version, installs new
+- User data preserved (`%LOCALAPPDATA%\keva` outside install path)
+- Downgrades blocked with error message
+
+### GitHub Actions Pipeline
+
+**Trigger:**
+
+```yaml
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:  # Manual trigger for testing
+```
+
+**Release Flow:**
+
+1. Push to `main` branch
+2. Extract version from `keva_windows/Cargo.toml`
+3. Check if GitHub Release `v{version}` exists
+4. If exists → skip build
+5. If not exists:
+
+- Build release exe
+- Build C# custom action DLL
+- Build MSI
+- Create GitHub Release with auto-tag
+- Upload `keva-{version}-x64.msi`
+
+**Manual Dispatch:**
+
+- Builds MSI from current Cargo.toml version
+- Uploads as artifact only (no GitHub Release)
+- For pre-release testing
+
+### File Structure
+
+```
+keva/
+├── keva_windows/
+│   └── Cargo.toml          # Version source of truth
+├── installer/
+│   ├── Keva.wxs            # WiX product definition
+│   ├── LICENSE.rtf         # License for installer UI
+│   └── CustomActions/
+│       ├── CustomActions.csproj
+│       └── Actions.cs
+└── .github/
+    └── workflows/
+        └── release.yml
+```
+
+### Code Signing
+
+Deferred for initial release. Plan:
+
+1. Apply to SignPath Foundation (free for open source)
+2. If approved: integrate into CI
+3. Without signing: Windows SmartScreen shows "Unknown publisher" warning
+
+### Deferred Features
+
+| Feature                   | Reason                           |
+|---------------------------|----------------------------------|
+| Code signing              | Apply to SignPath in parallel    |
+| Auto-update               | Implement properly with UI later |
+| Silent install (`/quiet`) | Not needed for MVP               |
+
+### Test Procedure
+
+1. Use manual dispatch to build test MSI
+2. Test on clean Windows VM or Windows Sandbox
+3. Verify scenarios pass
+4. Bump version in Cargo.toml, push to main
+5. CI creates release automatically
+
 **Test Cases:**
 
-| TC        | Description                            | Status |
-|-----------|----------------------------------------|--------|
-| TC-M22-01 | Installer completes without error      | ❌      |
-| TC-M22-02 | App appears in Start Menu              | ❌      |
-| TC-M22-03 | App appears in Add/Remove Programs     | ❌      |
-| TC-M22-04 | Uninstaller removes application files  | ❌      |
-| TC-M22-05 | Uninstaller prompts for data deletion  | ❌      |
-| TC-M22-06 | "Yes" deletes data directory           | ❌      |
-| TC-M22-07 | "No" preserves data directory          | ❌      |
-| TC-M22-08 | Upgrade install preserves user data    | ❌      |
-| TC-M22-09 | Installer detects missing WebView2     | ❌      |
-| TC-M22-10 | Installer detects outdated WebView2    | ❌      |
-| TC-M22-11 | Installer proceeds with valid WebView2 | ❌      |
+| TC        | Description                                     | Status |
+|-----------|-------------------------------------------------|--------|
+| TC-M22-01 | Installer completes without error               | ❌      |
+| TC-M22-02 | App appears in Start Menu                       | ❌      |
+| TC-M22-03 | App appears in Add/Remove Programs              | ❌      |
+| TC-M22-04 | Uninstaller removes application files           | ❌      |
+| TC-M22-05 | Uninstaller prompts for data deletion           | ❌      |
+| TC-M22-06 | "Yes" deletes data directory                    | ❌      |
+| TC-M22-07 | "No" preserves data directory                   | ❌      |
+| TC-M22-08 | Upgrade install preserves user data             | ❌      |
+| TC-M22-09 | WebView2 missing → bootstrapper installs it     | ❌      |
+| TC-M22-10 | WebView2 present → fast install                 | ❌      |
+| TC-M22-11 | Startup registry removed on uninstall           | ❌      |
+| TC-M22-12 | Push to main with new version creates release   | ❌      |
+| TC-M22-13 | Push to main with same version skips release    | ❌      |
+| TC-M22-14 | Manual dispatch builds artifact without release | ❌      |
 
 ---
