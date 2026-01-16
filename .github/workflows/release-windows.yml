@@ -2,7 +2,7 @@ name: Release Windows
 
 on:
   push:
-    branches: [main]
+    branches: [ main ]
   workflow_dispatch:
     inputs:
       skip_release:
@@ -34,13 +34,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $tag = "windows-v${{ steps.version.outputs.version }}"
-          $exists = gh release view $tag 2>$null
+          $null = gh release view $tag 2>&1
           if ($LASTEXITCODE -eq 0) {
             echo "exists=true" >> $env:GITHUB_OUTPUT
             echo "Release $tag already exists, skipping build"
           } else {
             echo "exists=false" >> $env:GITHUB_OUTPUT
             echo "Release $tag does not exist, proceeding with build"
+            exit 0  # Explicitly exit with success
           }
 
       - name: Setup Rust
