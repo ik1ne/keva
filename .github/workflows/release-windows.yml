@@ -22,7 +22,7 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          $version = ./scripts/windows/extract-version.ps1
+          $version = ./platforms/windows/scripts/extract-version.ps1
           echo "version=$version" >> $env:GITHUB_OUTPUT
           echo "Version: $version"
 
@@ -62,21 +62,28 @@ jobs:
           cache: 'pnpm'
           cache-dependency-path: keva_windows/src/webview/vite/pnpm-lock.yaml
 
-      - name: Build
+      - name: Build application
         if: steps.check_release.outputs.exists != 'true'
         shell: pwsh
-        run: ./scripts/windows/build.ps1 -Release
+        run: ./platforms/windows/scripts/build.ps1
 
-      - name: Upload artifact
+      - name: Setup .NET
+        if: steps.check_release.outputs.exists != 'true'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build installer
+        if: steps.check_release.outputs.exists != 'true'
+        shell: pwsh
+        run: ./platforms/windows/scripts/build-installer.ps1
+
+      - name: Upload MSI artifact
         if: steps.check_release.outputs.exists != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: keva-windows-${{ steps.version.outputs.version }}-x64
-          path: target/release/keva_windows.exe
-
-      # TODO: Build MSI installer (Phase 3)
-      # - name: Build installer
-      #   run: ./scripts/windows/build-installer.ps1
+          name: keva-windows-${{ steps.version.outputs.version }}-x64-msi
+          path: dist/windows/keva-windows-${{ steps.version.outputs.version }}-x64.msi
 
       # TODO: Uncomment when ready for actual releases
       # - name: Create release
@@ -89,9 +96,9 @@ jobs:
       #   run: |
       #     $version = "${{ steps.version.outputs.version }}"
       #     $tag = "windows-v$version"
+      #     $msi = "dist/windows/keva-windows-$version-x64.msi"
       #
-      #     # For now, upload exe directly. Will be MSI in Phase 3.
       #     gh release create $tag `
       #       --title "Keva Windows v$version" `
       #       --generate-notes `
-      #       target/release/keva_windows.exe#keva-windows-$version-x64.exe
+      #       "$msi#keva-windows-$version-x64.msi"

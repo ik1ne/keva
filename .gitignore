@@ -1,4 +1,9 @@
 target
+dist
+
+# WiX build cache
+.wix/
+**/obj/
 
 # WebView frontend build
 keva_windows/src/webview/vite/node_modules

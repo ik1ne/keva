@@ -1,0 +1,19 @@
+<Project Sdk="WixToolset.Sdk/6.0.2">
+
+  <PropertyGroup>
+    <OutputType>Package</OutputType>
+    <Platform>x64</Platform>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Pass MSBuild properties to WiX as preprocessor variables -->
+    <DefineConstants>Version=$(Version);ExePath=$(ExePath);DistPath=$(DistPath);CustomActionsPath=$(CustomActionsPath)</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.UI.wixext" Version="6.0.2" />
+    <PackageReference Include="WixToolset.Util.wixext" Version="6.0.2" />
+  </ItemGroup>
+
+
+</Project>

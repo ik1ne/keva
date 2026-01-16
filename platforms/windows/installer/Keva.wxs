@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  Keva Windows Installer (MSI)
+  WiX v6
+
+  UpgradeCode GUID must NEVER change - it identifies the product family for upgrades.
+-->
+
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Package Name="Keva"
+           Manufacturer="JungChul Shin"
+           Version="$(Version)"
+           UpgradeCode="efc1e472-1cb4-4e18-a884-46d38320d154"
+           Scope="perMachine"
+           Language="1033"
+           Codepage="1252">
+
+    <!-- Require Windows 10 or later via registry (CurrentMajorVersionNumber only exists on Win10+) -->
+    <Property Id="WINDOWSMAJORVERSION" Secure="yes">
+      <RegistrySearch Id="WindowsMajorVersion"
+                      Root="HKLM"
+                      Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion"
+                      Name="CurrentMajorVersionNumber"
+                      Type="raw" />
+    </Property>
+    <Launch Condition="WINDOWSMAJORVERSION" Message="Keva requires Windows 10 or later." />
+
+    <!-- Upgrade handling: remove previous versions, block downgrades -->
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Keva is already installed."
+                  Schedule="afterInstallInitialize" />
+
+    <!-- Use WixUI_Minimal for simple install flow -->
+    <ui:WixUI Id="WixUI_Minimal" />
+    <WixVariable Id="WixUILicenseRtf" Value="LICENSE.rtf" />
+
+    <!-- Media for cabinet files -->
+    <Media Id="1" Cabinet="keva.cab" EmbedCab="yes" />
+
+    <!-- Launch Keva checkbox on exit dialog -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch Keva" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <Property Id="WixShellExecTarget" Value="[#KevaExe]" />
+
+    <!-- Installation directory structure -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Keva">
+        <Component Id="MainExecutable" Guid="a1099f9e-cfcb-4032-83ba-efeceef39bc0" Bitness="always64">
+          <File Id="KevaExe" Source="$(ExePath)" Name="keva_windows.exe" KeyPath="yes" />
+        </Component>
+        <!-- WebView UI files (Vite build output) -->
+        <Directory Id="DistFolder" Name="dist" />
+      </Directory>
+    </StandardDirectory>
+
+    <!-- Start Menu shortcut -->
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="Keva">
+        <Component Id="StartMenuShortcut" Guid="358b17ab-145f-4fc2-b6ad-6a5144d4ca73">
+          <Shortcut Id="ApplicationStartMenuShortcut"
+                    Name="Keva"
+                    Description="Local key-value store for knowledge management"
+                    Target="[#KevaExe]"
+                    WorkingDirectory="INSTALLFOLDER" />
+          <RemoveFolder Id="CleanupStartMenuFolder" On="uninstall" />
+          <RegistryValue Root="HKCU" Key="Software\Keva" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <!-- Installer marker for upgrade detection -->
+    <Component Id="InstallerMarker" Guid="2aee32aa-7ce4-4f2b-90ea-c45ea04a1f86" Directory="INSTALLFOLDER">
+      <RegistryValue Root="HKLM" Key="Software\Keva" Name="InstallerMarker" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <!-- Feature definition -->
+    <Feature Id="ProductFeature" Title="Keva" Level="1">
+      <ComponentRef Id="MainExecutable" />
+      <ComponentGroupRef Id="DistFiles" />
+      <ComponentRef Id="StartMenuShortcut" />
+      <ComponentRef Id="InstallerMarker" />
+    </Feature>
+
+    <!-- Custom Actions DLL -->
+    <Binary Id="CustomActionsDll" SourceFile="$(CustomActionsPath)" />
+
+    <!-- Remove startup registry entries on uninstall (enumerates HKEY_USERS as SYSTEM) -->
+    <CustomAction Id="RemoveStartupRegistry"
+                  BinaryRef="CustomActionsDll"
+                  DllEntry="RemoveStartupRegistry"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <InstallExecuteSequence>
+      <Custom Action="RemoveStartupRegistry" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot;" />
+    </InstallExecuteSequence>
+
+    <!-- Launch application after install (UI extension provides WixShellExec) -->
+    <CustomAction Id="LaunchApplication"
+                  DllEntry="WixShellExec"
+                  Impersonate="yes"
+                  BinaryRef="Wix4UtilCA_X86" />
+
+    <!-- Launch Keva when user clicks Finish with checkbox checked -->
+    <UI>
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchApplication"
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" />
+    </UI>
+
+  </Package>
+
+  <!-- WebView UI files (Vite build output) -->
+  <Fragment>
+    <ComponentGroup Id="DistFiles" Directory="DistFolder">
+      <Files Include="$(DistPath)\**" />
+    </ComponentGroup>
+  </Fragment>
+
+</Wix>

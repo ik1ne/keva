@@ -5,34 +5,34 @@
 .DESCRIPTION
     Builds the WebView frontend (Vite/pnpm) and Rust application.
 
-.PARAMETER Release
-    Build in release mode (default: debug).
+.PARAMETER Debug
+    Build in debug mode (default: release).
 
 .PARAMETER SkipFrontend
     Skip frontend build (use existing dist/).
 
 .EXAMPLE
     ./build.ps1
-    # Debug build
+    # Release build for distribution
 
 .EXAMPLE
-    ./build.ps1 -Release
-    # Release build for distribution
+    ./build.ps1 -Debug
+    # Debug build
 #>
 
 param(
-    [switch]$Release,
+    [switch]$Debug,
     [switch]$SkipFrontend
 )
 
 $ErrorActionPreference = "Stop"
 
-$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "../..")
+$repoRoot = Resolve-Path (Join-Path $PSScriptRoot "../../..")
 $viteDir = Join-Path $repoRoot "keva_windows/src/webview/vite"
 
 Write-Host "=== Keva Windows Build ===" -ForegroundColor Cyan
 Write-Host "Repository: $repoRoot"
-Write-Host "Mode: $(if ($Release) { 'Release' } else { 'Debug' })"
+Write-Host "Mode: $(if ($Debug) { 'Debug' } else { 'Release' })"
 Write-Host ""
 
 # Step 1: Build frontend
@@ -62,8 +62,9 @@ Write-Host "=== Building Rust Application ===" -ForegroundColor Cyan
 
 Push-Location $repoRoot
 try {
-    $cargoArgs = @("build", "-p", "keva_windows")
-    if ($Release) {
+    # Distribution builds use the 'dist' feature for exe-relative paths
+    $cargoArgs = @("build", "-p", "keva_windows", "--features", "dist")
+    if (-not $Debug) {
         $cargoArgs += "--release"
     }
 
@@ -71,7 +72,7 @@ try {
     & cargo @cargoArgs
     if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }
 
-    $profile = if ($Release) { "release" } else { "debug" }
+    $profile = if ($Debug) { "debug" } else { "release" }
     $exePath = Join-Path $repoRoot "target/$profile/keva_windows.exe"
 
     if (Test-Path $exePath) {

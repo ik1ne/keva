@@ -21,7 +21,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$cargoTomlPath = Join-Path $PSScriptRoot "../../keva_windows/Cargo.toml"
+$cargoTomlPath = Join-Path $PSScriptRoot "../../../keva_windows/Cargo.toml"
 $cargoTomlPath = Resolve-Path $cargoTomlPath
 
 if (-not (Test-Path $cargoTomlPath)) {

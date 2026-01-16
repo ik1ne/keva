@@ -18,13 +18,12 @@ use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW, COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN,
     COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN, COREWEBVIEW2_PERMISSION_KIND_CLIPBOARD_READ,
     COREWEBVIEW2_PERMISSION_KIND_FILE_READ_WRITE, COREWEBVIEW2_PERMISSION_STATE_ALLOW,
-    CreateCoreWebView2EnvironmentWithOptions,
-    ICoreWebView2, ICoreWebView2_3, ICoreWebView2AcceleratorKeyPressedEventArgs,
-    ICoreWebView2CompositionController5, ICoreWebView2Controller, ICoreWebView2Environment,
-    ICoreWebView2Environment3, ICoreWebView2EnvironmentOptions,
-    ICoreWebView2PermissionRequestedEventArgs, ICoreWebView2Settings3, ICoreWebView2Settings4,
-    ICoreWebView2Settings5, ICoreWebView2Settings6, ICoreWebView2Settings8, ICoreWebView2Settings9,
-    ICoreWebView2WebMessageReceivedEventArgs,
+    CreateCoreWebView2EnvironmentWithOptions, ICoreWebView2, ICoreWebView2_3,
+    ICoreWebView2AcceleratorKeyPressedEventArgs, ICoreWebView2CompositionController5,
+    ICoreWebView2Controller, ICoreWebView2Environment, ICoreWebView2Environment3,
+    ICoreWebView2EnvironmentOptions, ICoreWebView2PermissionRequestedEventArgs,
+    ICoreWebView2Settings3, ICoreWebView2Settings4, ICoreWebView2Settings5, ICoreWebView2Settings6,
+    ICoreWebView2Settings8, ICoreWebView2Settings9, ICoreWebView2WebMessageReceivedEventArgs,
 };
 use webview2_com::{
     AcceleratorKeyPressedEventHandler, CoreWebView2EnvironmentOptions,
@@ -211,10 +210,16 @@ fn create_composition_controller(
 
                     // Map virtual host to dist directory (Vite build output)
                     if let Ok(wv3) = wv.webview.cast::<ICoreWebView2_3>() {
-                        // UI files
+                        // UI files: use exe-relative path for dist builds, source path for dev
+                        let dist_path = get_dist_path();
+                        let dist_path_wide: Vec<u16> = dist_path
+                            .to_string_lossy()
+                            .encode_utf16()
+                            .chain(std::iter::once(0))
+                            .collect();
                         let _ = wv3.SetVirtualHostNameToFolderMapping(
                             w!("keva.local"),
-                            w!("../../keva_windows/src/webview/vite/dist"),
+                            PWSTR(dist_path_wide.as_ptr() as *mut u16),
                             COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW,
                         );
 
@@ -523,5 +528,26 @@ fn handle_accelerator_key(
                 LPARAM(0),
             );
         }
+    }
+}
+
+/// Returns the path to the WebView UI dist folder.
+///
+/// - Distribution builds (`--features dist`): `{exe_dir}/dist`
+/// - Development builds: `{exe_dir}/../../keva_windows/src/webview/vite/dist`
+fn get_dist_path() -> std::path::PathBuf {
+    let exe_path = std::env::current_exe().expect("Failed to get executable path");
+    let exe_dir = exe_path
+        .parent()
+        .expect("Failed to get executable directory");
+
+    #[cfg(feature = "dist")]
+    {
+        exe_dir.join("dist")
+    }
+
+    #[cfg(not(feature = "dist"))]
+    {
+        exe_dir.join("../../keva_windows/src/webview/vite/dist")
     }
 }

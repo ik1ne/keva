@@ -30,7 +30,7 @@ and includes test cases for verification.
 | M19  | Monaco Bundling        | Embed resources, single exe                   | ✅      |
 | M20  | Layout Polish          | Resizable panes with draggable dividers       | ✅      |
 | M21  | Copy Keybindings       | Configurable copy shortcuts, conflict detect  | ✅      |
-| M22  | Installer              | WiX v4, WebView2 bootstrapper, GitHub Actions | ❌      |
+| M22  | Installer              | WiX v6, WebView2 bootstrapper, GitHub Actions | ❌      |
 
 ---
 
@@ -1033,20 +1033,18 @@ shortcuts and global hotkey.
 
 ## M22: Installer
 
-**Goal:** Professional MSI installer with automatic WebView2 provisioning and GitHub Actions release pipeline.
+**Goal:** Professional MSI installer with GitHub Actions release pipeline.
 
-**Description:** WiX v4 installer with silent WebView2 bootstrapper, C# custom actions for uninstall cleanup, and
-automated releases triggered by Cargo.toml version changes.
+**Description:** WiX v6 installer with C# custom actions and automated releases triggered by Cargo.toml version changes.
 
 ### Technology Stack
 
-| Component             | Choice                                     |
-|-----------------------|--------------------------------------------|
-| Installer framework   | WiX Toolset v4                             |
-| Custom actions        | C# (.NET) with WixToolset.Dtf.CustomAction |
-| WebView2 provisioning | Microsoft Evergreen Bootstrapper (silent)  |
-| Build automation      | GitHub Actions                             |
-| Distribution          | GitHub Releases                            |
+| Component           | Choice                             |
+|---------------------|------------------------------------|
+| Installer framework | WiX Toolset v6                     |
+| Custom actions      | C# (.NET 4.72) with WixToolset.Dtf |
+| Build automation    | GitHub Actions                     |
+| Distribution        | GitHub Releases                    |
 
 ### Product Configuration
 
@@ -1074,29 +1072,14 @@ WixUI_Minimal flow:
 4. Progress bar
 5. Finish screen
 
-### WebView2 Handling
+### Custom Actions
 
-Silent installation via Microsoft Evergreen Bootstrapper:
+**Remove Startup Registry (Uninstall):**
 
-1. Bootstrapper runs during install sequence
-2. If WebView2 missing/outdated: downloads and installs silently
-3. If WebView2 present and sufficient: skips
-4. If bootstrapper fails (offline, blocked): show error, abort install
-
-### Custom Actions (C#)
-
-**1. Remove Startup Registry (Uninstall):**
-
-- Trigger: Always on uninstall
-- Action: Delete `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\Keva`
-- Rationale: App manages this entry; installer must clean up regardless of origin
-
-**2. Data Deletion Prompt (Uninstall):**
-
-- Trigger: Always on uninstall
-- Action: MessageBox "Delete all Keva data?"
-- Yes: Remove `%LOCALAPPDATA%\keva`
-- No: Leave data intact
+- C# custom action enumerating `HKEY_USERS` to access all users' HKCU hives
+- Runs as SYSTEM with `Impersonate="no"` (required for HKEY_USERS access)
+- Removes `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run\Keva` for all users
+- Rationale: Per-machine uninstall runs as SYSTEM; SYSTEM's HKCU ≠ user's HKCU
 
 ### Upgrade Behavior
 
@@ -1142,16 +1125,22 @@ on:
 ```
 keva/
 ├── keva_windows/
-│   └── Cargo.toml          # Version source of truth
-├── installer/
-│   ├── Keva.wxs            # WiX product definition
-│   ├── LICENSE.rtf         # License for installer UI
-│   └── CustomActions/
-│       ├── CustomActions.csproj
-│       └── Actions.cs
+│   └── Cargo.toml              # Version source of truth
+├── platforms/windows/
+│   ├── installer/
+│   │   ├── Keva.wxs            # WiX product definition
+│   │   ├── Keva.wixproj        # WiX project file
+│   │   ├── LICENSE.rtf         # License for installer UI
+│   │   └── CustomActions/
+│   │       ├── CustomActions.csproj
+│   │       └── Actions.cs
+│   └── scripts/
+│       ├── build.ps1           # Build application
+│       ├── build-installer.ps1 # Build MSI installer
+│       └── extract-version.ps1 # Extract version from Cargo.toml
 └── .github/
     └── workflows/
-        └── release.yml
+        └── release-windows.yml
 ```
 
 ### Code Signing
@@ -1186,15 +1175,10 @@ Deferred for initial release. Plan:
 | TC-M22-02 | App appears in Start Menu                       | ❌      |
 | TC-M22-03 | App appears in Add/Remove Programs              | ❌      |
 | TC-M22-04 | Uninstaller removes application files           | ❌      |
-| TC-M22-05 | Uninstaller prompts for data deletion           | ❌      |
-| TC-M22-06 | "Yes" deletes data directory                    | ❌      |
-| TC-M22-07 | "No" preserves data directory                   | ❌      |
-| TC-M22-08 | Upgrade install preserves user data             | ❌      |
-| TC-M22-09 | WebView2 missing → bootstrapper installs it     | ❌      |
-| TC-M22-10 | WebView2 present → fast install                 | ❌      |
-| TC-M22-11 | Startup registry removed on uninstall           | ❌      |
-| TC-M22-12 | Push to main with new version creates release   | ❌      |
-| TC-M22-13 | Push to main with same version skips release    | ❌      |
-| TC-M22-14 | Manual dispatch builds artifact without release | ❌      |
+| TC-M22-05 | Upgrade install preserves user data             | ❌      |
+| TC-M22-06 | Startup registry removed on uninstall           | ❌      |
+| TC-M22-07 | Push to main with new version creates release   | ❌      |
+| TC-M22-08 | Push to main with same version skips release    | ❌      |
+| TC-M22-09 | Manual dispatch builds artifact without release | ❌      |
 
 ---
