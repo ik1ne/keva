@@ -71,7 +71,6 @@ use crate::types::config::SavedConfig;  // Types not in parent
 
 mod create {
     use super::*;  // Gets items from tests.rs level
-    use common::{create_test_db, make_key};
 
     #[test]
     fn test_create() { ... }
@@ -85,7 +84,7 @@ Extract raw `wparam`/`lparam` values into named variables that explain their mea
 ```rust
 // Good - reader understands the values without looking up Windows docs
 let cursor_x = (lparam.0 & 0xFFFF) as i16 as i32;
-let cursor_y = ((lparam.0 >> 16) & 0xFFFF) as i16 as i32;
+let cursor_y = ((lparam.0 > > 16) & 0xFFFF) as i16 as i32;
 let previous_window = lparam.0;
 let virtual_key = wparam.0 as u16;
 
