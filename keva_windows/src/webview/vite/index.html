@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+</head>
+<body>
+<div class="splash" id="splash">
+    <div class="splash-text">Loading database...</div>
+</div>
+<div class="welcome-overlay hidden" id="welcome-overlay">
+    <div class="welcome-panel">
+        <div class="welcome-title">Welcome to Keva</div>
+        <div class="welcome-body">
+            <p>Keva stores your notes and files locally.</p>
+            <p>Press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>K</kbd> anytime to open this window.</p>
+        </div>
+        <div class="welcome-option">
+            <input type="checkbox" id="welcome-launch-at-login" checked>
+            <label for="welcome-launch-at-login">Launch Keva at login</label>
+        </div>
+        <div class="welcome-footer">
+            <button class="welcome-btn" id="welcome-get-started">Get Started</button>
+        </div>
+    </div>
+</div>
+<div class="settings-overlay hidden" id="settings-overlay">
+    <div class="settings-panel">
+        <div class="settings-header">
+            <span>Settings</span>
+            <button class="settings-close" id="settings-close">&times;</button>
+        </div>
+        <div class="settings-body">
+            <div class="settings-nav">
+                <button class="settings-nav-item active" data-category="general">General</button>
+                <button class="settings-nav-item" data-category="shortcuts">Shortcuts</button>
+                <button class="settings-nav-item" data-category="lifecycle">Lifecycle</button>
+            </div>
+            <div class="settings-content">
+                <div class="settings-category" id="settings-general">
+                    <div class="settings-row">
+                        <label>Theme</label>
+                        <div class="segmented-control" id="setting-theme" data-value="system">
+                            <button class="segment" data-value="light">Light</button>
+                            <button class="segment" data-value="dark">Dark</button>
+                            <button class="segment active" data-value="system">System</button>
+                        </div>
+                    </div>
+                    <div class="settings-row">
+                        <label>Launch at login</label>
+                        <input type="checkbox" id="setting-launch-at-login">
+                    </div>
+                    <div class="settings-row">
+                        <label>Show tray icon</label>
+                        <input type="checkbox" id="setting-show-tray-icon">
+                    </div>
+                </div>
+                <div class="settings-category hidden" id="settings-shortcuts">
+                    <div class="settings-row">
+                        <label>Global shortcut</label>
+                        <div class="hotkey-wrapper">
+                            <input type="text" id="setting-global-shortcut" class="hotkey-input" readonly placeholder="Click to set shortcut">
+                            <button class="hotkey-clear" id="setting-global-shortcut-clear" title="Clear shortcut" disabled>&times;</button>
+                        </div>
+                    </div>
+                    <div class="settings-row">
+                        <label>Focus Search</label>
+                        <div class="hotkey-wrapper">
+                            <input type="text" id="setting-focus-search" class="hotkey-input" readonly placeholder="Click to set shortcut">
+                            <button class="hotkey-clear" id="setting-focus-search-clear" title="Clear shortcut" disabled>&times;</button>
+                        </div>
+                    </div>
+                    <div class="settings-row">
+                        <label>Copy Markdown</label>
+                        <div class="hotkey-wrapper">
+                            <input type="text" id="setting-copy-markdown" class="hotkey-input" readonly placeholder="Click to set shortcut">
+                            <button class="hotkey-clear" id="setting-copy-markdown-clear" title="Clear shortcut" disabled>&times;</button>
+                        </div>
+                    </div>
+                    <div class="settings-row">
+                        <label>Copy HTML</label>
+                        <div class="hotkey-wrapper">
+                            <input type="text" id="setting-copy-html" class="hotkey-input" readonly placeholder="Click to set shortcut">
+                            <button class="hotkey-clear" id="setting-copy-html-clear" title="Clear shortcut" disabled>&times;</button>
+                        </div>
+                    </div>
+                    <div class="settings-row">
+                        <label>Copy Files</label>
+                        <div class="hotkey-wrapper">
+                            <input type="text" id="setting-copy-files" class="hotkey-input" readonly placeholder="Click to set shortcut">
+                            <button class="hotkey-clear" id="setting-copy-files-clear" title="Clear shortcut" disabled>&times;</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="settings-category hidden" id="settings-lifecycle">
+                    <div class="settings-row">
+                        <label>Trash after (days)</label>
+                        <input type="text" id="setting-trash-ttl" inputmode="numeric">
+                    </div>
+                    <div class="settings-row">
+                        <label>Purge after (days)</label>
+                        <input type="text" id="setting-purge-ttl" inputmode="numeric">
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="settings-footer">
+            <button class="settings-btn settings-btn-cancel" id="settings-cancel">Cancel</button>
+            <button class="settings-btn settings-btn-save" id="settings-save">Save</button>
+        </div>
+    </div>
+</div>
+<div class="app">
+    <div class="search-bar">
+        <div class="search-icon">&#128269;</div>
+        <input type="text" class="search-input" id="search-input" placeholder="Search keys..." autocomplete="off">
+        <button class="search-action-btn" id="search-action-btn" title="Create or edit">&#43;</button>
+    </div>
+    <div class="main-content">
+        <div class="left-pane" id="left-pane">
+            <div class="key-list" id="key-list"></div>
+            <div class="trash-section" id="trash-section">
+                <div class="trash-header">Trash (<span id="trash-count">0</span>)</div>
+                <div id="trash-list"></div>
+            </div>
+        </div>
+        <div class="divider-v" id="divider-v"></div>
+        <div class="right-pane">
+            <div class="editor-tabs" id="editor-tabs">
+                <button class="tab active" data-tab="edit">Edit</button>
+                <button class="tab" data-tab="preview">Preview</button>
+            </div>
+            <div class="editor-viewport">
+                <div id="editor-container"></div>
+                <div id="preview-container" class="hidden"></div>
+            </div>
+            <div class="divider-h" id="divider-h"></div>
+            <div class="empty-state" id="empty-state">Select a key or type to search</div>
+            <div id="attachments-container" class="attachments-container">
+                <div class="attachments-header">
+                    <span>Attachments</span>
+                    <button class="add-files-btn" id="add-files-btn" title="Add files">+</button>
+                </div>
+                <div class="attachments-list" id="attachments-list"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>

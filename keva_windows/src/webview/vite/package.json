@@ -1,0 +1,21 @@
+{
+  "name": "keva-webview",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "dompurify": "^3.2.4",
+    "highlight.js": "^11.11.1",
+    "keyboard-event-to-string": "^2.1.0",
+    "markdown-it": "^14.1.0",
+    "monaco-editor": "^0.55.1"
+  },
+  "devDependencies": {
+    "vite": "^6.0.7",
+    "vite-plugin-monaco-editor": "^1.1.0"
+  }
+}

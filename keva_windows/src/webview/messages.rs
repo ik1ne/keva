@@ -1,0 +1,95 @@
+//! WebView message types.
+
+use serde::Deserialize;
+
+/// Messages from WebView to native.
+#[derive(Debug, Deserialize)]
+#[serde(
+    tag = "type",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum IncomingMessage {
+    Ready,
+    Search {
+        query: String,
+    },
+    Select {
+        key: String,
+    },
+    Save {
+        key: String,
+        content: String,
+    },
+    Create {
+        key: String,
+    },
+    Rename {
+        old_key: String,
+        new_key: String,
+        force: bool,
+    },
+    Trash {
+        key: String,
+    },
+    Restore {
+        key: String,
+    },
+    Purge {
+        key: String,
+    },
+    Touch {
+        key: String,
+    },
+    Hide,
+    ShutdownAck,
+    ShutdownBlocked,
+    OpenFilePicker {
+        key: String,
+    },
+    /// Add attachments with target filenames.
+    AddAttachments {
+        key: String,
+        /// Each file: [source_path, target_filename]
+        files: Vec<(String, String)>,
+    },
+    /// Remove an attachment from a key.
+    RemoveAttachment {
+        key: String,
+        filename: String,
+    },
+    /// Rename an attachment.
+    RenameAttachment {
+        key: String,
+        old_filename: String,
+        new_filename: String,
+        /// If true, overwrite existing file with same name.
+        force: bool,
+    },
+    /// Add files from drop or clipboard using cached paths.
+    /// Files are referenced by index (matching order in JS event).
+    AddFiles {
+        key: String,
+        /// Each file: [index, resolved_filename]
+        files: Vec<(usize, String)>,
+    },
+    /// Copy files to clipboard.
+    CopyFiles {
+        key: String,
+        filenames: Vec<String>,
+    },
+    /// Save settings from WebView settings panel.
+    SaveSettings {
+        config: keva_core::types::AppConfig,
+        /// Written to registry, not config file.
+        launch_at_login: bool,
+    },
+    /// User completed the welcome dialog.
+    WelcomeResult {
+        launch_at_login: bool,
+    },
+    /// Temporarily suspend global hotkey (for hotkey capture in settings).
+    SuspendGlobalHotkey,
+    /// Resume global hotkey after capture.
+    ResumeGlobalHotkey,
+}

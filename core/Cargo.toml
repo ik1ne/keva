@@ -4,7 +4,16 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+blake3 = { version = "1", features = ["serde"] }
+fast_image_resize = { version = "5", features = ["image"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp"] }
+nutype = { version = "0.6", features = ["new_unchecked", "serde"] }
+postcard = { version = "1", features = ["alloc"] }
+redb = "3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2.0"
+toml = "0.9"
 
 [dev-dependencies]
 tempfile = "3.10"
-
