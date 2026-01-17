@@ -15,6 +15,11 @@ use windows::Win32::UI::HiDpi::{
 use windows::core::Result;
 
 fn main() -> Result<()> {
+    if std::env::args().any(|arg| arg == "--unregister-startup") {
+        platform::startup::disable_launch_at_login();
+        std::process::exit(0);
+    }
+
     let _ = unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
 
     let start_minimized = std::env::args().any(|arg| arg == "--minimized");

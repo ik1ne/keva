@@ -76,27 +76,6 @@ if (-not (Test-Path $outputDir)) {
     New-Item -ItemType Directory -Path $outputDir | Out-Null
 }
 
-# Build custom actions
-Write-Host "=== Building Custom Actions ===" -ForegroundColor Cyan
-
-$customActionsDir = Join-Path $installerDir "CustomActions"
-Push-Location $customActionsDir
-try {
-    dotnet build -c Release -o "$outputDir/CustomActions"
-    if ($LASTEXITCODE -ne 0) { throw "dotnet build failed" }
-    Write-Host "Custom actions built." -ForegroundColor Green
-}
-finally {
-    Pop-Location
-}
-Write-Host ""
-
-$customActionsDll = Join-Path $outputDir "CustomActions/CustomActions.CA.dll"
-if (-not (Test-Path $customActionsDll)) {
-    Write-Error "Custom actions DLL not found: $customActionsDll"
-    exit 1
-}
-
 # Build WiX installer
 Write-Host "=== Building WiX Installer ===" -ForegroundColor Cyan
 
@@ -112,7 +91,6 @@ try {
         -p:Version=$Version `
         -p:ExePath=$ExePath `
         -p:DistPath=$distPath `
-        -p:CustomActionsPath=$customActionsDll `
         -o $outputDir
 
     if ($LASTEXITCODE -ne 0) { throw "wix build failed" }

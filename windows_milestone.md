@@ -1171,12 +1171,12 @@ Deferred for initial release. Plan:
 
 | TC        | Description                                     | Status |
 |-----------|-------------------------------------------------|--------|
-| TC-M22-01 | Installer completes without error               | ❌      |
-| TC-M22-02 | App appears in Start Menu                       | ❌      |
-| TC-M22-03 | App appears in Add/Remove Programs              | ❌      |
-| TC-M22-04 | Uninstaller removes application files           | ❌      |
-| TC-M22-05 | Upgrade install preserves user data             | ❌      |
-| TC-M22-06 | Startup registry removed on uninstall           | ❌      |
+| TC-M22-01 | Installer completes without error               | ✅      |
+| TC-M22-02 | App appears in Start Menu                       | ✅      |
+| TC-M22-03 | App appears in Add/Remove Programs              | ✅      |
+| TC-M22-04 | Uninstaller removes application files           | ✅      |
+| TC-M22-05 | Upgrade install preserves user data             | ✅      |
+| TC-M22-06 | Startup registry removed on uninstall           | ✅      |
 | TC-M22-07 | Push to main with new version creates release   | ❌      |
 | TC-M22-08 | Push to main with same version skips release    | ❌      |
 | TC-M22-09 | Manual dispatch builds artifact without release | ❌      |

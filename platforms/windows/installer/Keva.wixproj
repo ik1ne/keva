@@ -3,17 +3,17 @@
   <PropertyGroup>
     <OutputType>Package</OutputType>
     <Platform>x64</Platform>
+    <SuppressIces>ICE38;ICE64;ICE60;ICE69;ICE91</SuppressIces>
   </PropertyGroup>
 
   <PropertyGroup>
     <!-- Pass MSBuild properties to WiX as preprocessor variables -->
-    <DefineConstants>Version=$(Version);ExePath=$(ExePath);DistPath=$(DistPath);CustomActionsPath=$(CustomActionsPath)</DefineConstants>
+    <DefineConstants>Version=$(Version);ExePath=$(ExePath);DistPath=$(DistPath)</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="WixToolset.UI.wixext" Version="6.0.2" />
     <PackageReference Include="WixToolset.Util.wixext" Version="6.0.2" />
   </ItemGroup>
-
 
 </Project>

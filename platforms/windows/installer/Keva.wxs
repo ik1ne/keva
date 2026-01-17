@@ -2,31 +2,22 @@
 
 <!--
   Keva Windows Installer (MSI)
-  WiX v6
+  WiX v6 - Per-User Installation
 
   UpgradeCode GUID must NEVER change - it identifies the product family for upgrades.
 -->
 
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
-     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
 
   <Package Name="Keva"
            Manufacturer="JungChul Shin"
            Version="$(Version)"
            UpgradeCode="efc1e472-1cb4-4e18-a884-46d38320d154"
-           Scope="perMachine"
+           Scope="perUser"
            Language="1033"
            Codepage="1252">
-
-    <!-- Require Windows 10 or later via registry (CurrentMajorVersionNumber only exists on Win10+) -->
-    <Property Id="WINDOWSMAJORVERSION" Secure="yes">
-      <RegistrySearch Id="WindowsMajorVersion"
-                      Root="HKLM"
-                      Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion"
-                      Name="CurrentMajorVersionNumber"
-                      Type="raw" />
-    </Property>
-    <Launch Condition="WINDOWSMAJORVERSION" Message="Keva requires Windows 10 or later." />
 
     <!-- Upgrade handling: remove previous versions, block downgrades -->
     <MajorUpgrade DowngradeErrorMessage="A newer version of Keva is already installed."
@@ -44,14 +35,15 @@
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
     <Property Id="WixShellExecTarget" Value="[#KevaExe]" />
 
-    <!-- Installation directory structure -->
-    <StandardDirectory Id="ProgramFiles64Folder">
-      <Directory Id="INSTALLFOLDER" Name="Keva">
-        <Component Id="MainExecutable" Guid="a1099f9e-cfcb-4032-83ba-efeceef39bc0" Bitness="always64">
-          <File Id="KevaExe" Source="$(ExePath)" Name="keva_windows.exe" KeyPath="yes" />
-        </Component>
-        <!-- WebView UI files (Vite build output) -->
-        <Directory Id="DistFolder" Name="dist" />
+    <!-- Installation directory: %LOCALAPPDATA%\Programs\Keva -->
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="LocalProgramsFolder" Name="Programs">
+        <Directory Id="INSTALLFOLDER" Name="Keva">
+          <Component Id="MainExecutable" Guid="a1099f9e-cfcb-4032-83ba-efeceef39bc0">
+            <File Id="KevaExe" Source="$(ExePath)" Name="keva_windows.exe" KeyPath="yes" />
+          </Component>
+          <Directory Id="DistFolder" Name="dist" />
+        </Directory>
       </Directory>
     </StandardDirectory>
 
@@ -70,9 +62,9 @@
       </Directory>
     </StandardDirectory>
 
-    <!-- Installer marker for upgrade detection -->
+    <!-- Installer marker -->
     <Component Id="InstallerMarker" Guid="2aee32aa-7ce4-4f2b-90ea-c45ea04a1f86" Directory="INSTALLFOLDER">
-      <RegistryValue Root="HKLM" Key="Software\Keva" Name="InstallerMarker" Type="integer" Value="1" KeyPath="yes" />
+      <RegistryValue Root="HKCU" Key="Software\Keva" Name="InstallerMarker" Type="integer" Value="1" KeyPath="yes" />
     </Component>
 
     <!-- Feature definition -->
@@ -83,26 +75,34 @@
       <ComponentRef Id="InstallerMarker" />
     </Feature>
 
-    <!-- Custom Actions DLL -->
-    <Binary Id="CustomActionsDll" SourceFile="$(CustomActionsPath)" />
-
-    <!-- Remove startup registry entries on uninstall (enumerates HKEY_USERS as SYSTEM) -->
-    <CustomAction Id="RemoveStartupRegistry"
-                  BinaryRef="CustomActionsDll"
-                  DllEntry="RemoveStartupRegistry"
-                  Execute="deferred"
-                  Impersonate="no"
-                  Return="ignore" />
-
-    <InstallExecuteSequence>
-      <Custom Action="RemoveStartupRegistry" Before="RemoveFiles" Condition="REMOVE=&quot;ALL&quot;" />
-    </InstallExecuteSequence>
-
-    <!-- Launch application after install (UI extension provides WixShellExec) -->
+    <!-- Launch application after install -->
     <CustomAction Id="LaunchApplication"
                   DllEntry="WixShellExec"
                   Impersonate="yes"
                   BinaryRef="Wix4UtilCA_X86" />
+
+    <!--
+      Unregister startup entry on uninstall.
+      Calls the exe with unregister-startup flag. (double dashes)
+      Skipped during upgrade (UPGRADINGPRODUCTCODE) to preserve user preference.
+    -->
+    <SetProperty Id="UnregisterStartup"
+                 Value="&quot;[INSTALLFOLDER]keva_windows.exe&quot; --unregister-startup"
+                 Before="UnregisterStartup"
+                 Sequence="execute" />
+
+    <CustomAction Id="UnregisterStartup"
+                  DllEntry="WixQuietExec"
+                  BinaryRef="Wix4UtilCA_X86"
+                  Execute="deferred"
+                  Impersonate="yes"
+                  Return="ignore" />
+
+    <!-- Schedule custom actions -->
+    <InstallExecuteSequence>
+      <Custom Action="UnregisterStartup" Before="RemoveFiles"
+              Condition="Installed AND REMOVE=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+    </InstallExecuteSequence>
 
     <!-- Launch Keva when user clicks Finish with checkbox checked -->
     <UI>
@@ -118,5 +118,4 @@
       <Files Include="$(DistPath)\**" />
     </ComponentGroup>
   </Fragment>
-
 </Wix>
