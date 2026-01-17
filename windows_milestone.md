@@ -30,7 +30,7 @@ and includes test cases for verification.
 | M19  | Monaco Bundling        | Embed resources, single exe                   | ✅      |
 | M20  | Layout Polish          | Resizable panes with draggable dividers       | ✅      |
 | M21  | Copy Keybindings       | Configurable copy shortcuts, conflict detect  | ✅      |
-| M22  | Installer              | WiX v6, WebView2 bootstrapper, GitHub Actions | ❌      |
+| M22  | Installer              | WiX v6, WebView2 bootstrapper, GitHub Actions | ✅      |
 
 ---
 
@@ -1177,7 +1177,7 @@ Deferred for initial release. Plan:
 | TC-M22-04 | Uninstaller removes application files           | ✅      |
 | TC-M22-05 | Upgrade install preserves user data             | ✅      |
 | TC-M22-06 | Startup registry removed on uninstall           | ✅      |
-| TC-M22-07 | Push to main with new version creates release   | ❌      |
+| TC-M22-07 | Push to main with new version creates release   | ✅      |
 | TC-M22-08 | Push to main with same version skips release    | ✅      |
 | TC-M22-09 | Manual dispatch builds artifact without release | ✅      |
 
