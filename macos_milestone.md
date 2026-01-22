@@ -8,7 +8,7 @@ and includes test cases for verification.
 | #   | Milestone            | Description                                     | Status |
 |-----|----------------------|-------------------------------------------------|--------|
 | M1  | Initial Setup        | Xcode project or Swift package, app launches    | ✅      |
-| M2  | Borderless Window    | NSWindow without titlebar, resize, hide/show    | ⚠️      |
+| M2  | Borderless Window    | NSWindow without titlebar, resize, hide/show    | ✅      |
 | M3  | Single Instance      | macOS automatic + applicationShouldHandleReopen | ✅      |
 | M4  | Menu Bar Item        | NSStatusItem, click toggles, right-click menu   | ✅      |
 | M5  | Load Frontend        | Move vite output, WKURLSchemeHandler for assets | ❌      |
@@ -142,7 +142,7 @@ for drag/drop workflows.
 | TC-M2-08 | Corner drag resizes diagonally             | ✅      |
 | TC-M2-09 | Hidden window can be shown again           | ✅      |
 | TC-M2-10 | Text is crisp at Retina scaling            | N/A    |
-| TC-M2-11 | Hide restores focus to previous app        | ❌      |
+| TC-M2-11 | Hide restores focus to previous app        | ✅      |
 
 **Notes:**
 

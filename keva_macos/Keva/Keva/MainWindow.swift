@@ -2,6 +2,7 @@ import Cocoa
 
 class MainWindow: NSWindow, NSWindowDelegate {
     private var eventMonitor: Any?
+    private var previousApp: NSRunningApplication?
 
     init() {
         super.init(
@@ -18,26 +19,29 @@ class MainWindow: NSWindow, NSWindowDelegate {
         center()
 
         setupKeyEventMonitor()
+        setupWorkspaceNotifications()
     }
 
     deinit {
         if let monitor = eventMonitor {
             NSEvent.removeMonitor(monitor)
         }
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        orderOut(nil)
+        hide()
         return false
     }
 
     func show() {
         makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.activate()
     }
 
     func hide() {
         orderOut(nil)
+        restorePreviousApp()
     }
 
     func toggle() {
@@ -45,6 +49,31 @@ class MainWindow: NSWindow, NSWindowDelegate {
             hide()
         } else {
             show()
+        }
+    }
+
+    private func restorePreviousApp() {
+        guard let app = previousApp, !app.isTerminated else { return }
+        app.activate()
+    }
+
+    private func setupWorkspaceNotifications() {
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(applicationDidActivate(_:)),
+            name: NSWorkspace.didActivateApplicationNotification,
+            object: nil
+        )
+    }
+
+    /// Track app activations to capture the previous app for focus restore.
+    @objc private func applicationDidActivate(_ notification: Notification) {
+        guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else {
+            return
+        }
+        // Store the activated app if it's not ourselves
+        if app.bundleIdentifier != Bundle.main.bundleIdentifier {
+            previousApp = app
         }
     }
 
