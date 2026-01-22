@@ -135,6 +135,13 @@ Attachments are referenced in Markdown using filename-based links:
 - Search text preserved from previous session
 - Text is selected (as if Ctrl+A pressed)
 - User can type to replace or use arrow keys to preserve existing text
+- Focus restored to previously active pane (search bar, left pane, right top, or right bottom)
+
+**Focus Restore on Hide:**
+
+- Every time Keva window gains focus, capture the previously focused application
+- When Keva window is hidden (Esc), restore focus to that captured application
+- Example: App A → Keva (capture A) → click App B → click Keva (capture B) → Esc → restores B
 
 ### Tray Icon Behavior
 
