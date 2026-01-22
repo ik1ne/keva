@@ -109,6 +109,7 @@ without destroying it. Window stays on top to enable drag/drop from other apps.
 - `SetProcessDpiAwarenessContext` for DPI awareness
 - Minimum window size: 400×300 logical pixels (enforced via `WM_GETMINMAXINFO`)
 - Aero Snap support requires `WM_NCHITTEST` returning appropriate `HT*` values
+- Focus restore: `WM_ACTIVATE` captures previous foreground window, restored on hide
 
 **Test Cases:**
 
@@ -131,6 +132,11 @@ without destroying it. Window stays on top to enable drag/drop from other apps.
 | TC-M1-15 | Aero Snap to corner (quarter-screen)       | ✅      |
 | TC-M1-16 | Drag from maximized restores window        | ✅      |
 | TC-M1-17 | Resize border scales correctly at 150% DPI | ✅      |
+| TC-M1-18 | Hide restores focus to previous app        | ✅      |
+
+**Notes:**
+
+- TC-M1-18: App A → Keva → click App B → click Keva → Esc → B regains focus (not A)
 
 ---
 
