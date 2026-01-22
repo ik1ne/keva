@@ -534,7 +534,7 @@ fn handle_accelerator_key(
 /// Returns the path to the WebView UI dist folder.
 ///
 /// - Distribution builds (`--features dist`): `{exe_dir}/dist`
-/// - Development builds: `{exe_dir}/../../keva_windows/src/webview/vite/dist`
+/// - Development builds: `{exe_dir}/../../frontend/dist`
 fn get_dist_path() -> std::path::PathBuf {
     let exe_path = std::env::current_exe().expect("Failed to get executable path");
     let exe_dir = exe_path
@@ -548,6 +548,6 @@ fn get_dist_path() -> std::path::PathBuf {
 
     #[cfg(not(feature = "dist"))]
     {
-        exe_dir.join("../../keva_windows/src/webview/vite/dist")
+        exe_dir.join("../../frontend/dist")
     }
 }

@@ -57,9 +57,9 @@ $ExePath = Resolve-Path $ExePath
 $buildType = if ($Debug) { "Debug" } else { "Release" }
 
 # WebView UI dist folder (Vite build output)
-$distPath = Join-Path $repoRoot "keva_windows/src/webview/vite/dist"
+$distPath = Join-Path $repoRoot "frontend/dist"
 if (-not (Test-Path $distPath)) {
-    Write-Error "Dist folder not found: $distPath`nRun 'pnpm build' in keva_windows/src/webview/vite first."
+    Write-Error "Dist folder not found: $distPath`nRun 'pnpm build' in frontend first."
     exit 1
 }
 $distPath = Resolve-Path $distPath

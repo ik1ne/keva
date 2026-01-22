@@ -1,3 +1,3 @@
 @echo off
-cd /d "%~dp0src\webview\vite"
+cd /d "%~dp0..\frontend"
 pnpm install && pnpm build

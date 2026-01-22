@@ -6,8 +6,8 @@ dist
 **/obj/
 
 # WebView frontend build
-keva_windows/src/webview/vite/node_modules
-keva_windows/src/webview/vite/dist
+frontend/node_modules
+frontend/dist
 
 # XCode
 xcuserdata/

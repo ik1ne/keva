@@ -28,7 +28,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "../../..")
-$viteDir = Join-Path $repoRoot "keva_windows/src/webview/vite"
+$viteDir = Join-Path $repoRoot "frontend"
 
 Write-Host "=== Keva Windows Build ===" -ForegroundColor Cyan
 Write-Host "Repository: $repoRoot"

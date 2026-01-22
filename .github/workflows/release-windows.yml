@@ -62,7 +62,7 @@ jobs:
         with:
           node-version: '22'
           cache: 'pnpm'
-          cache-dependency-path: keva_windows/src/webview/vite/pnpm-lock.yaml
+          cache-dependency-path: frontend/pnpm-lock.yaml
 
       - name: Build application
         if: steps.check_release.outputs.exists != 'true'
