@@ -7,7 +7,7 @@ and includes test cases for verification.
 
 | #   | Milestone            | Description                                     | Status |
 |-----|----------------------|-------------------------------------------------|--------|
-| M1  | Initial Setup        | Xcode project or Swift package, app launches    | ❌      |
+| M1  | Initial Setup        | Xcode project or Swift package, app launches    | ✅      |
 | M2  | Borderless Window    | NSWindow without titlebar, resize, hide/show    | ❌      |
 | M3  | Single Instance      | NSRunningApplication check, activate existing   | ❌      |
 | M4  | Menu Bar Item        | NSStatusItem, click toggles, right-click menu   | ❌      |
@@ -64,7 +64,7 @@ then terminates cleanly. Establishes project structure for subsequent milestones
 
 **Implementation Notes:**
 
-- Swift 5.9+ with macOS 14 (Sonoma) deployment target
+- Swift 5.9+ with macOS 15 (Sequoia) deployment target, supporting macOS 26 (Tahoe)
 - AppKit-based (not SwiftUI) for fine-grained control
 - Bundle identifier: `com.keva.app` (or similar)
 - Project structure prepared for Rust integration via swift-bridge or manual FFI
@@ -87,10 +87,17 @@ keva_macos/
 
 | TC       | Description                       | Status |
 |----------|-----------------------------------|--------|
-| TC-M1-01 | App launches without crash        | ❌      |
-| TC-M1-02 | App appears in Dock during launch | ❌      |
-| TC-M1-03 | App terminates cleanly            | ❌      |
-| TC-M1-04 | Console shows no errors           | ❌      |
+| TC-M1-01 | App launches without crash        | ✅      |
+| TC-M1-02 | App appears in Dock during launch | ✅      |
+| TC-M1-03 | App terminates cleanly            | ⚠️     |
+| TC-M1-04 | Console shows no errors           | ⚠️     |
+
+**Notes:**
+
+- TC-M1-03: Cmd+Q unresponsive (no menu bar), dock context menu "Quit" works
+- TC-M1-04: Warning:
+  `-[NSApplication restoreWindowWithIdentifier:state:completionHandler:] Unable to find className=(null)` — harmless
+  window restoration message
 
 ---
 
