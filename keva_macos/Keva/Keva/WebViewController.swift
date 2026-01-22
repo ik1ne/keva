@@ -5,6 +5,9 @@ import WebKit
 class WebViewController: NSViewController, WKNavigationDelegate, WKScriptMessageHandler {
     private(set) var webView: WKWebView!
     private var schemeHandler: KevaSchemeHandler!
+    private var appearanceObserver: NSKeyValueObservation?
+    private var lastMouseDownEvent: NSEvent?
+    private var mouseMonitor: Any?
 
     override func loadView() {
         let distPath = Self.findDistPath()
@@ -26,6 +29,9 @@ class WebViewController: NSViewController, WKNavigationDelegate, WKScriptMessage
         webView = WKWebView(frame: .zero, configuration: config)
         webView.autoresizingMask = [.width, .height]
         view = webView
+
+        setupAppearanceObserver()
+        setupMouseMonitor()
     }
 
     override func viewDidLoad() {
@@ -34,6 +40,13 @@ class WebViewController: NSViewController, WKNavigationDelegate, WKScriptMessage
 
         if let url = URL(string: "\(KevaSchemeHandler.scheme)://index.html") {
             webView.load(URLRequest(url: url))
+        }
+    }
+
+    deinit {
+        appearanceObserver?.invalidate()
+        if let monitor = mouseMonitor {
+            NSEvent.removeMonitor(monitor)
         }
     }
 
@@ -52,7 +65,10 @@ class WebViewController: NSViewController, WKNavigationDelegate, WKScriptMessage
     // MARK: - WKNavigationDelegate
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        sendTheme()
         // TODO: M6 will send coreReady after keva_core initialization
+        // For M5c testing, send mock coreReady to bypass loading screen
+        postMessage(["type": "coreReady"])
     }
 
     // MARK: - WKScriptMessageHandler
@@ -66,8 +82,44 @@ class WebViewController: NSViewController, WKNavigationDelegate, WKScriptMessage
             return
         }
 
-        // TODO: M5c will implement message handlers (hide, theme, window drag, etc.)
-        _ = type
+        switch type {
+        case "hide":
+            (view.window as? MainWindow)?.hide()
+
+        case "startWindowDrag":
+            startWindowDrag()
+
+        default:
+            // TODO: M6 will implement remaining message handlers
+            break
+        }
+    }
+
+    // MARK: - Theme
+
+    private func setupAppearanceObserver() {
+        appearanceObserver = NSApp.observe(\.effectiveAppearance) { [weak self] _, _ in
+            self?.sendTheme()
+        }
+    }
+
+    private func sendTheme() {
+        let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        postMessage(["type": "theme", "theme": isDark ? "dark" : "light"])
+    }
+
+    // MARK: - Window Drag
+
+    private func setupMouseMonitor() {
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
+            self?.lastMouseDownEvent = event
+            return event
+        }
+    }
+
+    private func startWindowDrag() {
+        guard let window = view.window, let event = lastMouseDownEvent else { return }
+        window.performDrag(with: event)
     }
 
     // MARK: - Private

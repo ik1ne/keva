@@ -156,6 +156,7 @@ html, body {
     app-region: drag;
     border-radius: var(--radius-sm);
     transition: color var(--transition-fast);
+    cursor: default;
 }
 
 .search-bar.pane-active .search-icon {

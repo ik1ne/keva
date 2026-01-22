@@ -73,6 +73,7 @@ export const Main = {
         this.dom = {
             splash: document.getElementById('splash'),
             searchBar: document.querySelector('.search-bar'),
+            searchIcon: document.querySelector('.search-icon'),
             searchInput: document.getElementById('search-input'),
             searchActionBtn: document.getElementById('search-action-btn'),
             leftPane: document.querySelector('.left-pane'),
@@ -169,6 +170,14 @@ export const Main = {
 
     setupEventHandlers: function () {
         const self = this;
+
+        // Search icon: trigger window drag on macOS (WKWebView doesn't support CSS app-region: drag)
+        this.dom.searchIcon.addEventListener('mousedown', function (e) {
+            // Only send on left mouse button
+            if (e.button === 0) {
+                Api.send({type: 'startWindowDrag'});
+            }
+        });
 
         // Search input focus
         this.dom.searchInput.addEventListener('focus', function () {

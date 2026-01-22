@@ -93,9 +93,7 @@ class MainWindow: NSWindow, NSWindowDelegate {
     // MARK: - Keyboard Handling
 
     private func setupKeyEventMonitor() {
-        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard let self = self else { return event }
-
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
 
             // Cmd+Q: Quit application
@@ -104,13 +102,7 @@ class MainWindow: NSWindow, NSWindowDelegate {
                 return nil
             }
 
-            // Esc: Hide window
-            // TODO: M5c will move this to frontend (context-aware via 'hide' message)
-            if event.keyCode == 53 {
-                self.hide()
-                return nil
-            }
-
+            // ESC is handled by frontend (context-aware: closes dialogs, then hides window)
             return event
         }
     }
