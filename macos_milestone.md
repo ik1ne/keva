@@ -9,7 +9,7 @@ and includes test cases for verification.
 |-----|----------------------|-------------------------------------------------|--------|
 | M1  | Initial Setup        | Xcode project or Swift package, app launches    | ✅      |
 | M2  | Borderless Window    | NSWindow without titlebar, resize, hide/show    | ✅      |
-| M3  | Single Instance      | NSRunningApplication check, activate existing   | ❌      |
+| M3  | Single Instance      | macOS automatic + applicationShouldHandleReopen | ✅      |
 | M4  | Menu Bar Item        | NSStatusItem, click toggles, right-click menu   | ❌      |
 | M5  | Load Frontend        | Move vite output, WKURLSchemeHandler for assets | ❌      |
 | M6  | Worker Thread        | keva_core integration, message passing          | ❌      |
@@ -152,23 +152,26 @@ for drag/drop workflows.
 
 **Goal:** Ensure only one instance runs at a time.
 
-**Description:** Check for existing instance using NSRunningApplication. If already running, activate existing
-window instead of launching new instance.
+**Description:** macOS automatically enforces single instance for bundled apps. When user launches an already-running
+app, the OS calls `applicationShouldHandleReopen` instead of starting a new process.
 
 **Implementation Notes:**
 
-- `NSRunningApplication.runningApplications(withBundleIdentifier:)`
-- If found and not self: `activate(options: .activateIgnoringOtherApps)`
-- Send notification or use Distributed Notifications to signal "show window"
-- Exit new instance after activating existing
+- No explicit check needed — macOS handles this automatically for bundled apps
+- `applicationShouldHandleReopen(_:hasVisibleWindows:)` is called when user "relaunches"
+- Existing implementation calls `showWindow()` which handles both showing and activating
 
 **Test Cases:**
 
 | TC       | Description                             | Status |
 |----------|-----------------------------------------|--------|
-| TC-M3-01 | Second launch activates existing window | ❌      |
-| TC-M3-02 | Second launch exits after activation    | ❌      |
-| TC-M3-03 | Works when existing window is hidden    | ❌      |
+| TC-M3-01 | Second launch activates existing window | ✅      |
+| TC-M3-02 | Second launch exits after activation    | N/A    |
+| TC-M3-03 | Works when existing window is hidden    | ✅      |
+
+**Notes:**
+
+- TC-M3-02: N/A because macOS doesn't start a second process — it calls the existing instance
 
 ---
 
