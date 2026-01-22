@@ -6,8 +6,13 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		18A7C4F72F2222E800B857C2 /* dist in Resources */ = {isa = PBXBuildFile; fileRef = 18A7C4F62F2222E800B857C2 /* dist */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		18A7C4CD2F21B0AB00B857C2 /* Keva.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Keva.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		18A7C4F62F2222E800B857C2 /* dist */ = {isa = PBXFileReference; lastKnownFileType = folder; name = dist; path = ../../frontend/dist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -32,6 +37,7 @@
 		18A7C4C42F21B0AB00B857C2 = {
 			isa = PBXGroup;
 			children = (
+				18A7C4F62F2222E800B857C2 /* dist */,
 				18A7C4CF2F21B0AB00B857C2 /* Keva */,
 				18A7C4CE2F21B0AB00B857C2 /* Products */,
 			);
@@ -109,6 +115,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				18A7C4F72F2222E800B857C2 /* dist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

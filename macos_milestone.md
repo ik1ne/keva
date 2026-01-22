@@ -12,7 +12,7 @@ and includes test cases for verification.
 | M3  | Single Instance      | macOS automatic + applicationShouldHandleReopen | ✅      |
 | M4  | Menu Bar Item        | NSStatusItem, click toggles, right-click menu   | ✅      |
 | M5a | Move Frontend        | Relocate frontend/, fix Windows build paths     | ✅      |
-| M5b | Load WebView         | WKWebView + KevaSchemeHandler, render UI        | ❌      |
+| M5b | Load WebView         | WKWebView + KevaSchemeHandler, render UI        | ✅      |
 | M5c | Message Bridge       | Native↔WebView messages, window drag, theme     | ❌      |
 | M6  | Worker Thread        | keva_core integration, message passing          | ❌      |
 | M7  | Content Protocol     | Full content load/save, large file optimization | ❌      |
@@ -291,10 +291,10 @@ class KevaSchemeHandler: NSObject, WKURLSchemeHandler {
 
 | TC        | Description                        | Status |
 |-----------|------------------------------------|--------|
-| TC-M5b-01 | WebView loads and displays UI      | ❌      |
-| TC-M5b-02 | CSS styles applied correctly       | ❌      |
-| TC-M5b-03 | JavaScript executes without errors | ❌      |
-| TC-M5b-04 | Monaco editor loads                | ❌      |
+| TC-M5b-01 | WebView loads and displays UI      | ✅      |
+| TC-M5b-02 | CSS styles applied correctly       | ✅      |
+| TC-M5b-03 | JavaScript executes without errors | ✅      |
+| TC-M5b-04 | Monaco editor loads                | ✅      |
 
 ---
 

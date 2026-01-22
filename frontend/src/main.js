@@ -561,7 +561,7 @@ export const Main = {
                 // Reset to edit mode when switching keys
                 self.resetToEditMode();
 
-                // Check for FileSystemHandle in additionalObjects
+                // Check for FileSystemHandle in additionalObjects (Windows)
                 if (event.additionalObjects && event.additionalObjects.length > 0) {
                     const handle = event.additionalObjects[0];
                     self.showEditorUI();
@@ -570,9 +570,16 @@ export const Main = {
                     if (pendingCopyAction) {
                         self.performCopy(pendingCopyAction);
                     }
+                } else if (msg.content !== undefined) {
+                    // macOS: content sent directly in message
+                    self.showEditorUI();
+                    await Editor.showWithContent(msg.content, msg.key, msg.readOnly);
+                    if (pendingCopyAction) {
+                        self.performCopy(pendingCopyAction);
+                    }
                 } else {
-                    // No handle received - show error
-                    console.error('[Main] No FileSystemHandle in message');
+                    // No handle or content received - show error
+                    console.error('[Main] No FileSystemHandle or content in message');
                     Editor.showError('Failed to access content');
                 }
             },

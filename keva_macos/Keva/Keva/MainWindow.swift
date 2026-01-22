@@ -1,6 +1,8 @@
 import Cocoa
 
+/// Borderless floating window that hosts the Keva WebView.
 class MainWindow: NSWindow, NSWindowDelegate {
+    private(set) var webViewController: WebViewController!
     private var eventMonitor: Any?
     private var previousApp: NSRunningApplication?
 
@@ -18,6 +20,9 @@ class MainWindow: NSWindow, NSWindowDelegate {
         isMovableByWindowBackground = true
         center()
 
+        webViewController = WebViewController()
+        contentViewController = webViewController
+
         setupKeyEventMonitor()
         setupWorkspaceNotifications()
     }
@@ -29,10 +34,19 @@ class MainWindow: NSWindow, NSWindowDelegate {
         NSWorkspace.shared.notificationCenter.removeObserver(self)
     }
 
+    // MARK: - NSWindow Overrides
+
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+
+    // MARK: - NSWindowDelegate
+
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         hide()
         return false
     }
+
+    // MARK: - Window Visibility
 
     func show() {
         makeKeyAndOrderFront(nil)
@@ -52,6 +66,8 @@ class MainWindow: NSWindow, NSWindowDelegate {
         }
     }
 
+    // MARK: - Focus Restore
+
     private func restorePreviousApp() {
         guard let app = previousApp, !app.isTerminated else { return }
         app.activate()
@@ -66,16 +82,15 @@ class MainWindow: NSWindow, NSWindowDelegate {
         )
     }
 
-    /// Track app activations to capture the previous app for focus restore.
     @objc private func applicationDidActivate(_ notification: Notification) {
-        guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else {
+        guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+              app.bundleIdentifier != Bundle.main.bundleIdentifier else {
             return
         }
-        // Store the activated app if it's not ourselves
-        if app.bundleIdentifier != Bundle.main.bundleIdentifier {
-            previousApp = app
-        }
+        previousApp = app
     }
+
+    // MARK: - Keyboard Handling
 
     private func setupKeyEventMonitor() {
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -84,14 +99,13 @@ class MainWindow: NSWindow, NSWindowDelegate {
             let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
 
             // Cmd+Q: Quit application
-            // Use `characters` (not `charactersIgnoringModifiers`) because macOS switches to
-            // Latin layer when Command is pressed, even on non-Latin keyboards (Korean, Hebrew, etc.)
             if modifiers == .command && event.characters?.lowercased() == "q" {
                 NSApp.terminate(nil)
                 return nil
             }
 
             // Esc: Hide window
+            // TODO: M5c will move this to frontend (context-aware via 'hide' message)
             if event.keyCode == 53 {
                 self.hide()
                 return nil

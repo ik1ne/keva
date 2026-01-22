@@ -122,6 +122,27 @@ export const Editor = {
         }
     },
 
+    // macOS: show content sent directly via postMessage
+    showWithContent: async function (content, key, readOnly) {
+        this.currentHandle = null;  // No file handle on macOS
+        this.currentKey = key;
+        this.isReadOnly = readOnly;
+        SaveBanner.hide();
+
+        if (!this.instance) return;
+
+        this.instance.setValue(content);
+        this.applyFileSizeOptions(content.length);
+        this.instance.updateOptions({readOnly: readOnly});
+        State.data.isDirty = false;
+        this.updatePlaceholder();
+
+        if (State.data.focusEditorOnLoad) {
+            this.instance.focus();
+            State.data.focusEditorOnLoad = false;
+        }
+    },
+
     writeToHandle: async function () {
         if (!this.currentHandle || !this.instance || this.isReadOnly) {
             return false;
