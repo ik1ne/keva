@@ -11,7 +11,9 @@ and includes test cases for verification.
 | M2  | Borderless Window    | NSWindow without titlebar, resize, hide/show    | ✅      |
 | M3  | Single Instance      | macOS automatic + applicationShouldHandleReopen | ✅      |
 | M4  | Menu Bar Item        | NSStatusItem, click toggles, right-click menu   | ✅      |
-| M5  | Load Frontend        | Move vite output, WKURLSchemeHandler for assets | ❌      |
+| M5a | Move Frontend        | Relocate frontend/, fix Windows build paths     | ❌      |
+| M5b | Load WebView         | WKWebView + KevaSchemeHandler, render UI        | ❌      |
+| M5c | Message Bridge       | Native↔WebView messages, window drag, theme     | ❌      |
 | M6  | Worker Thread        | keva_core integration, message passing          | ❌      |
 | M7  | Content Protocol     | Full content load/save, large file optimization | ❌      |
 | M8  | Search Engine        | keva_search integration on main thread          | ❌      |
@@ -222,33 +224,57 @@ matching Windows tray menu.
 
 ---
 
-## M5: Load Frontend
+## M5a: Move Frontend
 
-**Goal:** Load actual Keva frontend HTML in WKWebView.
+**Goal:** Relocate frontend to shared location without breaking Windows build.
 
-**Description:** Move vite build output to shared location (outside Windows-specific folder). Load HTML via
-WKURLSchemeHandler custom protocol. Establish basic Native↔WebView message bridge. Window drag works via message.
+**Description:** Move vite frontend from `keva_windows/src/webview/vite/` to shared `frontend/` folder. Update all
+Windows build paths (Cargo, PowerShell scripts) to reference new location. Verify Windows build and runtime still work.
 
 **Implementation Notes:**
 
-- Register custom scheme: `keva-app://`
-- `WKURLSchemeHandler` serves bundled HTML/CSS/JS
-- `WKScriptMessageHandler` for WebView→Native messages
-- `evaluateJavaScript` for Native→WebView messages
-- Window drag: WebView sends `{ type: "startWindowDrag" }` → Native calls `window.performDrag(with: event)`
+- Move `keva_windows/src/webview/vite/` → `frontend/`
+- Update `keva_windows/Cargo.toml` or build.rs paths
+- Update any `.ps1` scripts referencing old paths
+- Keep same vite config, just relocate
 
 **Folder Structure Change:**
 
 ```
 keva/
-├── frontend/           # Moved from platforms/windows/
+├── frontend/           # Moved from keva_windows/src/webview/vite/
 │   ├── src/
 │   ├── vite.config.ts
 │   └── dist/          # Build output
-├── platforms/
-│   ├── windows/
-│   └── macos/
+├── keva_windows/
+│   └── src/webview/   # No longer contains vite/
+└── keva_macos/
 ```
+
+**Test Cases:**
+
+| TC        | Description                              | Status |
+|-----------|------------------------------------------|--------|
+| TC-M5a-01 | Frontend moved to `frontend/` directory  | ❌      |
+| TC-M5a-02 | `cargo build` succeeds for keva_windows  | ❌      |
+| TC-M5a-03 | Windows app runs with relocated frontend | ❌      |
+| TC-M5a-04 | PowerShell build scripts work            | ❌      |
+
+---
+
+## M5b: Load WebView
+
+**Goal:** Display Keva frontend UI in WKWebView.
+
+**Description:** Add WKWebView to MainWindow. Implement WKURLSchemeHandler to serve bundled assets via `keva-app://`
+custom protocol. Frontend renders visually (no interactivity yet).
+
+**Implementation Notes:**
+
+- Register custom scheme: `keva-app://`
+- `WKURLSchemeHandler` serves bundled HTML/CSS/JS from `frontend/dist/`
+- Bundle frontend assets in Xcode project
+- MIME type detection for html, css, js, woff2, etc.
 
 **Custom Scheme Handler:**
 
@@ -263,15 +289,36 @@ class KevaSchemeHandler: NSObject, WKURLSchemeHandler {
 
 **Test Cases:**
 
-| TC       | Description                          | Status |
-|----------|--------------------------------------|--------|
-| TC-M5-01 | WebView loads and displays UI        | ❌      |
-| TC-M5-02 | CSS styles applied correctly         | ❌      |
-| TC-M5-03 | JavaScript executes without errors   | ❌      |
-| TC-M5-04 | Monaco editor loads                  | ❌      |
-| TC-M5-05 | Native↔WebView message bridge works  | ❌      |
-| TC-M5-06 | Window drag via search icon works    | ❌      |
-| TC-M5-07 | Theme matches system dark/light mode | ❌      |
+| TC        | Description                        | Status |
+|-----------|------------------------------------|--------|
+| TC-M5b-01 | WebView loads and displays UI      | ❌      |
+| TC-M5b-02 | CSS styles applied correctly       | ❌      |
+| TC-M5b-03 | JavaScript executes without errors | ❌      |
+| TC-M5b-04 | Monaco editor loads                | ❌      |
+
+---
+
+## M5c: Message Bridge
+
+**Goal:** Establish Native↔WebView communication with window drag and theme support.
+
+**Description:** Implement bidirectional message passing between Swift and WebView. Handle window drag via
+`startWindowDrag` message. Detect system appearance and send theme to WebView.
+
+**Implementation Notes:**
+
+- `WKScriptMessageHandler` for WebView→Native messages
+- `evaluateJavaScript` for Native→WebView messages
+- Window drag: WebView sends `{ type: "startWindowDrag" }` → Native calls `window.performDrag(with: event)`
+- Theme: detect `NSApp.effectiveAppearance`, send `{ type: "theme", dark: bool }`
+
+**Test Cases:**
+
+| TC        | Description                          | Status |
+|-----------|--------------------------------------|--------|
+| TC-M5c-01 | Native↔WebView message bridge works  | ❌      |
+| TC-M5c-02 | Window drag via search icon works    | ❌      |
+| TC-M5c-03 | Theme matches system dark/light mode | ❌      |
 
 ---
 
