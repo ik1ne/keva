@@ -8,7 +8,7 @@ and includes test cases for verification.
 | #   | Milestone            | Description                                     | Status |
 |-----|----------------------|-------------------------------------------------|--------|
 | M1  | Initial Setup        | Xcode project or Swift package, app launches    | ✅      |
-| M2  | Borderless Window    | NSWindow without titlebar, resize, hide/show    | ❌      |
+| M2  | Borderless Window    | NSWindow without titlebar, resize, hide/show    | ✅      |
 | M3  | Single Instance      | NSRunningApplication check, activate existing   | ❌      |
 | M4  | Menu Bar Item        | NSStatusItem, click toggles, right-click menu   | ❌      |
 | M5  | Load Frontend        | Move vite output, WKURLSchemeHandler for assets | ❌      |
@@ -131,16 +131,20 @@ for drag/drop workflows.
 
 | TC       | Description                                | Status |
 |----------|--------------------------------------------|--------|
-| TC-M2-01 | Window appears without titlebar            | ❌      |
-| TC-M2-02 | Window appears centered on primary monitor | ❌      |
-| TC-M2-03 | Drag from edges resizes window             | ❌      |
-| TC-M2-04 | Window respects minimum size (400×300)     | ❌      |
-| TC-M2-05 | Esc hides window (process stays alive)     | ❌      |
-| TC-M2-06 | Cmd+Q quits application entirely           | ❌      |
-| TC-M2-07 | Window stays on top of other windows       | ❌      |
-| TC-M2-08 | Corner drag resizes diagonally             | ❌      |
-| TC-M2-09 | Hidden window can be shown again           | ❌      |
-| TC-M2-10 | Text is crisp at Retina scaling            | ❌      |
+| TC-M2-01 | Window appears without titlebar            | ✅      |
+| TC-M2-02 | Window appears centered on primary monitor | ✅      |
+| TC-M2-03 | Drag from edges resizes window             | ✅      |
+| TC-M2-04 | Window respects minimum size (400×300)     | ✅      |
+| TC-M2-05 | Esc hides window (process stays alive)     | ✅      |
+| TC-M2-06 | Cmd+Q quits application entirely           | ✅      |
+| TC-M2-07 | Window stays on top of other windows       | ✅      |
+| TC-M2-08 | Corner drag resizes diagonally             | ✅      |
+| TC-M2-09 | Hidden window can be shown again           | ✅      |
+| TC-M2-10 | Text is crisp at Retina scaling            | N/A    |
+
+**Notes:**
+
+- TC-M2-10: Deferred to M5 (no content to display yet)
 
 ---
 
