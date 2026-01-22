@@ -11,7 +11,7 @@ and includes test cases for verification.
 | M2  | Borderless Window    | NSWindow without titlebar, resize, hide/show    | ✅      |
 | M3  | Single Instance      | macOS automatic + applicationShouldHandleReopen | ✅      |
 | M4  | Menu Bar Item        | NSStatusItem, click toggles, right-click menu   | ✅      |
-| M5a | Move Frontend        | Relocate frontend/, fix Windows build paths     | ❌      |
+| M5a | Move Frontend        | Relocate frontend/, fix Windows build paths     | ✅      |
 | M5b | Load WebView         | WKWebView + KevaSchemeHandler, render UI        | ❌      |
 | M5c | Message Bridge       | Native↔WebView messages, window drag, theme     | ❌      |
 | M6  | Worker Thread        | keva_core integration, message passing          | ❌      |
@@ -255,10 +255,10 @@ keva/
 
 | TC        | Description                              | Status |
 |-----------|------------------------------------------|--------|
-| TC-M5a-01 | Frontend moved to `frontend/` directory  | ❌      |
-| TC-M5a-02 | `cargo build` succeeds for keva_windows  | ❌      |
-| TC-M5a-03 | Windows app runs with relocated frontend | ❌      |
-| TC-M5a-04 | PowerShell build scripts work            | ❌      |
+| TC-M5a-01 | Frontend moved to `frontend/` directory  | ✅      |
+| TC-M5a-02 | `cargo build` succeeds for keva_windows  | ✅      |
+| TC-M5a-03 | Windows app runs with relocated frontend | ✅      |
+| TC-M5a-04 | PowerShell build scripts work            | ✅      |
 
 ---
 
