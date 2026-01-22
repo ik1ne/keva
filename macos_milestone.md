@@ -10,7 +10,7 @@ and includes test cases for verification.
 | M1  | Initial Setup        | Xcode project or Swift package, app launches    | ✅      |
 | M2  | Borderless Window    | NSWindow without titlebar, resize, hide/show    | ✅      |
 | M3  | Single Instance      | macOS automatic + applicationShouldHandleReopen | ✅      |
-| M4  | Menu Bar Item        | NSStatusItem, click toggles, right-click menu   | ❌      |
+| M4  | Menu Bar Item        | NSStatusItem, click toggles, right-click menu   | ✅      |
 | M5  | Load Frontend        | Move vite output, WKURLSchemeHandler for assets | ❌      |
 | M6  | Worker Thread        | keva_core integration, message passing          | ❌      |
 | M7  | Content Protocol     | Full content load/save, large file optimization | ❌      |
@@ -205,13 +205,17 @@ matching Windows tray menu.
 
 | TC       | Description                              | Status |
 |----------|------------------------------------------|--------|
-| TC-M4-01 | Menu bar icon visible                    | ❌      |
-| TC-M4-02 | Left-click toggles window visibility     | ❌      |
-| TC-M4-03 | Right-click shows context menu           | ❌      |
-| TC-M4-04 | "Show Keva" disabled when window visible | ❌      |
-| TC-M4-05 | "Quit Keva" terminates application       | ❌      |
-| TC-M4-06 | Icon adapts to dark/light mode           | ❌      |
-| TC-M4-07 | Tooltip shows "Keva"                     | ❌      |
+| TC-M4-01 | Menu bar icon visible                    | ✅      |
+| TC-M4-02 | Left-click toggles window visibility     | ✅      |
+| TC-M4-03 | Right-click shows context menu           | ✅      |
+| TC-M4-04 | "Show Keva" disabled when window visible | ✅      |
+| TC-M4-05 | "Quit Keva" terminates application       | ✅      |
+| TC-M4-06 | Icon adapts to dark/light mode           | ✅      |
+| TC-M4-07 | Tooltip shows "Keva"                     | ✅      |
+
+**Notes:**
+
+- "Settings..." and "Launch at Login" are disabled placeholders (implemented in M12)
 
 ---
 

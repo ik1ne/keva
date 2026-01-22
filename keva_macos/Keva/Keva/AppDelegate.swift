@@ -3,6 +3,7 @@ import Cocoa
 class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var window: NSWindow?
     var eventMonitor: Any?
+    var statusItem: NSStatusItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSLog("Keva launched")
@@ -20,6 +21,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window?.center()
         window?.makeKeyAndOrderFront(nil)
 
+        setupStatusItem()
         setupKeyEventMonitor()
     }
 
@@ -39,13 +41,75 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         return false
     }
 
-    func showWindow() {
+    var isWindowVisible: Bool {
+        window?.isVisible ?? false
+    }
+
+    @objc func showWindow() {
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
     func hideWindow() {
         window?.orderOut(nil)
+    }
+
+    func toggleWindow() {
+        if isWindowVisible {
+            hideWindow()
+        } else {
+            showWindow()
+        }
+    }
+
+    private func setupStatusItem() {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+
+        guard let button = statusItem?.button else { return }
+
+        button.image = NSImage(systemSymbolName: "k.square", accessibilityDescription: "Keva")
+        button.toolTip = "Keva"
+        button.target = self
+        button.action = #selector(statusItemClicked)
+        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+    }
+
+    @objc private func statusItemClicked() {
+        guard let event = NSApp.currentEvent else { return }
+
+        if event.type == .rightMouseUp {
+            showStatusMenu()
+        } else {
+            toggleWindow()
+        }
+    }
+
+    private func showStatusMenu() {
+        let menu = NSMenu()
+
+        let showItem = NSMenuItem(title: "Show Keva", action: #selector(showWindow), keyEquivalent: "")
+        showItem.target = self
+        showItem.isEnabled = !isWindowVisible
+        menu.addItem(showItem)
+
+        let settingsItem = NSMenuItem(title: "Settings...", action: nil, keyEquivalent: ",")
+        settingsItem.isEnabled = false
+        menu.addItem(settingsItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        let launchItem = NSMenuItem(title: "Launch at Login", action: nil, keyEquivalent: "")
+        launchItem.isEnabled = false
+        menu.addItem(launchItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        let quitItem = NSMenuItem(title: "Quit Keva", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menu.addItem(quitItem)
+
+        statusItem?.menu = menu
+        statusItem?.button?.performClick(nil)
+        statusItem?.menu = nil
     }
 
     private func setupKeyEventMonitor() {
