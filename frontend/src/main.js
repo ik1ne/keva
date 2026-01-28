@@ -171,13 +171,16 @@ export const Main = {
     setupEventHandlers: function () {
         const self = this;
 
-        // Search icon: trigger window drag on macOS (WKWebView doesn't support CSS app-region: drag)
-        this.dom.searchIcon.addEventListener('mousedown', function (e) {
-            // Only send on left mouse button
-            if (e.button === 0) {
-                Api.send({type: 'startWindowDrag'});
-            }
-        });
+        // Window drag on macOS: WKWebView doesn't support CSS app-region: drag,
+        // so we send a message to native to call performDrag(with:).
+        // On Windows, CSS app-region: drag handles this natively.
+        if (Api.isMacOS) {
+            this.dom.searchIcon.addEventListener('mousedown', function (e) {
+                if (e.button === 0) {
+                    Api.send({type: 'startWindowDrag'});
+                }
+            });
+        }
 
         // Search input focus
         this.dom.searchInput.addEventListener('focus', function () {

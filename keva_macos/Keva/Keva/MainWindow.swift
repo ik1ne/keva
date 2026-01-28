@@ -17,7 +17,6 @@ class MainWindow: NSWindow, NSWindowDelegate {
         delegate = self
         level = .floating
         minSize = NSSize(width: 400, height: 300)
-        isMovableByWindowBackground = true
         center()
 
         webViewController = WebViewController()
