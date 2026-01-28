@@ -13,7 +13,7 @@ and includes test cases for verification.
 | M4  | Menu Bar Item        | NSStatusItem, click toggles, right-click menu   | ✅      |
 | M5a | Move Frontend        | Relocate frontend/, fix Windows build paths     | ✅      |
 | M5b | Load WebView         | WKWebView + KevaSchemeHandler, render UI        | ✅      |
-| M5c | Message Bridge       | Native↔WebView messages, window drag, theme     | ❌      |
+| M5c | Message Bridge       | Native↔WebView messages, window drag, theme     | ✅      |
 | M6  | Worker Thread        | keva_core integration, message passing          | ❌      |
 | M7  | Content Protocol     | Full content load/save, large file optimization | ❌      |
 | M8  | Search Engine        | keva_search integration on main thread          | ❌      |
@@ -316,9 +316,9 @@ class KevaSchemeHandler: NSObject, WKURLSchemeHandler {
 
 | TC        | Description                          | Status |
 |-----------|--------------------------------------|--------|
-| TC-M5c-01 | Native↔WebView message bridge works  | ❌      |
-| TC-M5c-02 | Window drag via search icon works    | ❌      |
-| TC-M5c-03 | Theme matches system dark/light mode | ❌      |
+| TC-M5c-01 | Native↔WebView message bridge works  | ✅      |
+| TC-M5c-02 | Window drag via search icon works    | ✅      |
+| TC-M5c-03 | Theme matches system dark/light mode | ✅      |
 
 ---
 
