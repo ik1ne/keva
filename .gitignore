@@ -9,5 +9,12 @@ dist
 frontend/node_modules
 frontend/dist
 
-# XCode
+# Xcode
 xcuserdata/
+*.xcuserstate
+
+# Build artifacts
+*.a
+*.o
+*.dylib
+*.DS_Store

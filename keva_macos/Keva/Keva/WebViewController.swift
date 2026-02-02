@@ -8,6 +8,7 @@ class WebViewController: NSViewController, WKNavigationDelegate, WKScriptMessage
     private var appearanceObserver: NSKeyValueObservation?
     private var lastMouseDownEvent: NSEvent?
     private var mouseMonitor: Any?
+    let worker = KevaWorker()
 
     override func loadView() {
         let distPath = Self.findDistPath()
@@ -32,6 +33,7 @@ class WebViewController: NSViewController, WKNavigationDelegate, WKScriptMessage
 
         setupAppearanceObserver()
         setupMouseMonitor()
+        setupWorker()
     }
 
     override func viewDidLoad() {
@@ -62,13 +64,40 @@ class WebViewController: NSViewController, WKNavigationDelegate, WKScriptMessage
         webView.evaluateJavaScript(script, completionHandler: nil)
     }
 
+    // MARK: - Worker
+
+    private func setupWorker() {
+        worker.onMessage = { [weak self] msg in
+            self?.handleWorkerMessage(msg)
+        }
+        worker.start()
+    }
+
+    private func handleWorkerMessage(_ msg: [String: Any]) {
+        postMessage(msg)
+    }
+
+    /// Initiate graceful shutdown: tell frontend to save, then shut down worker.
+    func initiateShutdown() {
+        postMessage(["type": "shutdown"])
+    }
+
+    /// Called when frontend acknowledges shutdown (after saving).
+    func handleShutdownAck() {
+        worker.send(message: ["type": "shutdownAck"])
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            self?.worker.stop()
+            DispatchQueue.main.async {
+                NSApp.reply(toApplicationShouldTerminate: true)
+            }
+        }
+    }
+
     // MARK: - WKNavigationDelegate
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         sendTheme()
-        // TODO: M6 will send coreReady after keva_core initialization
-        // For M5c testing, send mock coreReady to bypass loading screen
-        postMessage(["type": "coreReady"])
+        // Worker sends coreReady after keva_core initialization completes
     }
 
     // MARK: - WKScriptMessageHandler
@@ -89,9 +118,12 @@ class WebViewController: NSViewController, WKNavigationDelegate, WKScriptMessage
         case "startWindowDrag":
             startWindowDrag()
 
+        case "shutdownAck":
+            handleShutdownAck()
+
         default:
-            // TODO: M6 will implement remaining message handlers
-            break
+            // Forward all other messages to the worker as JSON
+            worker.send(json: jsonString)
         }
     }
 

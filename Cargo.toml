@@ -1,5 +1,5 @@
 [workspace]
-members = ["core", "search", "keva_windows"]
+members = ["core", "search", "keva_windows", "ffi"]
 resolver = "3"
 
 # Optimize all dependencies in dev builds (keeps workspace crates at opt-level=0)

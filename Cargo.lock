@@ -378,6 +378,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "keva_ffi"
+version = "0.1.0"
+dependencies = [
+ "keva_core",
+ "keva_search",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "keva_search"
 version = "0.1.0"
 dependencies = [
