@@ -3,7 +3,6 @@ import Cocoa
 /// Borderless floating window that hosts the Keva WebView.
 class MainWindow: NSWindow, NSWindowDelegate {
     private(set) var webViewController: WebViewController!
-    private var eventMonitor: Any?
     private var previousApp: NSRunningApplication?
 
     init() {
@@ -22,14 +21,10 @@ class MainWindow: NSWindow, NSWindowDelegate {
         webViewController = WebViewController()
         contentViewController = webViewController
 
-        setupKeyEventMonitor()
         setupWorkspaceNotifications()
     }
 
     deinit {
-        if let monitor = eventMonitor {
-            NSEvent.removeMonitor(monitor)
-        }
         NSWorkspace.shared.notificationCenter.removeObserver(self)
     }
 
@@ -89,20 +84,4 @@ class MainWindow: NSWindow, NSWindowDelegate {
         previousApp = app
     }
 
-    // MARK: - Keyboard Handling
-
-    private func setupKeyEventMonitor() {
-        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-
-            // Cmd+Q: Quit application
-            if modifiers == .command && event.characters?.lowercased() == "q" {
-                NSApp.terminate(nil)
-                return nil
-            }
-
-            // ESC is handled by frontend (context-aware: closes dialogs, then hides window)
-            return event
-        }
-    }
 }
