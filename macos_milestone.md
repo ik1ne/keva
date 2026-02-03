@@ -14,7 +14,7 @@ and includes test cases for verification.
 | M5a | Move Frontend        | Relocate frontend/, fix Windows build paths     | ✅      |
 | M5b | Load WebView         | WKWebView + KevaSchemeHandler, render UI        | ✅      |
 | M5c | Message Bridge       | Native↔WebView messages, window drag, theme     | ✅      |
-| M6  | Worker Thread        | keva_core integration, message passing          | ❌      |
+| M6  | Worker Thread        | keva_core integration, message passing          | ✅      |
 | M7  | Content Protocol     | Full content load/save, large file optimization | ❌      |
 | M8  | Search Engine        | keva_search integration on main thread          | ❌      |
 | M9  | Global Hotkey        | Cmd+Option+K system-wide                        | ❌      |
@@ -351,10 +351,15 @@ Main Thread                     Worker Thread
 
 | TC       | Description                                | Status |
 |----------|--------------------------------------------|--------|
-| TC-M6-01 | App quits cleanly via Cmd+Q (no hang)      | ❌      |
-| TC-M6-02 | App quits cleanly via menu (no hang)       | ❌      |
-| TC-M6-03 | Creating key updates UI without freezing   | ❌      |
-| TC-M6-04 | keva_core operations complete successfully | ❌      |
+| TC-M6-01 | App quits cleanly via Cmd+Q (no hang)      | ✅      |
+| TC-M6-02 | App quits cleanly via menu (no hang)       | ✅      |
+| TC-M6-03 | Creating key updates UI without freezing   | ✅      |
+| TC-M6-04 | keva_core operations complete successfully | ✅      |
+
+**Notes:**
+
+- TC-M6-02: Via status bar right-click menu "Quit Keva"
+- Search engine (keva_search) integrated in worker, matching Windows architecture
 
 ---
 
